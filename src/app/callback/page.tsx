@@ -20,6 +20,7 @@ function CallbackContent() {
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [channelInfo, setChannelInfo] = useState<ChannelInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [kvConfigured, setKvConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
     const code = searchParams.get("code");
@@ -64,6 +65,7 @@ function CallbackContent() {
         }
 
         setChannelInfo(result.data.channelInfo);
+        setKvConfigured(result.data.kvConfigured ?? null);
         setStatus("success");
       } catch {
         setStatus("error");
@@ -90,12 +92,20 @@ function CallbackContent() {
 
           {status === "success" && (
             <>
-              <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-6">
+              <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-4">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-5 h-5 text-green-600" />
                   <span className="text-green-700 font-medium">YouTube OAuth2 callback processed successfully</span>
                 </div>
+                <p className="text-sm text-green-600 mt-1">Token validated and stored. Channel status will update to &quot;Valid&quot; in the CMS dashboard.</p>
               </div>
+              {kvConfigured === false && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
+                  <p className="text-sm text-amber-700">
+                    <strong>Warning:</strong> Persistent storage (Vercel KV) is not configured. Token will be lost on next deployment. Please set up Vercel KV.
+                  </p>
+                </div>
+              )}
 
               {channelInfo && (
                 <div className="border border-gray-200 rounded-lg p-5">

@@ -1,4 +1,4 @@
-import { setChannelToken, type ChannelToken } from "@/lib/channel-tokens";
+import { setChannelToken, isKVConfigured, type ChannelToken } from "@/lib/channel-tokens";
 import { google } from "googleapis";
 
 export const dynamic = "force-dynamic";
@@ -76,31 +76,43 @@ export async function POST(request: Request) {
     });
 
     const channel = channelResponse.data.items?.[0];
-    const channelId = channel?.id || "unknown";
+    const googleChannelId = channel?.id || "unknown";
     const channelTitle = channel?.snippet?.title || "Unknown Channel";
     const subscribers = Number(channel?.statistics?.subscriberCount || 0);
     const totalViews = Number(channel?.statistics?.viewCount || 0);
     const totalVideos = Number(channel?.statistics?.videoCount || 0);
     const thumbnail = channel?.snippet?.thumbnails?.default?.url || "";
 
-    // Store the token
+    // Store the token with the expectedChannelId from state parameter
+    // This ensures the token is stored with the same ID that the CMS uses
+    const storageChannelId = expectedChannelId;
+
     const channelToken: ChannelToken = {
-      channelId,
+      channelId: storageChannelId,
       channelTitle,
       accessToken,
       refreshToken: refreshToken || "",
       tokenExpiry: Date.now() + (tokenData.expires_in || 3600) * 1000,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      googleChannelId,
     };
 
-    await setChannelToken(channelId, channelToken);
+    await setChannelToken(storageChannelId, channelToken);
+
+    // Also store with Google's channel ID if different (for cross-reference)
+    if (googleChannelId !== storageChannelId && googleChannelId !== "unknown") {
+      await setChannelToken(googleChannelId, channelToken);
+    }
+
+    console.log(`Token stored for channel: ${storageChannelId} (Google: ${googleChannelId}), KV: ${isKVConfigured()}`);
 
     return Response.json({
       data: {
         success: true,
+        kvConfigured: isKVConfigured(),
         channelInfo: {
-          channelId,
+          channelId: storageChannelId,
           channelTitle,
           subscribers,
           totalViews,
