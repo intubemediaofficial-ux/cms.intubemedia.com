@@ -139,6 +139,42 @@ export async function GET(request: Request) {
           },
         });
       }
+      case "dashboardFull": {
+        const prevStartDate = url.searchParams.get("prevStartDate") || startDate;
+        const prevEndDate = url.searchParams.get("prevEndDate") || endDate;
+
+        const performanceMetrics = "views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes";
+
+        const [
+          channels,
+          currentPerformance,
+          prevPerformance,
+          currentRevenue,
+          prevRevenue,
+          dailyRevenue,
+          topVideosByViews,
+        ] = await Promise.all([
+          getChannelStats(session.accessToken),
+          getAnalyticsData(session.accessToken, startDate, endDate, performanceMetrics, ""),
+          getAnalyticsData(session.accessToken, prevStartDate, prevEndDate, performanceMetrics, ""),
+          getRevenueData(session.accessToken, startDate, endDate).catch(() => null),
+          getRevenueData(session.accessToken, prevStartDate, prevEndDate).catch(() => null),
+          getAnalyticsData(session.accessToken, startDate, endDate, "estimatedRevenue", "day").catch(() => null),
+          getTopVideos(session.accessToken, startDate, endDate),
+        ]);
+
+        return Response.json({
+          data: {
+            channels,
+            currentPerformance,
+            prevPerformance,
+            currentRevenue,
+            prevRevenue,
+            dailyRevenue,
+            topVideos: topVideosByViews,
+          },
+        });
+      }
       default:
         return Response.json({ error: "Invalid action" }, { status: 400 });
     }

@@ -44,7 +44,7 @@ export default function OnboardingChannelRevenuePage() {
           )}
           {!isAuthenticated && (
             <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-              <WifiOff className="w-3.5 h-3.5" /> Demo Data
+              <WifiOff className="w-3.5 h-3.5" /> Sign in to see data
             </div>
           )}
           <button className="flex items-center gap-2 text-sm text-primary font-medium px-3 py-2 border border-border rounded-lg">

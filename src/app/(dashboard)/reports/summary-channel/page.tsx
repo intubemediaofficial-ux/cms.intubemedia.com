@@ -52,7 +52,7 @@ export default function SummaryChannelPage() {
           {!isAuthenticated && (
             <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
               <WifiOff className="w-3.5 h-3.5" />
-              Demo Data
+              Sign in to see data
             </div>
           )}
           <button className="flex items-center gap-2 text-sm text-primary hover:text-primary-dark font-medium px-3 py-2 border border-border rounded-lg">

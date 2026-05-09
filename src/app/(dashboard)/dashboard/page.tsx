@@ -1,28 +1,40 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import {
   Eye,
   Users,
-  Video,
-  Clock,
   Play,
   MessageSquare,
   ThumbsUp,
   Wifi,
   WifiOff,
   Loader2,
+  Share2,
 } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from "recharts";
 import { signIn, useSession } from "next-auth/react";
-import StatsCard from "@/components/dashboard/StatsCard";
-import ViewsChart from "@/components/charts/ViewsChart";
-import SubscriberChart from "@/components/charts/SubscriberChart";
-import { formatNumber } from "@/lib/utils";
+import MetricCard from "@/components/dashboard/MetricCard";
+import DateRangeFilter, { computeRange } from "@/components/dashboard/DateRangeFilter";
+import type { DateRange } from "@/components/dashboard/DateRangeFilter";
+import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-interface DashboardChannel {
-  snippet?: { title?: string | null };
+interface ChannelItem {
+  id?: string | null;
+  snippet?: {
+    title?: string | null;
+    thumbnails?: { default?: { url?: string | null } | null } | null;
+  };
   statistics?: {
     viewCount?: string | null;
     subscriberCount?: string | null;
@@ -51,141 +63,197 @@ interface TopVideoItem {
   } | null;
 }
 
-interface DashboardData {
-  channels?: DashboardChannel[];
-  analytics?: AnalyticsResponse;
+interface DashboardFullData {
+  channels?: ChannelItem[];
+  currentPerformance?: AnalyticsResponse;
+  prevPerformance?: AnalyticsResponse;
+  currentRevenue?: AnalyticsResponse | null;
+  prevRevenue?: AnalyticsResponse | null;
+  dailyRevenue?: AnalyticsResponse | null;
   topVideos?: {
     analytics?: AnalyticsResponse;
     videos?: TopVideoItem[];
   };
 }
 
-function transformAnalyticsToViewsData(analytics: AnalyticsResponse | undefined) {
-  if (!analytics?.rows?.length || !analytics.columnHeaders) return [];
-
-  const headers = analytics.columnHeaders.map((h) => h.name || "");
-  const monthIdx = headers.indexOf("month");
-  const viewsIdx = headers.indexOf("views");
-
-  if (monthIdx === -1 || viewsIdx === -1) return [];
-
-  return analytics.rows.map((row) => {
-    const monthStr = String(row[monthIdx]);
-    const monthNum = parseInt(monthStr.split("-")[1] || monthStr, 10);
-    return {
-      date: MONTHS[monthNum - 1] || monthStr,
-      views: Number(row[viewsIdx]) || 0,
-    };
-  });
+function sumMetric(data: AnalyticsResponse | undefined | null, metricName: string): number {
+  if (!data?.rows?.length || !data.columnHeaders) return 0;
+  const headers = data.columnHeaders.map((h) => h.name || "");
+  const idx = headers.indexOf(metricName);
+  if (idx === -1) return 0;
+  return data.rows.reduce((sum, row) => sum + (Number(row[idx]) || 0), 0);
 }
 
-function transformAnalyticsToSubscriberData(analytics: AnalyticsResponse | undefined) {
-  if (!analytics?.rows?.length || !analytics.columnHeaders) return [];
+function sumRevenueMetric(data: AnalyticsResponse | undefined | null, metricName: string): number {
+  if (!data?.rows?.length || !data.columnHeaders) return 0;
+  const headers = data.columnHeaders.map((h) => h.name || "");
+  const idx = headers.indexOf(metricName);
+  if (idx === -1) return 0;
+  return data.rows.reduce((sum, row) => sum + (Number(row[idx]) || 0), 0);
+}
 
-  const headers = analytics.columnHeaders.map((h) => h.name || "");
-  const monthIdx = headers.indexOf("month");
-  const gainedIdx = headers.indexOf("subscribersGained");
-  const lostIdx = headers.indexOf("subscribersLost");
+function pctChange(current: number, previous: number): number | null {
+  if (previous === 0 && current === 0) return 0;
+  if (previous === 0) return 100;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
 
-  if (monthIdx === -1 || gainedIdx === -1) return [];
-
-  let cumulativeNet = 0;
-  return analytics.rows.map((row) => {
-    const monthStr = String(row[monthIdx]);
-    const monthNum = parseInt(monthStr.split("-")[1] || monthStr, 10);
-    const gained = Number(row[gainedIdx]) || 0;
-    const lost = lostIdx !== -1 ? Number(row[lostIdx]) || 0 : 0;
-    cumulativeNet += gained - lost;
-    return {
-      date: MONTHS[monthNum - 1] || monthStr,
-      subscribers: cumulativeNet,
-    };
-  });
+function getDailyRevenueChartData(data: AnalyticsResponse | null | undefined) {
+  if (!data?.rows?.length || !data.columnHeaders) return [];
+  const headers = data.columnHeaders.map((h) => h.name || "");
+  const dayIdx = headers.indexOf("day");
+  const revIdx = headers.indexOf("estimatedRevenue");
+  if (dayIdx === -1 || revIdx === -1) return [];
+  return data.rows.map((row) => ({
+    date: String(row[dayIdx]).slice(5),
+    revenue: Math.round((Number(row[revIdx]) || 0) * 100) / 100,
+  }));
 }
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
-  const { data: dashboardData, isReal, error, loading } = useYouTubeData<DashboardData>(
-    "dashboard",
-    {},
+  const isAuthenticated = status === "authenticated" && !!session?.accessToken;
+
+  const [datePreset, setDatePreset] = useState("28d");
+  const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
+
+  const apiParams = useMemo(() => ({
+    startDate: dateRange.startDate,
+    endDate: dateRange.endDate,
+    prevStartDate: dateRange.prevStartDate,
+    prevEndDate: dateRange.prevEndDate,
+  }), [dateRange]);
+
+  const { data: dashData, isReal, error, loading } = useYouTubeData<DashboardFullData>(
+    "dashboardFull",
+    apiParams,
     {}
   );
 
-  const channel = dashboardData?.channels?.[0];
-  const isAuthenticated = status === "authenticated" && !!session?.accessToken;
+  const channel = dashData?.channels?.[0];
 
-  const viewsChartData = isReal ? transformAnalyticsToViewsData(dashboardData?.analytics) : undefined;
-  const subscriberChartData = isReal ? transformAnalyticsToSubscriberData(dashboardData?.analytics) : undefined;
+  // Cumulative metrics (from channel statistics — date-independent)
+  const totalViews = Number(channel?.statistics?.viewCount || 0);
+  const totalSubscribers = Number(channel?.statistics?.subscriberCount || 0);
+  const totalVideos = Number(channel?.statistics?.videoCount || 0);
 
-  const topVideos = isReal ? (dashboardData?.topVideos?.videos || []) : [];
-  const topVideoAnalytics = dashboardData?.topVideos?.analytics;
-  const videoAnalyticsMap: Record<string, { views: number; likes: number }> = {};
+  // Revenue metrics
+  const curEstRevenue = sumRevenueMetric(dashData?.currentRevenue, "estimatedRevenue");
+  const curAdRevenue = sumRevenueMetric(dashData?.currentRevenue, "estimatedAdRevenue");
+  const curGrossRevenue = sumRevenueMetric(dashData?.currentRevenue, "grossRevenue");
+  const curPremiumRevenue = Math.max(0, curGrossRevenue - curAdRevenue);
+  const prevEstRevenue = sumRevenueMetric(dashData?.prevRevenue, "estimatedRevenue");
+  const prevAdRevenue = sumRevenueMetric(dashData?.prevRevenue, "estimatedAdRevenue");
+  const prevGrossRevenue = sumRevenueMetric(dashData?.prevRevenue, "grossRevenue");
+  const prevPremiumRevenue = Math.max(0, prevGrossRevenue - prevAdRevenue);
+
+  // Performance metrics
+  const curViews = sumMetric(dashData?.currentPerformance, "views");
+  const prevViews = sumMetric(dashData?.prevPerformance, "views");
+  const curSubs = sumMetric(dashData?.currentPerformance, "subscribersGained") - sumMetric(dashData?.currentPerformance, "subscribersLost");
+  const prevSubs = sumMetric(dashData?.prevPerformance, "subscribersGained") - sumMetric(dashData?.prevPerformance, "subscribersLost");
+  const curLikes = sumMetric(dashData?.currentPerformance, "likes");
+  const prevLikes = sumMetric(dashData?.prevPerformance, "likes");
+  const curWatchTime = sumMetric(dashData?.currentPerformance, "estimatedMinutesWatched");
+  const prevWatchTime = sumMetric(dashData?.prevPerformance, "estimatedMinutesWatched");
+
+  // CPM and RPM
+  const curCPM = curViews > 0 ? (curEstRevenue / curViews) * 1000 : 0;
+  const prevCPM = prevViews > 0 ? (prevEstRevenue / prevViews) * 1000 : 0;
+  const curRPM = curViews > 0 ? (curEstRevenue / curViews) * 1000 : 0;
+  const prevRPM = prevViews > 0 ? (prevEstRevenue / prevViews) * 1000 : 0;
+
+  // Revenue per channel
+  const channelCount = dashData?.channels?.length || 1;
+  const curRevenuePerChannel = curEstRevenue / channelCount;
+  const prevRevenuePerChannel = prevEstRevenue / (channelCount || 1);
+
+  // Daily revenue chart
+  const dailyRevenueData = getDailyRevenueChartData(dashData?.dailyRevenue);
+  const avgDailyRevenue = dailyRevenueData.length > 0
+    ? dailyRevenueData.reduce((s, d) => s + d.revenue, 0) / dailyRevenueData.length
+    : 0;
+
+  // Top videos
+  const topVideos = isReal ? (dashData?.topVideos?.videos || []) : [];
+  const topVideoAnalytics = dashData?.topVideos?.analytics;
+  const videoAnalyticsMap: Record<string, { views: number; likes: number; subs: number }> = {};
   if (topVideoAnalytics?.rows && topVideoAnalytics.columnHeaders) {
     const headers = topVideoAnalytics.columnHeaders.map((h) => h.name || "");
     const videoIdx = headers.indexOf("video");
     const viewsIdx = headers.indexOf("views");
     const likesIdx = headers.indexOf("likes");
+    const subsIdx = headers.indexOf("subscribersGained");
     for (const row of topVideoAnalytics.rows) {
       const videoId = String(row[videoIdx]);
       videoAnalyticsMap[videoId] = {
         views: viewsIdx !== -1 ? Number(row[viewsIdx]) || 0 : 0,
         likes: likesIdx !== -1 ? Number(row[likesIdx]) || 0 : 0,
+        subs: subsIdx !== -1 ? Number(row[subsIdx]) || 0 : 0,
       };
     }
   }
 
+  // Sort top videos by different metrics for leaderboards
+  const videosSortedByViews = [...topVideos]
+    .map((v) => ({ ...v, analyticsViews: videoAnalyticsMap[v.id || ""]?.views || Number(v.statistics?.viewCount || 0) }))
+    .sort((a, b) => b.analyticsViews - a.analyticsViews)
+    .slice(0, 5);
+  const videosSortedBySubs = [...topVideos]
+    .map((v) => ({ ...v, analyticsSubs: videoAnalyticsMap[v.id || ""]?.subs || 0 }))
+    .sort((a, b) => b.analyticsSubs - a.analyticsSubs)
+    .slice(0, 5);
+
+  const displayStart = dateRange.startDate.split("-").reverse().join("-");
+  const displayEnd = dateRange.endDate.split("-").reverse().join("-");
+  const prevDisplayStart = dateRange.prevStartDate.split("-").reverse().join("-");
+  const prevDisplayEnd = dateRange.prevEndDate.split("-").reverse().join("-");
+
+  const handleDateChange = (preset: string, range: DateRange) => {
+    setDatePreset(preset);
+    setDateRange(range);
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted mt-1">
-            Welcome back, {isReal && channel?.snippet?.title ? channel.snippet.title : ""}. Here&apos;s your channel overview.
-          </p>
-        </div>
-        {isAuthenticated && isReal && (
-          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
-            <Wifi className="w-3.5 h-3.5" />
-            Live YouTube Data
-          </div>
-        )}
-        {isAuthenticated && !isReal && !loading && (
-          <div className="flex items-center gap-2 text-xs">
-            <span className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+        <div className="flex items-center gap-3">
+          {isAuthenticated && isReal && (
+            <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+              <Wifi className="w-3.5 h-3.5" />
+              Live YouTube Data
+            </div>
+          )}
+          {isAuthenticated && loading && (
+            <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Loading...
+            </div>
+          )}
+          {!isAuthenticated && (
+            <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
               <WifiOff className="w-3.5 h-3.5" />
-              {error || "Could not load YouTube data"}
-            </span>
-            <button
-              onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-              className="px-3 py-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-            >
-              Re-authenticate
-            </button>
-          </div>
-        )}
-        {isAuthenticated && loading && (
-          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            Loading YouTube Data...
-          </div>
-        )}
-        {!isAuthenticated && (
-          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-            <WifiOff className="w-3.5 h-3.5" />
-            Sign in with Google to see data
-          </div>
-        )}
+              Sign in to see data
+            </div>
+          )}
+          <button
+            onClick={() => {
+              if (typeof navigator !== "undefined" && navigator.clipboard) {
+                navigator.clipboard.writeText(window.location.href);
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-lg text-muted hover:bg-slate-50 transition-colors"
+            title="Share dashboard"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            Share
+          </button>
+        </div>
       </div>
 
-      {isAuthenticated && loading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
-            <p className="text-sm text-muted">Loading your YouTube data...</p>
-          </div>
-        </div>
-      )}
-
+      {/* Not authenticated */}
       {!isAuthenticated && (
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
@@ -202,120 +270,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {isAuthenticated && !loading && isReal && channel?.statistics && (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            <StatsCard
-              title="Total Views"
-              value={formatNumber(Number(channel.statistics.viewCount || 0))}
-              change="From YouTube"
-              changeType="positive"
-              icon={Eye}
-              iconColor="#f59e0b"
-              iconBg="#fef3c7"
-            />
-            <StatsCard
-              title="Subscribers"
-              value={formatNumber(Number(channel.statistics.subscriberCount || 0))}
-              change="From YouTube"
-              changeType="positive"
-              icon={Users}
-              iconColor="#3b82f6"
-              iconBg="#dbeafe"
-            />
-            <StatsCard
-              title="Total Videos"
-              value={formatNumber(Number(channel.statistics.videoCount || 0))}
-              change="From YouTube"
-              changeType="neutral"
-              icon={Video}
-              iconColor="#8b5cf6"
-              iconBg="#ede9fe"
-            />
-            {viewsChartData && viewsChartData.length > 0 && (
-              <StatsCard
-                title="Watch Time"
-                value={(() => {
-                  if (!dashboardData?.analytics?.rows?.length || !dashboardData.analytics.columnHeaders) return "0 hrs";
-                  const headers = dashboardData.analytics.columnHeaders.map((h) => h.name || "");
-                  const wtIdx = headers.indexOf("estimatedMinutesWatched");
-                  if (wtIdx === -1) return "0 hrs";
-                  const totalMinutes = dashboardData.analytics.rows.reduce((sum, row) => sum + (Number(row[wtIdx]) || 0), 0);
-                  return formatNumber(Math.round(totalMinutes / 60)) + " hrs";
-                })()}
-                change="From YouTube Analytics"
-                changeType="positive"
-                icon={Clock}
-                iconColor="#22c55e"
-                iconBg="#dcfce7"
-              />
-            )}
+      {isAuthenticated && loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
+            <p className="text-sm text-muted">Loading your YouTube data...</p>
           </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ViewsChart data={viewsChartData} />
-            <SubscriberChart data={subscriberChartData} />
-          </div>
-
-          {topVideos.length > 0 && (
-            <div className="bg-white rounded-xl border border-border p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-foreground">Top Performing Videos</h3>
-                <a href="/videos" className="text-sm text-accent hover:underline">
-                  View all
-                </a>
-              </div>
-              <div className="space-y-3">
-                {topVideos.slice(0, 10).map((video, index) => {
-                  const analyticsRow = videoAnalyticsMap[video.id || ""];
-                  const views = analyticsRow?.views || Number(video.statistics?.viewCount || 0);
-                  const likes = analyticsRow?.likes || Number(video.statistics?.likeCount || 0);
-                  const comments = Number(video.statistics?.commentCount || 0);
-                  const thumbnail = video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url || "";
-
-                  return (
-                    <div
-                      key={video.id || index}
-                      className="flex items-center gap-4 p-3 rounded-lg hover:bg-slate-50 transition-colors"
-                    >
-                      <span className="text-sm font-bold text-muted w-6">
-                        {index + 1}
-                      </span>
-                      <div className="w-24 h-14 bg-slate-200 rounded-lg overflow-hidden shrink-0">
-                        {thumbnail && (
-                          <img
-                            src={thumbnail}
-                            alt={video.snippet?.title || ""}
-                            className="w-full h-full object-cover"
-                          />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {video.snippet?.title || "Untitled"}
-                        </p>
-                        <div className="flex items-center gap-4 mt-1">
-                          <span className="text-xs text-muted flex items-center gap-1">
-                            <Play className="w-3 h-3" />
-                            {formatNumber(views)}
-                          </span>
-                          <span className="text-xs text-muted flex items-center gap-1">
-                            <ThumbsUp className="w-3 h-3" />
-                            {formatNumber(likes)}
-                          </span>
-                          <span className="text-xs text-muted flex items-center gap-1">
-                            <MessageSquare className="w-3 h-3" />
-                            {formatNumber(comments)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
 
       {isAuthenticated && !loading && !isReal && (
@@ -332,6 +293,344 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {isAuthenticated && !loading && isReal && (
+        <>
+          {/* ===== SECTION 1: Cumulative Metrics (date-independent) ===== */}
+          <div className="bg-slate-50 rounded-xl border border-border p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-3">
+              Cumulative Metrics <span className="text-xs font-normal text-muted">(Overall, date-independent)</span>
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <MetricCard
+                title="Estimated Revenue"
+                value={formatCurrency(curEstRevenue)}
+                tooltip="Total estimated revenue across all time for the selected period"
+                color="#f59e0b"
+              />
+              <MetricCard
+                title="Ad Revenue"
+                value={formatCurrency(curAdRevenue)}
+                tooltip="Revenue from ads shown on your videos"
+                color="#3b82f6"
+              />
+              <MetricCard
+                title="Premium Revenue"
+                value={formatCurrency(curPremiumRevenue)}
+                tooltip="Revenue from YouTube Premium viewers"
+                color="#22c55e"
+              />
+              <MetricCard
+                title="Avg CPM"
+                value={formatCurrency(curCPM)}
+                tooltip="Average cost per 1000 impressions"
+                color="#8b5cf6"
+              />
+              <MetricCard
+                title="Avg RPM"
+                value={formatCurrency(curRPM)}
+                tooltip="Average revenue per 1000 views"
+                color="#ec4899"
+              />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
+              <MetricCard
+                title="Total Channels"
+                value={String(channelCount)}
+                tooltip="Number of YouTube channels linked"
+                color="#06b6d4"
+              />
+              <MetricCard
+                title="Revenue Per Channel"
+                value={formatCurrency(curRevenuePerChannel)}
+                tooltip="Average revenue per channel"
+                color="#f97316"
+              />
+              <MetricCard
+                title="Videos"
+                value={formatNumber(totalVideos)}
+                tooltip="Total number of videos on your channel(s)"
+                color="#84cc16"
+              />
+              <MetricCard
+                title="Views"
+                value={formatNumber(totalViews)}
+                tooltip="Total lifetime views across all channels"
+                color="#eab308"
+              />
+              <MetricCard
+                title="Subscribers"
+                value={formatNumber(totalSubscribers)}
+                tooltip="Total subscribers across all channels"
+                color="#14b8a6"
+              />
+            </div>
+          </div>
+
+          {/* ===== NOTE ===== */}
+          <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-xs text-blue-700">
+            <span className="font-semibold shrink-0">Note:</span>
+            <span>All date ranges end at {displayEnd} (today minus 3 days) due to YouTube&apos;s data reporting delay.</span>
+          </div>
+
+          {/* ===== DATE RANGE FILTER ===== */}
+          <DateRangeFilter value={datePreset} onChange={handleDateChange} />
+
+          {/* ===== SECTION 2: Performance Overview (with % change) ===== */}
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-1">
+              Performance Overview
+              <span className="text-xs font-normal text-muted ml-2">
+                (Current: {dateRange.label} - {displayStart} to {displayEnd} | Prev: {prevDisplayStart} to {prevDisplayEnd})
+              </span>
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
+              <MetricCard
+                title="Estimated Revenue"
+                value={formatCurrency(curEstRevenue)}
+                change={pctChange(curEstRevenue, prevEstRevenue)}
+                tooltip="Estimated revenue in selected period"
+                color="#f59e0b"
+              />
+              <MetricCard
+                title="Ad Revenue"
+                value={formatCurrency(curAdRevenue)}
+                change={pctChange(curAdRevenue, prevAdRevenue)}
+                tooltip="Ad revenue in selected period"
+                color="#3b82f6"
+              />
+              <MetricCard
+                title="Premium Revenue"
+                value={formatCurrency(curPremiumRevenue)}
+                change={pctChange(curPremiumRevenue, prevPremiumRevenue)}
+                tooltip="YouTube Premium revenue in selected period"
+                color="#22c55e"
+              />
+              <MetricCard
+                title="Avg CPM"
+                value={formatCurrency(curCPM)}
+                change={pctChange(curCPM, prevCPM)}
+                tooltip="Average CPM in selected period"
+                color="#8b5cf6"
+              />
+              <MetricCard
+                title="Avg RPM"
+                value={formatCurrency(curRPM)}
+                change={pctChange(curRPM, prevRPM)}
+                tooltip="Average RPM in selected period"
+                color="#ec4899"
+              />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
+              <MetricCard
+                title="Revenue Per Channel"
+                value={formatCurrency(curRevenuePerChannel)}
+                change={pctChange(curRevenuePerChannel, prevRevenuePerChannel)}
+                tooltip="Revenue per channel in selected period"
+                color="#f97316"
+              />
+              <MetricCard
+                title="Views"
+                value={formatNumber(curViews)}
+                change={pctChange(curViews, prevViews)}
+                tooltip="Total views in selected period"
+                color="#eab308"
+              />
+              <MetricCard
+                title="Subscribers"
+                value={formatNumber(curSubs)}
+                change={pctChange(curSubs, prevSubs)}
+                tooltip="Net subscribers gained in selected period"
+                color="#14b8a6"
+              />
+              <MetricCard
+                title="Likes"
+                value={formatNumber(curLikes)}
+                change={pctChange(curLikes, prevLikes)}
+                tooltip="Total likes in selected period"
+                color="#ef4444"
+              />
+              <MetricCard
+                title="Watch Time"
+                value={formatNumber(Math.round(curWatchTime / 60)) + " hrs"}
+                change={pctChange(curWatchTime, prevWatchTime)}
+                tooltip="Total watch time in hours for selected period"
+                color="#06b6d4"
+              />
+            </div>
+          </div>
+
+          {/* ===== SECTION 3: Top 5 Leaderboards ===== */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Top 5 by Revenue */}
+            {curEstRevenue > 0 && (
+              <div className="bg-white rounded-xl border border-border p-5">
+                <h3 className="font-semibold text-foreground text-sm mb-3 flex items-center gap-2">
+                  <span className="text-amber-500">$</span>
+                  Top 5 Videos by Revenue
+                </h3>
+                <div className="space-y-2">
+                  {videosSortedByViews.slice(0, 5).map((video, i) => {
+                    const thumbnail = video.snippet?.thumbnails?.default?.url || "";
+                    const revenue = videoAnalyticsMap[video.id || ""]?.views || 0;
+                    return (
+                      <div key={video.id || i} className="flex items-center gap-3 py-1.5">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-muted"}`}>
+                          {i + 1}
+                        </span>
+                        {thumbnail && <img src={thumbnail} alt="" className="w-8 h-8 rounded-full object-cover" />}
+                        <span className="flex-1 text-sm text-foreground truncate">{video.snippet?.title || "Untitled"}</span>
+                        <span className="text-sm font-semibold text-foreground">{formatNumber(revenue)} views</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Top 5 by Views */}
+            <div className="bg-white rounded-xl border border-border p-5">
+              <h3 className="font-semibold text-foreground text-sm mb-3 flex items-center gap-2">
+                <Eye className="w-4 h-4 text-blue-500" />
+                Top 5 Videos by Views
+              </h3>
+              <div className="space-y-2">
+                {videosSortedByViews.slice(0, 5).map((video, i) => {
+                  const thumbnail = video.snippet?.thumbnails?.default?.url || "";
+                  return (
+                    <div key={video.id || i} className="flex items-center gap-3 py-1.5">
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-muted"}`}>
+                        {i + 1}
+                      </span>
+                      {thumbnail && <img src={thumbnail} alt="" className="w-8 h-8 rounded-full object-cover" />}
+                      <span className="flex-1 text-sm text-foreground truncate">{video.snippet?.title || "Untitled"}</span>
+                      <span className="text-sm font-semibold text-foreground">{formatNumber(video.analyticsViews)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Top 5 by Subscriber Gain */}
+            <div className="bg-white rounded-xl border border-border p-5">
+              <h3 className="font-semibold text-foreground text-sm mb-3 flex items-center gap-2">
+                <Users className="w-4 h-4 text-green-500" />
+                Top 5 Videos by Subscriber Gain
+              </h3>
+              <div className="space-y-2">
+                {videosSortedBySubs.slice(0, 5).map((video, i) => {
+                  const thumbnail = video.snippet?.thumbnails?.default?.url || "";
+                  return (
+                    <div key={video.id || i} className="flex items-center gap-3 py-1.5">
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-green-100 text-green-700" : "bg-slate-100 text-muted"}`}>
+                        {i + 1}
+                      </span>
+                      {thumbnail && <img src={thumbnail} alt="" className="w-8 h-8 rounded-full object-cover" />}
+                      <span className="flex-1 text-sm text-foreground truncate">{video.snippet?.title || "Untitled"}</span>
+                      <span className="text-sm font-semibold text-foreground">{formatNumber(video.analyticsSubs)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* ===== SECTION 4: Revenue Trend Chart ===== */}
+          {dailyRevenueData.length > 0 && (
+            <div className="bg-white rounded-xl border border-border p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-foreground text-sm">Revenue Trend</h3>
+                <span className="text-xs text-muted">{dateRange.label}</span>
+              </div>
+              <div className="h-[280px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={dailyRevenueData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fill: "#64748b", fontSize: 11 }}
+                      axisLine={{ stroke: "#e2e8f0" }}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      tick={{ fill: "#64748b", fontSize: 11 }}
+                      axisLine={{ stroke: "#e2e8f0" }}
+                      tickFormatter={(v) => `$${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: "8px",
+                        border: "1px solid #e2e8f0",
+                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                      }}
+                      formatter={(value) => [`$${Number(value).toFixed(2)}`, "Revenue"]}
+                    />
+                    <ReferenceLine
+                      y={avgDailyRevenue}
+                      stroke="#94a3b8"
+                      strokeDasharray="5 5"
+                      label={{ value: `Avg: $${avgDailyRevenue.toFixed(2)}`, fill: "#64748b", fontSize: 11, position: "right" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#f59e0b"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* ===== SECTION 5: Top Videos Table ===== */}
+          {topVideos.length > 0 && (
+            <div className="bg-white rounded-xl border border-border p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-foreground">Top Performing Videos</h3>
+                <a href="/videos" className="text-sm text-accent hover:underline">View all</a>
+              </div>
+              <div className="space-y-3">
+                {topVideos.slice(0, 10).map((video, index) => {
+                  const analyticsRow = videoAnalyticsMap[video.id || ""];
+                  const views = analyticsRow?.views || Number(video.statistics?.viewCount || 0);
+                  const likes = analyticsRow?.likes || Number(video.statistics?.likeCount || 0);
+                  const comments = Number(video.statistics?.commentCount || 0);
+                  const thumbnail = video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url || "";
+
+                  return (
+                    <div
+                      key={video.id || index}
+                      className="flex items-center gap-4 p-3 rounded-lg hover:bg-slate-50 transition-colors"
+                    >
+                      <span className="text-sm font-bold text-muted w-6">{index + 1}</span>
+                      <div className="w-24 h-14 bg-slate-200 rounded-lg overflow-hidden shrink-0">
+                        {thumbnail && <img src={thumbnail} alt={video.snippet?.title || ""} className="w-full h-full object-cover" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{video.snippet?.title || "Untitled"}</p>
+                        <div className="flex items-center gap-4 mt-1">
+                          <span className="text-xs text-muted flex items-center gap-1">
+                            <Play className="w-3 h-3" />{formatNumber(views)}
+                          </span>
+                          <span className="text-xs text-muted flex items-center gap-1">
+                            <ThumbsUp className="w-3 h-3" />{formatNumber(likes)}
+                          </span>
+                          <span className="text-xs text-muted flex items-center gap-1">
+                            <MessageSquare className="w-3 h-3" />{formatNumber(comments)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
