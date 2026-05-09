@@ -285,6 +285,7 @@ export async function getRevenueData(
   const auth = getAuthClient(accessToken);
   const analytics = google.youtubeAnalytics({ version: "v2", auth });
 
+  // Try with grossRevenue first (requires content owner/CMS access)
   try {
     const response = await analytics.reports.query({
       ids: "channel==MINE",
@@ -296,7 +297,31 @@ export async function getRevenueData(
     });
     return response.data;
   } catch {
-    return null;
+    // grossRevenue requires content owner access — fallback without it
+    try {
+      const response = await analytics.reports.query({
+        ids: "channel==MINE",
+        startDate,
+        endDate,
+        metrics: "estimatedRevenue,estimatedAdRevenue",
+        dimensions: "month",
+        sort: "month",
+      });
+      return response.data;
+    } catch {
+      // Final fallback — just estimatedRevenue without dimensions
+      try {
+        const response = await analytics.reports.query({
+          ids: "channel==MINE",
+          startDate,
+          endDate,
+          metrics: "estimatedRevenue",
+        });
+        return response.data;
+      } catch {
+        return null;
+      }
+    }
   }
 }
 

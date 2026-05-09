@@ -164,6 +164,11 @@ export async function GET(request: Request) {
         const hasOwnChannel = channelIds.length === 0 ||
           myChannelIds.some((id) => channelIds.includes(id));
 
+        // Get yesterday's date for last day revenue
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 2); // YouTube data is ~2 days delayed
+        const lastDayDate = yesterday.toISOString().split("T")[0];
+
         const [
           channels,
           currentPerformance,
@@ -172,6 +177,8 @@ export async function GET(request: Request) {
           prevRevenue,
           dailyRevenue,
           topVideosByViews,
+          lastDayRevenueData,
+          channelRevenueData,
         ] = await Promise.all([
           channelsPromise,
           hasOwnChannel
@@ -192,7 +199,44 @@ export async function GET(request: Request) {
           hasOwnChannel
             ? getTopVideos(session.accessToken, startDate, endDate)
             : Promise.resolve({ analytics: null, videos: [] }),
+          hasOwnChannel
+            ? getAnalyticsData(session.accessToken, lastDayDate, lastDayDate, "estimatedRevenue,views", "").catch(() => null)
+            : Promise.resolve(null),
+          hasOwnChannel
+            ? getAnalyticsData(session.accessToken, startDate, endDate, "estimatedRevenue,views", "").catch(() => null)
+            : Promise.resolve(null),
         ]);
+
+        // Build per-channel revenue map
+        // YouTube Analytics only provides revenue for the user's own channel
+        // So we attribute all revenue to the user's own channel ID
+        const channelRevenueMap: Record<string, { revenue: number; views: number; rpm: number }> = {};
+        if (channelRevenueData?.rows?.length && channelRevenueData.columnHeaders) {
+          const headers = channelRevenueData.columnHeaders.map((h: { name?: string | null }) => h.name || "");
+          const revIdx = headers.indexOf("estimatedRevenue");
+          const viewsIdx = headers.indexOf("views");
+          const totalRevenue = revIdx !== -1 ? Number(channelRevenueData.rows[0][revIdx]) || 0 : 0;
+          const totalViews = viewsIdx !== -1 ? Number(channelRevenueData.rows[0][viewsIdx]) || 0 : 0;
+          for (const myId of myChannelIds) {
+            if (channelIds.length === 0 || channelIds.includes(myId)) {
+              channelRevenueMap[myId] = {
+                revenue: totalRevenue,
+                views: totalViews,
+                rpm: totalViews > 0 ? (totalRevenue / totalViews) * 1000 : 0,
+              };
+            }
+          }
+        }
+
+        // Extract last day revenue
+        let lastDayRevenue = 0;
+        if (lastDayRevenueData?.rows?.length && lastDayRevenueData.columnHeaders) {
+          const headers = lastDayRevenueData.columnHeaders.map((h: { name?: string | null }) => h.name || "");
+          const revIdx = headers.indexOf("estimatedRevenue");
+          if (revIdx !== -1) {
+            lastDayRevenue = Number(lastDayRevenueData.rows[0][revIdx]) || 0;
+          }
+        }
 
         return Response.json({
           data: {
@@ -204,6 +248,9 @@ export async function GET(request: Request) {
             dailyRevenue,
             topVideos: topVideosByViews,
             hasOwnChannel,
+            channelRevenueMap,
+            lastDayRevenue,
+            lastDayDate,
           },
         });
       }
