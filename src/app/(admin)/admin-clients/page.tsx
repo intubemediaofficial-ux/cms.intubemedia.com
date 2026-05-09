@@ -17,9 +17,25 @@ import {
   Key,
   Eye,
   EyeOff,
+  ExternalLink,
+  CheckCircle2,
+  XCircle,
+  DollarSign,
+  BarChart3,
+  TrendingUp,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+
+interface ChannelDetail {
+  id: string;
+  name: string;
+  subscribers: number;
+  views: number;
+  videos: number;
+  thumbnail: string;
+  tokenStatus: string;
+}
 
 interface Client {
   id: string;
@@ -62,6 +78,11 @@ export default function AdminClientsPage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  // Client detail view state
+  const [viewingClient, setViewingClient] = useState<Client | null>(null);
+  const [clientChannels, setClientChannels] = useState<ChannelDetail[]>([]);
+  const [clientChannelsLoading, setClientChannelsLoading] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -229,6 +250,73 @@ export default function AdminClientsPage() {
       setPasswordSaving(false);
     }
   };
+
+  const openClientView = useCallback(async (client: Client) => {
+    setViewingClient(client);
+    setClientChannels([]);
+    setClientChannelsLoading(true);
+
+    try {
+      // Fetch channel details and token statuses for this client's channels
+      const channelDetails: ChannelDetail[] = [];
+      const channelIds = client.channels;
+
+      if (channelIds.length > 0) {
+        // Fetch token statuses
+        const tokenRes = await fetch(`/api/channel-tokens?action=bulkTokenStatus&channelIds=${encodeURIComponent(channelIds.join(","))}`);
+        const tokenJson = await tokenRes.json();
+        const tokenStatuses = tokenJson.data?.statuses || {};
+
+        // Fetch channel info for each channel
+        for (const chId of channelIds) {
+          try {
+            const chRes = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(chId)}&storedChannelIds=${encodeURIComponent(channelIds.join(","))}`);
+            const chJson = await chRes.json();
+            if (chRes.ok && chJson.data?.length) {
+              const ch = chJson.data[0];
+              const tokenInfo = tokenStatuses[chId] as { status?: string } | undefined;
+              channelDetails.push({
+                id: chId,
+                name: ch.snippet?.title || chId,
+                subscribers: Number(ch.statistics?.subscriberCount || 0),
+                views: Number(ch.statistics?.viewCount || 0),
+                videos: Number(ch.statistics?.videoCount || 0),
+                thumbnail: ch.snippet?.thumbnails?.default?.url || "",
+                tokenStatus: tokenInfo?.status === "valid" ? "Valid" : "Invalid",
+              });
+            } else {
+              const tokenInfo = tokenStatuses[chId] as { status?: string } | undefined;
+              channelDetails.push({
+                id: chId,
+                name: chId,
+                subscribers: 0,
+                views: 0,
+                videos: 0,
+                thumbnail: "",
+                tokenStatus: tokenInfo?.status === "valid" ? "Valid" : "Invalid",
+              });
+            }
+          } catch {
+            channelDetails.push({
+              id: chId,
+              name: chId,
+              subscribers: 0,
+              views: 0,
+              videos: 0,
+              thumbnail: "",
+              tokenStatus: "Invalid",
+            });
+          }
+        }
+      }
+
+      setClientChannels(channelDetails);
+    } catch {
+      // silent
+    } finally {
+      setClientChannelsLoading(false);
+    }
+  }, []);
 
   const handleToggleStatus = async (client: Client) => {
     const newStatus = client.status === "active" ? "inactive" : "active";
@@ -424,12 +512,16 @@ export default function AdminClientsPage() {
                 {pageClients.map((client) => (
                   <tr key={client.id} className="border-b border-border hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => openClientView(client)}
+                        className="flex items-center gap-3 hover:opacity-80 transition-opacity text-left"
+                        title="Click to view client panel"
+                      >
                         <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-sm">
                           {client.name[0]}
                         </div>
-                        <span className="font-medium text-foreground">{client.name}</span>
-                      </div>
+                        <span className="font-medium text-foreground underline decoration-dotted underline-offset-2">{client.name}</span>
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-muted">{client.email}</td>
                     <td className="px-4 py-3 text-muted">{client.phone || "-"}</td>
@@ -455,6 +547,13 @@ export default function AdminClientsPage() {
                     <td className="px-4 py-3 text-muted">{client.joinedDate}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openClientView(client)}
+                          className="p-1.5 hover:bg-green-50 rounded-lg transition-colors"
+                          title="View Client Panel"
+                        >
+                          <Eye className="w-4 h-4 text-green-500" />
+                        </button>
                         <button
                           onClick={() => openEditModal(client)}
                           className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors"
@@ -665,6 +764,194 @@ export default function AdminClientsPage() {
                 )}
                 {editingClient ? "Save Changes" : "Create User"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Client Detail View Modal */}
+      {viewingClient && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
+                  {viewingClient.name[0]}
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">{viewingClient.name}</h2>
+                  <p className="text-sm text-muted">{viewingClient.email}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  viewingClient.status === "active"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                }`}>
+                  {viewingClient.status === "active" ? "Active" : "Inactive"}
+                </span>
+                <button
+                  onClick={() => openEditModal(viewingClient)}
+                  className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Edit User"
+                >
+                  <Edit2 className="w-4 h-4 text-blue-500" />
+                </button>
+                <button
+                  onClick={() => openPasswordModal(viewingClient)}
+                  className="p-1.5 hover:bg-amber-50 rounded-lg transition-colors"
+                  title="Change Password"
+                >
+                  <Key className="w-4 h-4 text-amber-500" />
+                </button>
+                <button
+                  onClick={() => {
+                    handleDeleteClient(viewingClient.id);
+                    setViewingClient(null);
+                  }}
+                  className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Delete User"
+                >
+                  <Trash2 className="w-4 h-4 text-red-400" />
+                </button>
+                <button
+                  onClick={() => setViewingClient(null)}
+                  className="p-1 hover:bg-slate-100 rounded-lg ml-2"
+                >
+                  <X className="w-5 h-5 text-muted" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 overflow-y-auto flex-1">
+              {/* Client Info Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <p className="text-xs text-blue-600 font-medium">Category</p>
+                  <p className="text-lg font-bold text-blue-900">{viewingClient.category}</p>
+                </div>
+                <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                  <div className="flex items-center gap-1.5">
+                    <Radio className="w-3.5 h-3.5 text-purple-500" />
+                    <p className="text-xs text-purple-600 font-medium">Channels</p>
+                  </div>
+                  <p className="text-lg font-bold text-purple-900">{viewingClient.channels.length}</p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                    <p className="text-xs text-green-600 font-medium">Valid Tokens</p>
+                  </div>
+                  <p className="text-lg font-bold text-green-900">
+                    {clientChannels.filter((c) => c.tokenStatus === "Valid").length}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                  <p className="text-xs text-slate-600 font-medium">Joined</p>
+                  <p className="text-lg font-bold text-slate-900">{viewingClient.joinedDate}</p>
+                </div>
+              </div>
+
+              {viewingClient.phone && (
+                <div className="mb-4 text-sm text-muted">
+                  Phone: <span className="font-medium text-foreground">{viewingClient.phone}</span>
+                </div>
+              )}
+
+              {/* Channels Table */}
+              <h3 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
+                <Radio className="w-4 h-4 text-purple-500" />
+                Channels ({viewingClient.channels.length})
+              </h3>
+
+              {clientChannelsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  <span className="ml-2 text-sm text-muted">Loading channel data...</span>
+                </div>
+              ) : clientChannels.length === 0 ? (
+                <div className="text-center py-8 text-muted text-sm">
+                  No channels assigned to this client.
+                </div>
+              ) : (
+                <div className="border border-border rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-border">
+                        <th className="text-left px-4 py-2.5 font-semibold text-foreground">Channel</th>
+                        <th className="text-left px-4 py-2.5 font-semibold text-foreground">Subscribers</th>
+                        <th className="text-left px-4 py-2.5 font-semibold text-foreground">Views</th>
+                        <th className="text-left px-4 py-2.5 font-semibold text-foreground">Videos</th>
+                        <th className="text-left px-4 py-2.5 font-semibold text-foreground">Token</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientChannels.map((ch) => (
+                        <tr key={ch.id} className="border-b border-border hover:bg-slate-50">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {ch.thumbnail ? (
+                                <img src={ch.thumbnail} alt="" className="w-8 h-8 rounded-full" />
+                              ) : (
+                                <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
+                                  <Radio className="w-4 h-4 text-slate-400" />
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-medium text-foreground">{ch.name}</p>
+                                <p className="text-xs text-muted">{ch.id}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-foreground">
+                            {ch.subscribers.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-foreground">
+                            {ch.views.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-foreground">
+                            {ch.videos.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                              ch.tokenStatus === "Valid"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-red-100 text-red-700"
+                            }`}>
+                              {ch.tokenStatus === "Valid" ? (
+                                <CheckCircle2 className="w-3 h-3" />
+                              ) : (
+                                <XCircle className="w-3 h-3" />
+                              )}
+                              {ch.tokenStatus}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-50 font-semibold">
+                        <td className="px-4 py-2.5 text-foreground">Total</td>
+                        <td className="px-4 py-2.5 text-foreground">
+                          {clientChannels.reduce((sum, c) => sum + c.subscribers, 0).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-2.5 text-foreground">
+                          {clientChannels.reduce((sum, c) => sum + c.views, 0).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-2.5 text-foreground">
+                          {clientChannels.reduce((sum, c) => sum + c.videos, 0).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="text-green-600">
+                            {clientChannels.filter((c) => c.tokenStatus === "Valid").length}/{clientChannels.length} Valid
+                          </span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>
