@@ -13,6 +13,7 @@ import {
   getTopVideos,
   lookupChannel,
 } from "@/lib/youtube";
+import { getValidAccessToken, getTokenStatus } from "@/lib/channel-tokens";
 
 export const dynamic = "force-dynamic";
 
@@ -156,7 +157,6 @@ export async function GET(request: Request) {
           : getChannelStats(session.accessToken);
 
         // Check if user's own channel is among the added channels
-        // Analytics API only works for owned channels (channel==MINE)
         const myChannels = await getChannelStats(session.accessToken);
         const myChannelIds = myChannels.map(
           (ch: { id?: string | null }) => ch.id
@@ -169,6 +169,22 @@ export async function GET(request: Request) {
         yesterday.setDate(yesterday.getDate() - 2); // YouTube data is ~2 days delayed
         const lastDayDate = yesterday.toISOString().split("T")[0];
 
+        // Collect per-channel tokens for channels that have valid OAuth tokens
+        const channelTokenMap: Record<string, string> = {};
+        for (const cid of channelIds) {
+          const tokenStatus = await getTokenStatus(cid);
+          if (tokenStatus === "valid" || tokenStatus === "expired") {
+            const token = await getValidAccessToken(cid);
+            if (token) channelTokenMap[cid] = token;
+          }
+        }
+        const tokenizedChannelIds = Object.keys(channelTokenMap);
+        const hasAnyToken = hasOwnChannel || tokenizedChannelIds.length > 0;
+
+        // Use admin token for own channel, per-channel tokens for others
+        const adminToken = session.accessToken;
+
+        // Fetch analytics using admin token (for own channel)
         const [
           channels,
           currentPerformance,
@@ -182,37 +198,69 @@ export async function GET(request: Request) {
         ] = await Promise.all([
           channelsPromise,
           hasOwnChannel
-            ? getAnalyticsData(session.accessToken, startDate, endDate, performanceMetrics, "")
+            ? getAnalyticsData(adminToken, startDate, endDate, performanceMetrics, "")
             : Promise.resolve(null),
           hasOwnChannel
-            ? getAnalyticsData(session.accessToken, prevStartDate, prevEndDate, performanceMetrics, "")
+            ? getAnalyticsData(adminToken, prevStartDate, prevEndDate, performanceMetrics, "")
             : Promise.resolve(null),
           hasOwnChannel
-            ? getRevenueData(session.accessToken, startDate, endDate).catch(() => null)
+            ? getRevenueData(adminToken, startDate, endDate).catch(() => null)
             : Promise.resolve(null),
           hasOwnChannel
-            ? getRevenueData(session.accessToken, prevStartDate, prevEndDate).catch(() => null)
+            ? getRevenueData(adminToken, prevStartDate, prevEndDate).catch(() => null)
             : Promise.resolve(null),
           hasOwnChannel
-            ? getAnalyticsData(session.accessToken, startDate, endDate, "estimatedRevenue", "day").catch(() => null)
+            ? getAnalyticsData(adminToken, startDate, endDate, "estimatedRevenue", "day").catch(() => null)
             : Promise.resolve(null),
           hasOwnChannel
-            ? getTopVideos(session.accessToken, startDate, endDate)
+            ? getTopVideos(adminToken, startDate, endDate)
             : Promise.resolve({ analytics: null, videos: [] }),
           hasOwnChannel
-            ? getAnalyticsData(session.accessToken, lastDayDate, lastDayDate, "estimatedRevenue,views", "").catch(() => null)
+            ? getAnalyticsData(adminToken, lastDayDate, lastDayDate, "estimatedRevenue,views", "").catch(() => null)
             : Promise.resolve(null),
           hasOwnChannel
-            ? getAnalyticsData(session.accessToken, startDate, endDate, "estimatedRevenue,views", "").catch(() => null)
+            ? getAnalyticsData(adminToken, startDate, endDate, "estimatedRevenue,views", "").catch(() => null)
             : Promise.resolve(null),
         ]);
 
+        // Fetch analytics for each tokenized channel using their own OAuth tokens
+        const perChannelAnalytics: Record<string, {
+          performance: Record<string, unknown> | null;
+          prevPerformance: Record<string, unknown> | null;
+          revenue: Record<string, unknown> | null;
+          prevRevenue: Record<string, unknown> | null;
+          revenueViews: Record<string, unknown> | null;
+        }> = {};
+
+        for (const [cid, token] of Object.entries(channelTokenMap)) {
+          // Skip if this is the admin's own channel (already fetched above)
+          if (myChannelIds.includes(cid)) continue;
+          try {
+            const [perf, prevPerf, rev, prevRev, revViews] = await Promise.all([
+              getAnalyticsData(token, startDate, endDate, performanceMetrics, "").catch(() => null),
+              getAnalyticsData(token, prevStartDate, prevEndDate, performanceMetrics, "").catch(() => null),
+              getRevenueData(token, startDate, endDate).catch(() => null),
+              getRevenueData(token, prevStartDate, prevEndDate).catch(() => null),
+              getAnalyticsData(token, startDate, endDate, "estimatedRevenue,views", "").catch(() => null),
+            ]);
+            perChannelAnalytics[cid] = {
+              performance: perf as Record<string, unknown> | null,
+              prevPerformance: prevPerf as Record<string, unknown> | null,
+              revenue: rev as Record<string, unknown> | null,
+              prevRevenue: prevRev as Record<string, unknown> | null,
+              revenueViews: revViews as Record<string, unknown> | null,
+            };
+          } catch {
+            // Token might be invalid, skip
+          }
+        }
+
         // Build per-channel revenue map
-        // YouTube Analytics only provides revenue for the user's own channel
-        // So we attribute all revenue to the user's own channel ID
         const channelRevenueMap: Record<string, { revenue: number; views: number; rpm: number }> = {};
+
+        // Admin's own channel revenue
         if (channelRevenueData?.rows?.length && channelRevenueData.columnHeaders) {
-          const headers = channelRevenueData.columnHeaders.map((h: { name?: string | null }) => h.name || "");
+          const headers = (channelRevenueData.columnHeaders as Array<{ name?: string | null }>).map((h) => h.name || "");
           const revIdx = headers.indexOf("estimatedRevenue");
           const viewsIdx = headers.indexOf("views");
           const totalRevenue = revIdx !== -1 ? Number(channelRevenueData.rows[0][revIdx]) || 0 : 0;
@@ -228,10 +276,27 @@ export async function GET(request: Request) {
           }
         }
 
+        // Per-channel token revenue
+        for (const [cid, data] of Object.entries(perChannelAnalytics)) {
+          const revData = data.revenueViews as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;
+          if (revData?.rows?.length && revData.columnHeaders) {
+            const headers = revData.columnHeaders.map((h) => h.name || "");
+            const revIdx = headers.indexOf("estimatedRevenue");
+            const viewsIdx = headers.indexOf("views");
+            const rev = revIdx !== -1 ? Number(revData.rows[0][revIdx]) || 0 : 0;
+            const views = viewsIdx !== -1 ? Number(revData.rows[0][viewsIdx]) || 0 : 0;
+            channelRevenueMap[cid] = {
+              revenue: rev,
+              views,
+              rpm: views > 0 ? (rev / views) * 1000 : 0,
+            };
+          }
+        }
+
         // Extract last day revenue
         let lastDayRevenue = 0;
         if (lastDayRevenueData?.rows?.length && lastDayRevenueData.columnHeaders) {
-          const headers = lastDayRevenueData.columnHeaders.map((h: { name?: string | null }) => h.name || "");
+          const headers = (lastDayRevenueData.columnHeaders as Array<{ name?: string | null }>).map((h) => h.name || "");
           const revIdx = headers.indexOf("estimatedRevenue");
           if (revIdx !== -1) {
             lastDayRevenue = Number(lastDayRevenueData.rows[0][revIdx]) || 0;
@@ -247,10 +312,12 @@ export async function GET(request: Request) {
             prevRevenue,
             dailyRevenue,
             topVideos: topVideosByViews,
-            hasOwnChannel,
+            hasOwnChannel: hasAnyToken,
             channelRevenueMap,
             lastDayRevenue,
             lastDayDate,
+            perChannelAnalytics,
+            tokenizedChannels: tokenizedChannelIds,
           },
         });
       }
