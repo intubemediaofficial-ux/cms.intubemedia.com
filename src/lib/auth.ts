@@ -80,6 +80,10 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60,
+  },
   callbacks: {
     async jwt({ token, account }) {
       if (account) {
@@ -95,18 +99,22 @@ export const authOptions: NextAuthOptions = {
 
       if (
         token.accessTokenExpires &&
-        Date.now() < token.accessTokenExpires
+        Date.now() < (token.accessTokenExpires as number)
       ) {
         return token;
       }
 
-      return refreshAccessToken(token);
+      if (token.refreshToken) {
+        return refreshAccessToken(token);
+      }
+
+      return token;
     },
     async session({ session, token }) {
-      session.accessToken = token.accessToken;
-      session.error = token.error;
+      session.accessToken = token.accessToken as string | undefined;
+      session.error = token.error as string | undefined;
       if (session.user) {
-        session.user.role = token.role;
+        session.user.role = token.role as "admin" | "client" | undefined;
       }
       return session;
     },

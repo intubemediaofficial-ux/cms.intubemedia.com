@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Search,
   Download,
@@ -11,8 +11,9 @@ import {
   WifiOff,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { formatNumber, formatCurrency } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
+import { downloadCSV } from "@/lib/csv-export";
 
 interface VideoItem {
   id?: string | null;
@@ -79,7 +80,7 @@ export default function VideoRevenuePage() {
           {!isAuthenticated && (
             <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
               <WifiOff className="w-3.5 h-3.5" />
-              Demo Data
+              Sign in to see data
             </div>
           )}
           <select
@@ -115,9 +116,25 @@ export default function VideoRevenuePage() {
           >
             {PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n} per page</option>)}
           </select>
-          <button className="flex items-center gap-2 text-sm text-primary hover:text-primary-dark font-medium px-3 py-2 border border-border rounded-lg">
+          <button
+            onClick={() => {
+              if (filteredVideos.length > 0) {
+                downloadCSV(
+                  ["Title", "Views", "Likes", "Published"],
+                  filteredVideos.map((v) => [
+                    v.snippet?.title || "",
+                    Number(v.statistics?.viewCount || 0),
+                    Number(v.statistics?.likeCount || 0),
+                    v.snippet?.publishedAt ? new Date(v.snippet.publishedAt).toLocaleDateString() : "-",
+                  ]),
+                  "video-revenue-report"
+                );
+              }
+            }}
+            className="flex items-center gap-2 text-sm text-primary hover:text-primary-dark font-medium px-3 py-2 border border-border rounded-lg"
+          >
             <Download className="w-4 h-4" />
-            Export
+            Export CSV
           </button>
         </div>
       </div>

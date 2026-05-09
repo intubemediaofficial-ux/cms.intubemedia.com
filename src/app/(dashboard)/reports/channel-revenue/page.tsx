@@ -11,6 +11,7 @@ import {
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
+import { downloadCSV } from "@/lib/csv-export";
 
 interface YouTubeChannel {
   id?: string | null;
@@ -58,7 +59,7 @@ export default function ChannelRevenuePage() {
           {!isAuthenticated && (
             <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
               <WifiOff className="w-3.5 h-3.5" />
-              Demo Data
+              Sign in to see data
             </div>
           )}
           <select
@@ -71,9 +72,25 @@ export default function ChannelRevenuePage() {
             <option value="90d">Last 90 days</option>
             <option value="365d">Last 365 days</option>
           </select>
-          <button className="flex items-center gap-2 text-sm text-primary hover:text-primary-dark font-medium px-3 py-2 border border-border rounded-lg">
+          <button
+            onClick={() => {
+              if (channels.length > 0) {
+                downloadCSV(
+                  ["Channel", "Subscribers", "Videos", "Views"],
+                  channels.map((ch) => [
+                    ch.snippet?.title || "",
+                    Number(ch.statistics?.subscriberCount || 0),
+                    Number(ch.statistics?.videoCount || 0),
+                    Number(ch.statistics?.viewCount || 0),
+                  ]),
+                  "channel-revenue-report"
+                );
+              }
+            }}
+            className="flex items-center gap-2 text-sm text-primary hover:text-primary-dark font-medium px-3 py-2 border border-border rounded-lg"
+          >
             <Download className="w-4 h-4" />
-            Export
+            Export CSV
           </button>
         </div>
       </div>

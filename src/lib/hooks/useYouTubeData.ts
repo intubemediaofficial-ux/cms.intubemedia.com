@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 
 export function useYouTubeData<T>(
@@ -14,6 +14,8 @@ export function useYouTubeData<T>(
   const [error, setError] = useState<string | null>(null);
   const [isReal, setIsReal] = useState(false);
 
+  const paramsKey = useMemo(() => JSON.stringify(params), [params]);
+
   useEffect(() => {
     if (status === "loading") return;
 
@@ -26,7 +28,8 @@ export function useYouTubeData<T>(
       setLoading(true);
       setError(null);
       try {
-        const queryParams = new URLSearchParams({ action, ...params });
+        const parsedParams = JSON.parse(paramsKey) as Record<string, string>;
+        const queryParams = new URLSearchParams({ action, ...parsedParams });
         const res = await fetch(`/api/youtube?${queryParams}`);
         const json = await res.json();
 
@@ -47,7 +50,7 @@ export function useYouTubeData<T>(
     };
 
     fetchData();
-  }, [session?.accessToken, status, action]);
+  }, [session?.accessToken, status, action, paramsKey]);
 
   return { data, loading, error, isReal };
 }

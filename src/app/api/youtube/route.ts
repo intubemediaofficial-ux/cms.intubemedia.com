@@ -13,11 +13,28 @@ import {
   lookupChannel,
 } from "@/lib/youtube";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.accessToken) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  if (!session) {
+    return Response.json(
+      { error: "No session found. Please log in again." },
+      { status: 401 }
+    );
+  }
+
+  if (!session.accessToken) {
+    return Response.json(
+      {
+        error: session.error === "RefreshAccessTokenError"
+          ? "Session expired. Please log out and log in again."
+          : "No access token. Please log out and sign in with Google again.",
+        sessionError: session.error || null,
+      },
+      { status: 401 }
+    );
   }
 
   const url = new URL(request.url);
@@ -119,6 +136,42 @@ export async function GET(request: Request) {
             channels,
             analytics: analyticsData,
             topVideos: topVideosData,
+          },
+        });
+      }
+      case "dashboardFull": {
+        const prevStartDate = url.searchParams.get("prevStartDate") || startDate;
+        const prevEndDate = url.searchParams.get("prevEndDate") || endDate;
+
+        const performanceMetrics = "views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes";
+
+        const [
+          channels,
+          currentPerformance,
+          prevPerformance,
+          currentRevenue,
+          prevRevenue,
+          dailyRevenue,
+          topVideosByViews,
+        ] = await Promise.all([
+          getChannelStats(session.accessToken),
+          getAnalyticsData(session.accessToken, startDate, endDate, performanceMetrics, ""),
+          getAnalyticsData(session.accessToken, prevStartDate, prevEndDate, performanceMetrics, ""),
+          getRevenueData(session.accessToken, startDate, endDate).catch(() => null),
+          getRevenueData(session.accessToken, prevStartDate, prevEndDate).catch(() => null),
+          getAnalyticsData(session.accessToken, startDate, endDate, "estimatedRevenue", "day").catch(() => null),
+          getTopVideos(session.accessToken, startDate, endDate),
+        ]);
+
+        return Response.json({
+          data: {
+            channels,
+            currentPerformance,
+            prevPerformance,
+            currentRevenue,
+            prevRevenue,
+            dailyRevenue,
+            topVideos: topVideosByViews,
           },
         });
       }
