@@ -14,7 +14,9 @@ import {
   Edit2,
   Trash2,
   Radio,
-  ExternalLink,
+  Key,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -30,43 +32,36 @@ interface Client {
   category: string;
 }
 
-const CLIENTS_KEY = "bainsla_admin_clients";
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
-
-function getClients(): Client[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(CLIENTS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveClients(clients: Client[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
-}
 
 export default function AdminClientsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
   const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [passwordClient, setPasswordClient] = useState<Client | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [perPage, setPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
 
-  // Form state
   const [formName, setFormName] = useState("");
   const [formEmail, setFormEmail] = useState("");
+  const [formPassword, setFormPassword] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formCategory, setFormCategory] = useState("Music");
   const [formChannels, setFormChannels] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -74,13 +69,31 @@ export default function AdminClientsPage() {
     }
   }, [status, session, router]);
 
-  useEffect(() => {
-    setClients(getClients());
+  const fetchClients = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/users");
+      if (res.ok) {
+        const json = await res.json();
+        setClients(json.data || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch clients:", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    if (status === "authenticated" && session?.user?.role === "admin") {
+      fetchClients();
+    }
+  }, [status, session, fetchClients]);
 
   const resetForm = () => {
     setFormName("");
     setFormEmail("");
+    setFormPassword("");
     setFormPhone("");
     setFormCategory("Music");
     setFormChannels("");
@@ -97,6 +110,7 @@ export default function AdminClientsPage() {
     setEditingClient(client);
     setFormName(client.name);
     setFormEmail(client.email);
+    setFormPassword("");
     setFormPhone(client.phone);
     setFormCategory(client.category);
     setFormChannels(client.channels.join(", "));
@@ -104,9 +118,25 @@ export default function AdminClientsPage() {
     setShowModal(true);
   };
 
-  const handleSaveClient = () => {
+  const openPasswordModal = (client: Client) => {
+    setPasswordClient(client);
+    setNewPassword("");
+    setShowNewPassword(false);
+    setPasswordSuccess(false);
+    setShowPasswordModal(true);
+  };
+
+  const handleSaveClient = async () => {
     if (!formName.trim() || !formEmail.trim()) {
       setFormError("Name and Email are required");
+      return;
+    }
+    if (!editingClient && !formPassword.trim()) {
+      setFormError("Password is required for new users");
+      return;
+    }
+    if (!editingClient && formPassword.length < 6) {
+      setFormError("Password must be at least 6 characters");
       return;
     }
 
@@ -115,74 +145,117 @@ export default function AdminClientsPage() {
       .map((c) => c.trim())
       .filter((c) => c.length > 0);
 
-    if (editingClient) {
-      const updated = clients.map((c) =>
-        c.id === editingClient.id
-          ? {
-              ...c,
-              name: formName.trim(),
-              email: formEmail.trim(),
-              phone: formPhone.trim(),
-              category: formCategory,
-              channels: channelIds,
-            }
-          : c
-      );
-      saveClients(updated);
-      setClients(updated);
-    } else {
-      const exists = clients.some(
-        (c) => c.email.toLowerCase() === formEmail.trim().toLowerCase()
-      );
-      if (exists) {
-        setFormError("Client with this email already exists");
-        return;
+    setSaving(true);
+    setFormError(null);
+
+    try {
+      if (editingClient) {
+        const body: Record<string, unknown> = {
+          id: editingClient.id,
+          name: formName.trim(),
+          email: formEmail.trim(),
+          phone: formPhone.trim(),
+          category: formCategory,
+          channels: channelIds,
+        };
+        if (formPassword.trim()) {
+          body.password = formPassword.trim();
+        }
+
+        const res = await fetch("/api/users", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setFormError(data.error || "Failed to update client");
+          return;
+        }
+      } else {
+        const res = await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formName.trim(),
+            email: formEmail.trim(),
+            password: formPassword.trim(),
+            phone: formPhone.trim(),
+            category: formCategory,
+            channels: channelIds,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setFormError(data.error || "Failed to create client");
+          return;
+        }
       }
 
-      const newClient: Client = {
-        id: Date.now().toString(),
-        name: formName.trim(),
-        email: formEmail.trim(),
-        phone: formPhone.trim(),
-        channels: channelIds,
-        status: "active",
-        joinedDate: new Date().toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        }),
-        category: formCategory,
-      };
-
-      const updated = [...clients, newClient];
-      saveClients(updated);
-      setClients(updated);
+      setShowModal(false);
+      resetForm();
+      fetchClients();
+    } catch {
+      setFormError("Failed to save client. Please try again.");
+    } finally {
+      setSaving(false);
     }
-
-    setShowModal(false);
-    resetForm();
   };
 
-  const handleToggleStatus = (clientId: string) => {
-    const updated = clients.map((c) =>
-      c.id === clientId
-        ? { ...c, status: (c.status === "active" ? "inactive" : "active") as "active" | "inactive" }
-        : c
-    );
-    saveClients(updated);
-    setClients(updated);
+  const handleUpdatePassword = async () => {
+    if (!passwordClient || !newPassword.trim()) return;
+    if (newPassword.length < 6) return;
+
+    setPasswordSaving(true);
+    try {
+      const res = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: passwordClient.id,
+          password: newPassword.trim(),
+        }),
+      });
+      if (res.ok) {
+        setPasswordSuccess(true);
+        setTimeout(() => {
+          setShowPasswordModal(false);
+          setPasswordClient(null);
+        }, 1500);
+      }
+    } catch {
+      // silent
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
-  const handleDeleteClient = (clientId: string) => {
-    if (!confirm("Are you sure you want to delete this client?")) return;
-    const updated = clients.filter((c) => c.id !== clientId);
-    saveClients(updated);
-    setClients(updated);
+  const handleToggleStatus = async (client: Client) => {
+    const newStatus = client.status === "active" ? "inactive" : "active";
+    try {
+      await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: client.id, status: newStatus }),
+      });
+      fetchClients();
+    } catch {
+      // silent
+    }
+  };
+
+  const handleDeleteClient = async (clientId: string) => {
+    if (!confirm("Are you sure you want to delete this client? This action cannot be undone.")) return;
+    try {
+      await fetch(`/api/users?id=${clientId}`, { method: "DELETE" });
+      fetchClients();
+    } catch {
+      // silent
+    }
   };
 
   const filteredClients = useMemo(() => {
     let result = clients;
-
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
@@ -192,11 +265,9 @@ export default function AdminClientsPage() {
           c.phone.includes(q)
       );
     }
-
     if (statusFilter) {
       result = result.filter((c) => c.status === statusFilter);
     }
-
     return result;
   }, [clients, searchQuery, statusFilter]);
 
@@ -212,14 +283,14 @@ export default function AdminClientsPage() {
         <Shield className="w-4 h-4 text-red-500" />
         <span className="text-red-500 font-medium">Admin</span>
         <span>›</span>
-        <span className="text-foreground font-medium">Client Management</span>
+        <span className="text-foreground font-medium">User Management</span>
       </div>
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Client Management</h1>
+          <h1 className="text-2xl font-bold text-foreground">User Management</h1>
           <p className="text-sm text-muted mt-1">
-            Add, edit, and manage client partners and their channel assignments.
+            Create, edit, and manage client accounts. Clients can login with their email and password.
           </p>
         </div>
       </div>
@@ -231,7 +302,7 @@ export default function AdminClientsPage() {
             <Users className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="text-sm text-blue-600 font-medium">Total Clients</p>
+            <p className="text-sm text-blue-600 font-medium">Total Users</p>
             <p className="text-2xl font-bold text-blue-900">{clients.length}</p>
           </div>
         </div>
@@ -240,7 +311,7 @@ export default function AdminClientsPage() {
             <Users className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="text-sm text-green-600 font-medium">Active Clients</p>
+            <p className="text-sm text-green-600 font-medium">Active Users</p>
             <p className="text-2xl font-bold text-green-900">
               {clients.filter((c) => c.status === "active").length}
             </p>
@@ -271,7 +342,7 @@ export default function AdminClientsPage() {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Search clients by name, email..."
+              placeholder="Search by name, email..."
               className="w-full pl-10 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
             />
           </div>
@@ -315,14 +386,14 @@ export default function AdminClientsPage() {
         </div>
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
           <p className="text-sm text-muted">
-            Total: <span className="font-semibold text-primary">{filteredClients.length}</span> clients
+            Total: <span className="font-semibold text-primary">{filteredClients.length}</span> users
           </p>
           <button
             onClick={openAddModal}
             className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Add Client
+            Create User
           </button>
         </div>
       </div>
@@ -330,84 +401,97 @@ export default function AdminClientsPage() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-border">
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Client</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Email</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Phone</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Category</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Channels</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Status</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Joined</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageClients.map((client) => (
-                <tr key={client.id} className="border-b border-border hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-sm">
-                        {client.name[0]}
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              <span className="ml-2 text-sm text-muted">Loading users...</span>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-border">
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">User</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Email</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Phone</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Category</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Channels</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Status</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Joined</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageClients.map((client) => (
+                  <tr key={client.id} className="border-b border-border hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-sm">
+                          {client.name[0]}
+                        </div>
+                        <span className="font-medium text-foreground">{client.name}</span>
                       </div>
-                      <span className="font-medium text-foreground">{client.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted">{client.email}</td>
-                  <td className="px-4 py-3 text-muted">{client.phone || "-"}</td>
-                  <td className="px-4 py-3 text-foreground">{client.category}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 text-foreground">
-                      <Radio className="w-3.5 h-3.5 text-purple-500" />
-                      {client.channels.length}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => handleToggleStatus(client.id)}
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${
-                        client.status === "active"
-                          ? "bg-green-100 text-green-700 hover:bg-green-200"
-                          : "bg-red-100 text-red-700 hover:bg-red-200"
-                      }`}
-                    >
-                      {client.status === "active" ? "Active" : "Inactive"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-muted">{client.joinedDate}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
+                    </td>
+                    <td className="px-4 py-3 text-muted">{client.email}</td>
+                    <td className="px-4 py-3 text-muted">{client.phone || "-"}</td>
+                    <td className="px-4 py-3 text-foreground">{client.category}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1 text-foreground">
+                        <Radio className="w-3.5 h-3.5 text-purple-500" />
+                        {client.channels.length}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
                       <button
-                        onClick={() => openEditModal(client)}
-                        className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit"
+                        onClick={() => handleToggleStatus(client)}
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${
+                          client.status === "active"
+                            ? "bg-green-100 text-green-700 hover:bg-green-200"
+                            : "bg-red-100 text-red-700 hover:bg-red-200"
+                        }`}
                       >
-                        <Edit2 className="w-4 h-4 text-blue-500" />
+                        {client.status === "active" ? "Active" : "Inactive"}
                       </button>
-                      <button
-                        onClick={() => handleDeleteClient(client.id)}
-                        className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-400" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {pageClients.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-muted">
-                    No clients found. Click &quot;Add Client&quot; to get started.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    </td>
+                    <td className="px-4 py-3 text-muted">{client.joinedDate}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openEditModal(client)}
+                          className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit User"
+                        >
+                          <Edit2 className="w-4 h-4 text-blue-500" />
+                        </button>
+                        <button
+                          onClick={() => openPasswordModal(client)}
+                          className="p-1.5 hover:bg-amber-50 rounded-lg transition-colors"
+                          title="Change Password"
+                        >
+                          <Key className="w-4 h-4 text-amber-500" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClient(client.id)}
+                          className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete User"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-400" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {pageClients.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-12 text-center text-muted">
+                      No users found. Click &quot;Create User&quot; to get started.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-slate-50">
             <p className="text-sm text-muted">
@@ -451,13 +535,13 @@ export default function AdminClientsPage() {
         )}
       </div>
 
-      {/* Add/Edit Client Modal */}
+      {/* Create/Edit User Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl">
             <div className="flex items-center justify-between p-5 border-b border-border">
               <h2 className="text-lg font-semibold text-foreground">
-                {editingClient ? "Edit Client" : "Add New Client"}
+                {editingClient ? "Edit User" : "Create New User"}
               </h2>
               <button
                 onClick={() => {
@@ -473,7 +557,7 @@ export default function AdminClientsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Client Name <span className="text-red-500">*</span>
+                    Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -493,11 +577,24 @@ export default function AdminClientsPage() {
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value)}
                     placeholder="client@email.com"
-                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    disabled={!!editingClient}
+                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-slate-50"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Password {!editingClient && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    type="password"
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
+                    placeholder={editingClient ? "Leave blank to keep current" : "Min 6 characters"}
+                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Phone
@@ -510,22 +607,22 @@ export default function AdminClientsPage() {
                     className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Category
-                  </label>
-                  <select
-                    value={formCategory}
-                    onChange={(e) => setFormCategory(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  >
-                    <option value="Music">Music</option>
-                    <option value="Entertainment">Entertainment</option>
-                    <option value="Devotional">Devotional</option>
-                    <option value="Education">Education</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Category
+                </label>
+                <select
+                  value={formCategory}
+                  onChange={(e) => setFormCategory(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="Music">Music</option>
+                  <option value="Entertainment">Entertainment</option>
+                  <option value="Devotional">Devotional</option>
+                  <option value="Education">Education</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
@@ -558,12 +655,95 @@ export default function AdminClientsPage() {
               </button>
               <button
                 onClick={handleSaveClient}
-                className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium"
+                disabled={saving}
+                className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
               >
-                <Plus className="w-4 h-4" />
-                {editingClient ? "Save Changes" : "Add Client"}
+                {saving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
+                {editingClient ? "Save Changes" : "Create User"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {showPasswordModal && passwordClient && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">Change Password</h2>
+              <button
+                onClick={() => setShowPasswordModal(false)}
+                className="p-1 hover:bg-slate-100 rounded-lg"
+              >
+                <X className="w-5 h-5 text-muted" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <p className="text-sm text-muted">User</p>
+                <p className="font-medium text-foreground">{passwordClient.name}</p>
+                <p className="text-xs text-muted">{passwordClient.email}</p>
+              </div>
+              {passwordSuccess ? (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 text-center">
+                  Password updated successfully!
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Min 6 characters"
+                      className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 pr-10"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                    >
+                      {showNewPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            {!passwordSuccess && (
+              <div className="flex items-center justify-end gap-3 p-5 border-t border-border">
+                <button
+                  onClick={() => setShowPasswordModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-muted hover:text-foreground border border-border rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdatePassword}
+                  disabled={passwordSaving || newPassword.length < 6}
+                  className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
+                >
+                  {passwordSaving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Key className="w-4 h-4" />
+                  )}
+                  Update Password
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

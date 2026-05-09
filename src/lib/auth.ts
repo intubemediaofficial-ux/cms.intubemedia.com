@@ -1,6 +1,8 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { kv } from "@vercel/kv";
+import crypto from "crypto";
 
 declare module "next-auth" {
   interface Session {
@@ -29,6 +31,7 @@ declare module "next-auth/jwt" {
 const ADMIN_EMAILS = [
   "vijendrachoudhary95@gmail.com",
   "ajeetgurjarofficial@gmail.com",
+  "bainslamusicofficial@gmail.com",
 ];
 
 const ADMIN_CREDENTIALS: Record<string, { password: string; name: string }> = {
@@ -40,7 +43,47 @@ const ADMIN_CREDENTIALS: Record<string, { password: string; name: string }> = {
     password: process.env.ADMIN_PASSWORD_2 || "BainslaAdmin@2026",
     name: "Ajeet Gurjar",
   },
+  "bainslamusicofficial@gmail.com": {
+    password: process.env.ADMIN_PASSWORD_3 || "BainslaAdmin@2026",
+    name: "Bainsla Music",
+  },
 };
+
+interface StoredUser {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  status: "active" | "inactive";
+  role: "client";
+}
+
+function hashPassword(password: string): string {
+  return crypto.createHash("sha256").update(password).digest("hex");
+}
+
+async function verifyClientCredentials(
+  email: string,
+  password: string
+): Promise<{ name: string; email: string } | null> {
+  try {
+    const users = await kv.get<StoredUser[]>("bainsla_users");
+    if (!users) return null;
+
+    const user = users.find(
+      (u) => u.email.toLowerCase() === email && u.status === "active"
+    );
+    if (!user) return null;
+
+    const hashed = hashPassword(password);
+    if (user.password !== hashed) return null;
+
+    return { name: user.name, email: user.email };
+  } catch (error) {
+    console.error("[Auth] Failed to verify client credentials:", error);
+    return null;
+  }
+}
 
 async function refreshAccessToken(token: import("next-auth/jwt").JWT) {
   try {
@@ -75,38 +118,39 @@ export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       id: "credentials",
-      name: "Admin Login",
+      name: "Login",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
         loginType: { label: "Login Type", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials?.email) return null;
+        if (!credentials?.email || !credentials?.password) return null;
         const email = credentials.email.toLowerCase();
 
-        // OTP login — password field contains "otp-verified" marker
-        if (credentials.loginType === "otp") {
-          // OTP was already verified by /api/auth/verify-otp
-          // Just create the session
+        // Admin login
+        const admin = ADMIN_CREDENTIALS[email];
+        if (admin && credentials.password === admin.password) {
           return {
             id: email,
             email,
-            name: email.split("@")[0],
+            name: admin.name,
             image: null,
           };
         }
 
-        // Password login — admin credentials
-        if (!credentials.password) return null;
-        const admin = ADMIN_CREDENTIALS[email];
-        if (!admin || credentials.password !== admin.password) return null;
-        return {
-          id: email,
-          email,
-          name: admin.name,
-          image: null,
-        };
+        // Client login via KV
+        const client = await verifyClientCredentials(email, credentials.password);
+        if (client) {
+          return {
+            id: client.email,
+            email: client.email,
+            name: client.name,
+            image: null,
+          };
+        }
+
+        return null;
       },
     }),
     GoogleProvider({
@@ -136,7 +180,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, account, user }) {
       if (account) {
         if (account.type === "credentials") {
-          token.role = "admin";
+          // role assigned below based on email
         } else {
           token.accessToken = account.access_token;
           token.refreshToken = account.refresh_token;

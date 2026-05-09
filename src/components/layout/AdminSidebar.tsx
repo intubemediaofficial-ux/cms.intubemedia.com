@@ -28,7 +28,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: "/admin-dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin-clients", label: "Client Management", icon: Users },
+  { href: "/admin-clients", label: "User Management", icon: Users },
   {
     href: "/admin-channels",
     label: "Channels",
