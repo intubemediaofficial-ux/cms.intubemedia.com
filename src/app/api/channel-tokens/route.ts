@@ -1,0 +1,124 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import {
+  getChannelToken,
+  setChannelToken,
+  deleteChannelToken,
+  getTokenStatus,
+  isKVConfigured,
+} from "@/lib/channel-tokens";
+
+export const dynamic = "force-dynamic";
+
+const ADMIN_EMAILS = [
+  "vijendrachoudhary95@gmail.com",
+  "ajeetgurjarofficial@gmail.com",
+];
+
+function isAdmin(email: string | null | undefined): boolean {
+  return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session || !isAdmin(session.user?.email)) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const action = url.searchParams.get("action");
+
+  switch (action) {
+    case "generateInviteLink": {
+      const channelId = url.searchParams.get("channelId");
+      const channelTitle = url.searchParams.get("channelTitle") || "";
+      if (!channelId) {
+        return Response.json({ error: "channelId required" }, { status: 400 });
+      }
+
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        return Response.json({ error: "Google Client ID not configured" }, { status: 500 });
+      }
+
+      const baseUrl = process.env.NEXTAUTH_URL || "https://bainsla-music-cms.vercel.app";
+      const redirectUri = `${baseUrl}/callback`;
+      const state = `youtube-auth-${channelId}-${Date.now()}`;
+
+      const scopes = [
+        "https://www.googleapis.com/auth/youtube.readonly",
+        "https://www.googleapis.com/auth/yt-analytics.readonly",
+        "https://www.googleapis.com/auth/yt-analytics-monetary.readonly",
+      ];
+
+      const oauthUrl = `https://accounts.google.com/o/oauth2/auth?` +
+        `access_type=offline` +
+        `&client_id=${encodeURIComponent(clientId)}` +
+        `&prompt=consent` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent(scopes.join(" "))}` +
+        `&state=${encodeURIComponent(state)}`;
+
+      return Response.json({
+        data: {
+          oauthUrl,
+          channelId,
+          channelTitle,
+          state,
+          redirectUri,
+        },
+      });
+    }
+
+    case "tokenStatus": {
+      const channelId = url.searchParams.get("channelId");
+      if (!channelId) {
+        return Response.json({ error: "channelId required" }, { status: 400 });
+      }
+
+      const status = await getTokenStatus(channelId);
+      const token = await getChannelToken(channelId);
+      return Response.json({
+        data: {
+          channelId,
+          status,
+          channelTitle: token?.channelTitle || null,
+          updatedAt: token?.updatedAt || null,
+          kvConfigured: isKVConfigured(),
+        },
+      });
+    }
+
+    case "bulkTokenStatus": {
+      const channelIdsParam = url.searchParams.get("channelIds") || "";
+      const channelIds = channelIdsParam.split(",").filter(Boolean);
+
+      const statuses: Record<string, { status: string; channelTitle?: string; updatedAt?: string }> = {};
+      for (const id of channelIds) {
+        const status = await getTokenStatus(id);
+        const token = await getChannelToken(id);
+        statuses[id] = {
+          status,
+          channelTitle: token?.channelTitle || undefined,
+          updatedAt: token?.updatedAt || undefined,
+        };
+      }
+
+      return Response.json({ data: { statuses, kvConfigured: isKVConfigured() } });
+    }
+
+    case "deleteToken": {
+      const channelId = url.searchParams.get("channelId");
+      if (!channelId) {
+        return Response.json({ error: "channelId required" }, { status: 400 });
+      }
+
+      await deleteChannelToken(channelId);
+      return Response.json({ data: { success: true, channelId } });
+    }
+
+    default:
+      return Response.json({ error: "Invalid action" }, { status: 400 });
+  }
+}

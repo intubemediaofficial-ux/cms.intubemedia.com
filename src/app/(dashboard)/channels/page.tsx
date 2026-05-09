@@ -17,6 +17,12 @@ import {
   RefreshCw,
   ArrowRightLeft,
   ClipboardList,
+  Link2,
+  Copy,
+  Mail,
+  Check,
+  MoreVertical,
+  Key,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
@@ -136,6 +142,19 @@ export default function ChannelsPage() {
   const [bulkAdding, setBulkAdding] = useState(false);
   const [bulkResult, setBulkResult] = useState<string | null>(null);
 
+  // Invite Link Modal State
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteChannelId, setInviteChannelId] = useState("");
+  const [inviteChannelTitle, setInviteChannelTitle] = useState("");
+  const [inviteOAuthUrl, setInviteOAuthUrl] = useState("");
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteEmails, setInviteEmails] = useState("");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteSentMessage, setInviteSentMessage] = useState("");
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [activeActionMenu, setActiveActionMenu] = useState<string | null>(null);
+  const [tokenStatuses, setTokenStatuses] = useState<Record<string, string>>({});
+
   useEffect(() => {
     if (!isAuthenticated) return;
     const activeStored = storedChannels.filter((c) => c.status === "active");
@@ -161,6 +180,71 @@ export default function ChannelsPage() {
     };
     fetchChannels();
   }, [isAuthenticated, storedChannels, channelDataMap]);
+
+  // Fetch token statuses for all stored channels
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const activeStored = storedChannels.filter((c) => c.status === "active");
+    if (activeStored.length === 0) return;
+
+    const ids = activeStored.map((c) => c.id).join(",");
+    fetch(`/api/channel-tokens?action=bulkTokenStatus&channelIds=${encodeURIComponent(ids)}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.data?.statuses) {
+          const statusMap: Record<string, string> = {};
+          for (const [id, info] of Object.entries(json.data.statuses)) {
+            const typedInfo = info as { status: string };
+            statusMap[id] = typedInfo.status === "valid" ? "Valid" : typedInfo.status === "expired" ? "Expired" : "N/A";
+          }
+          setTokenStatuses(statusMap);
+        }
+      })
+      .catch(() => {});
+  }, [isAuthenticated, storedChannels]);
+
+  const handleGenerateInviteLink = useCallback(async (channelId: string, channelTitle: string) => {
+    setGeneratingLink(true);
+    setInviteChannelId(channelId);
+    setInviteChannelTitle(channelTitle);
+    setInviteCopied(false);
+    setInviteEmails("");
+    setInviteSentMessage("");
+    setActiveActionMenu(null);
+
+    try {
+      const res = await fetch(
+        `/api/channel-tokens?action=generateInviteLink&channelId=${encodeURIComponent(channelId)}&channelTitle=${encodeURIComponent(channelTitle)}`
+      );
+      const json = await res.json();
+      if (res.ok && json.data?.oauthUrl) {
+        setInviteOAuthUrl(json.data.oauthUrl);
+        setShowInviteModal(true);
+      }
+    } catch {
+      // error
+    } finally {
+      setGeneratingLink(false);
+    }
+  }, []);
+
+  const handleCopyInviteUrl = useCallback(() => {
+    navigator.clipboard.writeText(inviteOAuthUrl);
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2000);
+  }, [inviteOAuthUrl]);
+
+  const handleSendInviteEmail = useCallback(async () => {
+    const emails = inviteEmails.split(/[,;\s]+/).filter((e) => e.includes("@"));
+    if (emails.length === 0) return;
+
+    setInviteSending(true);
+    // For now, copy the link to clipboard and show a message
+    // Email sending requires a backend email service (SendGrid, etc.)
+    await navigator.clipboard.writeText(inviteOAuthUrl);
+    setInviteSentMessage(`Link copied! Please share it manually with: ${emails.join(", ")}`);
+    setInviteSending(false);
+  }, [inviteEmails, inviteOAuthUrl]);
 
   const handleAddChannel = useCallback(async () => {
     const id = channelIdInput.trim();
@@ -227,6 +311,14 @@ export default function ChannelsPage() {
   const handleTransfer = (channelId: string) => {
     const updated = storedChannels.map((c) =>
       c.id === channelId ? { ...c, status: "transferred" as const } : c
+    );
+    saveStoredChannels(updated);
+    setStoredChannels(updated);
+  };
+
+  const handleRelink = (channelId: string) => {
+    const updated = storedChannels.map((c) =>
+      c.id === channelId ? { ...c, status: "active" as const } : c
     );
     saveStoredChannels(updated);
     setStoredChannels(updated);
@@ -343,7 +435,7 @@ export default function ChannelsPage() {
           views: Number(ch.statistics?.viewCount || 0),
           category: storedInfo?.category || "Music",
           channelType: storedInfo?.channelType || "Original",
-          tokenStatus: "Valid",
+          tokenStatus: tokenStatuses[ch.id || ""] || storedInfo?.tokenStatus || "Valid",
           cms: storedInfo?.cms || "Bainsla Music",
           addedDate: storedInfo?.addedDate || "-",
           isOwn: true,
@@ -365,7 +457,7 @@ export default function ChannelsPage() {
         views: Number(data?.statistics?.viewCount || 0),
         category: sc.category,
         channelType: sc.channelType || "Original",
-        tokenStatus: sc.tokenStatus || "Valid",
+        tokenStatus: tokenStatuses[sc.id] || sc.tokenStatus || "N/A",
         cms: sc.cms || "Bainsla Music",
         addedDate: sc.addedDate,
         isOwn: false,
@@ -374,11 +466,12 @@ export default function ChannelsPage() {
     }
 
     return rows;
-  }, [isReal, myChannels, storedChannels, channelDataMap]);
+  }, [isReal, myChannels, storedChannels, channelDataMap, tokenStatuses]);
 
   const activeChannels = allChannelRows.filter((c) => c.status === "active");
   const transferredChannels = allChannelRows.filter((c) => c.status === "transferred");
   const channelsWithToken = activeChannels.filter((c) => c.tokenStatus === "Valid");
+  const transferredWithToken = transferredChannels.filter((c) => c.tokenStatus === "Valid");
 
   const filteredChannels = useMemo(() => {
     const source = activeTab === "transferred" ? transferredChannels : activeChannels;
@@ -480,14 +573,20 @@ export default function ChannelsPage() {
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
-                <Radio className="w-6 h-6 text-white" />
+            <div className={`${activeTab === "transferred" ? "bg-purple-50 border-purple-200" : "bg-blue-50 border-blue-200"} border rounded-xl p-5 flex items-center gap-4`}>
+              <div className={`w-12 h-12 ${activeTab === "transferred" ? "bg-purple-500" : "bg-blue-500"} rounded-xl flex items-center justify-center`}>
+                {activeTab === "transferred" ? <ArrowRightLeft className="w-6 h-6 text-white" /> : <Radio className="w-6 h-6 text-white" />}
               </div>
               <div>
-                <p className="text-sm text-blue-600 font-medium">Total Channels</p>
-                <p className="text-2xl font-bold text-blue-900">{activeChannels.length}</p>
-                <p className="text-xs text-blue-500">All registered channels</p>
+                <p className={`text-sm ${activeTab === "transferred" ? "text-purple-600" : "text-blue-600"} font-medium`}>
+                  {activeTab === "transferred" ? "Transferred Channels" : "Total Channels"}
+                </p>
+                <p className={`text-2xl font-bold ${activeTab === "transferred" ? "text-purple-900" : "text-blue-900"}`}>
+                  {activeTab === "transferred" ? transferredChannels.length : activeChannels.length}
+                </p>
+                <p className={`text-xs ${activeTab === "transferred" ? "text-purple-500" : "text-blue-500"}`}>
+                  {activeTab === "transferred" ? "Channels transferred to other partners" : "All registered channels"}
+                </p>
               </div>
             </div>
             <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-4">
@@ -496,7 +595,9 @@ export default function ChannelsPage() {
               </div>
               <div>
                 <p className="text-sm text-green-600 font-medium">Channels With Token</p>
-                <p className="text-2xl font-bold text-green-900">{channelsWithToken.length}</p>
+                <p className="text-2xl font-bold text-green-900">
+                  {activeTab === "transferred" ? transferredWithToken.length : channelsWithToken.length}
+                </p>
                 <p className="text-xs text-green-500">Channels with active tokens</p>
               </div>
             </div>
@@ -717,22 +818,51 @@ export default function ChannelsPage() {
                       <td className="px-4 py-3 text-foreground">{channel.category}</td>
                       <td className="px-4 py-3 text-muted">{channel.addedDate}</td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {!channel.isOwn && activeTab === "channels" && (
-                            <>
+                        <div className="relative">
+                          <button
+                            onClick={() => setActiveActionMenu(activeActionMenu === channel.id ? null : channel.id)}
+                            className="p-1.5 rounded hover:bg-slate-100 transition-colors"
+                          >
+                            <MoreVertical className="w-4 h-4 text-muted" />
+                          </button>
+                          {activeActionMenu === channel.id && (
+                            <div className="absolute right-0 top-8 z-50 bg-white rounded-lg shadow-lg border border-border py-1 min-w-[200px]">
                               <button
-                                onClick={() => handleDelink(channel.id)}
-                                className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                                onClick={() => handleGenerateInviteLink(channel.id, channel.name)}
+                                disabled={generatingLink}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-slate-50 transition-colors"
                               >
-                                Delink
+                                <Key className="w-4 h-4 text-amber-500" />
+                                {generatingLink ? "Generating..." : "Generate Invite Link"}
                               </button>
-                              <button
-                                onClick={() => handleTransfer(channel.id)}
-                                className="text-xs text-blue-500 hover:text-blue-700 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
-                              >
-                                Transfer
-                              </button>
-                            </>
+                              {activeTab === "channels" && !channel.isOwn && (
+                                <>
+                                  <button
+                                    onClick={() => { handleDelink(channel.id); setActiveActionMenu(null); }}
+                                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                  >
+                                    <WifiOff className="w-4 h-4" />
+                                    Delink Channel
+                                  </button>
+                                  <button
+                                    onClick={() => { handleTransfer(channel.id); setActiveActionMenu(null); }}
+                                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+                                  >
+                                    <ArrowRightLeft className="w-4 h-4" />
+                                    Transfer Channel
+                                  </button>
+                                </>
+                              )}
+                              {activeTab === "transferred" && (
+                                <button
+                                  onClick={() => { handleRelink(channel.id); setActiveActionMenu(null); }}
+                                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-green-600 hover:bg-green-50 transition-colors"
+                                >
+                                  <RefreshCw className="w-4 h-4" />
+                                  Relink Channel
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       </td>
@@ -1059,6 +1189,103 @@ export default function ChannelsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Channel Invite Link Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+            <div className="p-5 border-b border-border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Channel Invite Link Generated</h2>
+                  <p className="text-sm text-muted mt-0.5">For channel: {inviteChannelTitle}</p>
+                </div>
+                <button
+                  onClick={() => setShowInviteModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5 text-muted" />
+                </button>
+              </div>
+            </div>
+            <div className="p-5 space-y-5">
+              {/* OAuth URL */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-foreground">OAuth Authorization URL:</label>
+                  <button
+                    onClick={handleCopyInviteUrl}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      inviteCopied
+                        ? "bg-green-100 text-green-700"
+                        : "bg-primary text-white hover:bg-primary-dark"
+                    }`}
+                  >
+                    {inviteCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        Copy URL
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="bg-slate-50 border border-border rounded-lg p-3 max-h-32 overflow-y-auto">
+                  <p className="text-xs text-muted break-all font-mono">{inviteOAuthUrl}</p>
+                </div>
+              </div>
+
+              {/* Send via Email */}
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Send Invite via Email (max 5):
+                </label>
+                <div className="space-y-2">
+                  <label className="text-xs text-muted">Email Addresses:</label>
+                  <input
+                    type="text"
+                    value={inviteEmails}
+                    onChange={(e) => setInviteEmails(e.target.value)}
+                    placeholder="Type email and press comma or enter (max 5)"
+                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  />
+                  <button
+                    onClick={handleSendInviteEmail}
+                    disabled={inviteSending || !inviteEmails.trim()}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <Mail className="w-4 h-4" />
+                    {inviteSending ? "Sending..." : "Send Invite"}
+                  </button>
+                  {inviteSentMessage && (
+                    <p className="text-sm text-green-600">{inviteSentMessage}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end p-5 border-t border-border">
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="px-4 py-2 text-sm font-medium text-muted hover:text-foreground border border-border rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Click outside to close action menu */}
+      {activeActionMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setActiveActionMenu(null)}
+        />
       )}
     </div>
   );
