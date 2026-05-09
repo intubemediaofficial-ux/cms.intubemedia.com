@@ -1,5 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
 
 declare module "next-auth" {
   interface Session {
@@ -29,6 +30,17 @@ const ADMIN_EMAILS = [
   "vijendrachoudhary95@gmail.com",
   "ajeetgurjarofficial@gmail.com",
 ];
+
+const ADMIN_CREDENTIALS: Record<string, { password: string; name: string }> = {
+  "vijendrachoudhary95@gmail.com": {
+    password: process.env.ADMIN_PASSWORD || "BainslaAdmin@2026",
+    name: "Vijendra Choudhary",
+  },
+  "ajeetgurjarofficial@gmail.com": {
+    password: process.env.ADMIN_PASSWORD_2 || "BainslaAdmin@2026",
+    name: "Ajeet Gurjar",
+  },
+};
 
 async function refreshAccessToken(token: import("next-auth/jwt").JWT) {
   try {
@@ -61,6 +73,25 @@ async function refreshAccessToken(token: import("next-auth/jwt").JWT) {
 
 export const authOptions: NextAuthOptions = {
   providers: [
+    CredentialsProvider({
+      name: "Admin Login",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null;
+        const email = credentials.email.toLowerCase();
+        const admin = ADMIN_CREDENTIALS[email];
+        if (!admin || credentials.password !== admin.password) return null;
+        return {
+          id: email,
+          email,
+          name: admin.name,
+          image: null,
+        };
+      },
+    }),
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
@@ -85,13 +116,21 @@ export const authOptions: NextAuthOptions = {
     maxAge: 30 * 24 * 60 * 60,
   },
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account, user }) {
       if (account) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.accessTokenExpires = account.expires_at
-          ? account.expires_at * 1000
-          : Date.now() + 3600 * 1000;
+        if (account.type === "credentials") {
+          token.role = "admin";
+        } else {
+          token.accessToken = account.access_token;
+          token.refreshToken = account.refresh_token;
+          token.accessTokenExpires = account.expires_at
+            ? account.expires_at * 1000
+            : Date.now() + 3600 * 1000;
+        }
+        if (user) {
+          token.email = user.email;
+          token.name = user.name;
+        }
       }
 
       const email = token.email?.toLowerCase() || "";
