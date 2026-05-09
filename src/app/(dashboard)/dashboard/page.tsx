@@ -160,7 +160,7 @@ export default function DashboardPage() {
   const { data: session, status } = useSession();
   const hasAccessToken = !!session?.accessToken;
   const isAdminSession = session?.user?.role === "admin";
-  const isAuthenticated = status === "authenticated" && (hasAccessToken || isAdminSession);
+  const isAuthenticated = status === "authenticated";
 
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));

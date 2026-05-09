@@ -20,6 +20,7 @@ export const dynamic = "force-dynamic";
 const ADMIN_EMAILS = [
   "vijendrachoudhary95@gmail.com",
   "ajeetgurjarofficial@gmail.com",
+  "bainslamusicofficial@gmail.com",
 ];
 
 export async function GET(request: Request) {
@@ -33,14 +34,15 @@ export async function GET(request: Request) {
   }
 
   const isAdminCredentials = !session.accessToken && ADMIN_EMAILS.includes(session.user?.email?.toLowerCase() || "");
+  const isCredentialsLogin = !session.accessToken;
 
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
   const startDate = url.searchParams.get("startDate") || getDefaultStartDate();
   const endDate = url.searchParams.get("endDate") || getDefaultEndDate();
 
-  // Admin credentials login can access dashboardFull and lookupChannel via per-channel tokens
-  if (!session.accessToken && !isAdminCredentials) {
+  // Credentials login (admin or client) can access dashboardFull and lookupChannel via per-channel tokens
+  if (!session.accessToken && !isAdminCredentials && !isCredentialsLogin) {
     return Response.json(
       {
         error: session.error === "RefreshAccessTokenError"
@@ -53,8 +55,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Actions that require Google OAuth access token
-    if (isAdminCredentials && !["dashboardFull", "lookupChannel", "dashboard", "videos"].includes(action || "")) {
+    // Credentials login (admin or client) can only access certain actions via per-channel tokens
+    if (isCredentialsLogin && !["dashboardFull", "lookupChannel", "dashboard", "videos"].includes(action || "")) {
       return Response.json(
         { error: "This action requires Google OAuth login. Please sign in with Google.", needsGoogleAuth: true },
         { status: 401 }
@@ -142,12 +144,11 @@ export async function GET(request: Request) {
         const query = url.searchParams.get("query");
         if (!query)
           return Response.json({ error: "query required" }, { status: 400 });
-        // For admin credentials login, try using any available per-channel token for lookup
+        // Try OAuth token first
         let lookupToken = session.accessToken;
         if (!lookupToken) {
-          // Try to find any valid channel token to use for the lookup API call
+          // Try per-channel tokens
           const { getValidAccessToken: getToken } = await import("@/lib/channel-tokens");
-          // We need any token — iterate stored channel IDs from the query params
           const storedIds = url.searchParams.get("storedChannelIds")?.split(",").filter(Boolean) || [];
           for (const sid of storedIds) {
             const t = await getToken(sid);
@@ -155,6 +156,41 @@ export async function GET(request: Request) {
           }
         }
         if (!lookupToken) {
+          // Fallback: use YouTube Data API key for public channel lookup
+          const apiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_API_KEY;
+          if (apiKey) {
+            try {
+              const { google } = await import("googleapis");
+              const youtube = google.youtube({ version: "v3", auth: apiKey });
+              if (query.startsWith("UC") && query.length >= 20) {
+                const response = await youtube.channels.list({
+                  part: ["snippet", "statistics", "contentDetails", "brandingSettings"],
+                  id: [query],
+                });
+                if (response.data.items?.length) {
+                  return Response.json({ data: response.data.items });
+                }
+              }
+              // Try search as fallback
+              const searchResponse = await youtube.search.list({
+                part: ["snippet"],
+                q: query,
+                type: ["channel"],
+                maxResults: 5,
+              });
+              if (searchResponse.data.items?.length) {
+                const channelIds = searchResponse.data.items.map((item) => item.snippet?.channelId).filter(Boolean) as string[];
+                const channelResponse = await youtube.channels.list({
+                  part: ["snippet", "statistics", "contentDetails", "brandingSettings"],
+                  id: channelIds,
+                });
+                return Response.json({ data: channelResponse.data.items || [] });
+              }
+              return Response.json({ data: [] });
+            } catch (apiKeyError) {
+              console.error("[YouTube] API key lookup failed:", apiKeyError);
+            }
+          }
           return Response.json({ error: "No token available for channel lookup. Please validate at least one channel token first." }, { status: 401 });
         }
         const results = await lookupChannel(lookupToken, query);
