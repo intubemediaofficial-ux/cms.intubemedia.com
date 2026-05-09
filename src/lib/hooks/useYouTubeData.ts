@@ -1,0 +1,47 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+
+export function useYouTubeData<T>(
+  action: string,
+  params: Record<string, string> = {},
+  fallback: T
+) {
+  const { data: session } = useSession();
+  const [data, setData] = useState<T>(fallback);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isReal, setIsReal] = useState(false);
+
+  useEffect(() => {
+    if (!session?.accessToken) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const queryParams = new URLSearchParams({ action, ...params });
+        const res = await fetch(`/api/youtube?${queryParams}`);
+        const json = await res.json();
+
+        if (res.ok && json.data) {
+          setData(json.data);
+          setIsReal(true);
+        } else {
+          setError(json.error || "Failed to fetch data");
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Network error");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [session?.accessToken, action]);
+
+  return { data, loading, error, isReal };
+}

@@ -10,28 +10,74 @@ import {
   Play,
   MessageSquare,
   ThumbsUp,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import StatsCard from "@/components/dashboard/StatsCard";
 import ViewsChart from "@/components/charts/ViewsChart";
 import SubscriberChart from "@/components/charts/SubscriberChart";
 import RevenueChart from "@/components/charts/RevenueChart";
-import { channelStats, topVideos, recentActivity } from "@/lib/mock-data";
+import {
+  channelStats as mockStats,
+  topVideos as mockTopVideos,
+  recentActivity,
+} from "@/lib/mock-data";
 import { formatNumber, formatCurrency } from "@/lib/utils";
+import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 
 export default function DashboardPage() {
+  const { data: session } = useSession();
+  const { data: channelsData, isReal } = useYouTubeData<
+    Array<{
+      snippet?: { title?: string | null };
+      statistics?: {
+        viewCount?: string | null;
+        subscriberCount?: string | null;
+        videoCount?: string | null;
+      };
+    }>
+  >("channels", {}, []);
+
+  const channel = channelsData?.[0];
+  const stats = isReal && channel?.statistics
+    ? {
+        totalViews: Number(channel.statistics.viewCount || 0),
+        totalSubscribers: Number(channel.statistics.subscriberCount || 0),
+        totalVideos: Number(channel.statistics.videoCount || 0),
+        totalWatchTime: mockStats.totalWatchTime,
+        revenue: mockStats.revenue,
+        estimatedRPM: mockStats.estimatedRPM,
+      }
+    : mockStats;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted mt-1">
-          Welcome back, Bainsla Music. Here&apos;s your channel overview.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted mt-1">
+            Welcome back, {isReal && channel?.snippet?.title ? channel.snippet.title : "Bainsla Music"}. Here&apos;s your channel overview.
+          </p>
+        </div>
+        {session?.accessToken && (
+          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+            <Wifi className="w-3.5 h-3.5" />
+            Live YouTube Data
+          </div>
+        )}
+        {!session?.accessToken && (
+          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+            <WifiOff className="w-3.5 h-3.5" />
+            Demo Data — Sign in with Google for real data
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatsCard
           title="Total Views"
-          value={formatNumber(channelStats.totalViews)}
+          value={formatNumber(stats.totalViews)}
           change="+12.5% from last month"
           changeType="positive"
           icon={Eye}
@@ -40,7 +86,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Subscribers"
-          value={formatNumber(channelStats.totalSubscribers)}
+          value={formatNumber(stats.totalSubscribers)}
           change="+3.2% from last month"
           changeType="positive"
           icon={Users}
@@ -49,7 +95,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Total Videos"
-          value={formatNumber(channelStats.totalVideos)}
+          value={formatNumber(stats.totalVideos)}
           change="+8 new this month"
           changeType="neutral"
           icon={Video}
@@ -58,7 +104,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Watch Time"
-          value={formatNumber(channelStats.totalWatchTime) + " hrs"}
+          value={formatNumber(stats.totalWatchTime) + " hrs"}
           change="+8.7% from last month"
           changeType="positive"
           icon={Clock}
@@ -67,7 +113,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Revenue"
-          value={formatCurrency(channelStats.revenue)}
+          value={formatCurrency(stats.revenue)}
           change="+15.3% from last month"
           changeType="positive"
           icon={DollarSign}
@@ -76,7 +122,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Est. RPM"
-          value={"$" + channelStats.estimatedRPM}
+          value={"$" + stats.estimatedRPM}
           change="+2.1% from last month"
           changeType="positive"
           icon={TrendingUp}
@@ -101,7 +147,7 @@ export default function DashboardPage() {
             </a>
           </div>
           <div className="space-y-3">
-            {topVideos.slice(0, 5).map((video, index) => (
+            {mockTopVideos.slice(0, 5).map((video, index) => (
               <div
                 key={video.id}
                 className="flex items-center gap-4 p-3 rounded-lg hover:bg-slate-50 transition-colors"
