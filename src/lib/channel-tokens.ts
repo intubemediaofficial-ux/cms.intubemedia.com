@@ -8,47 +8,59 @@ export interface ChannelToken {
   tokenExpiry?: number;
   createdAt: string;
   updatedAt: string;
+  googleChannelId?: string;
 }
 
 const TOKEN_PREFIX = "channel_token:";
-const KV_AVAILABLE = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+
+function isKVAvailable(): boolean {
+  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
 
 // In-memory fallback when Vercel KV is not configured
 const memoryStore = new Map<string, ChannelToken>();
 
 export async function getChannelToken(channelId: string): Promise<ChannelToken | null> {
-  if (KV_AVAILABLE) {
+  if (isKVAvailable()) {
     try {
-      return await kv.get<ChannelToken>(`${TOKEN_PREFIX}${channelId}`);
-    } catch {
+      const token = await kv.get<ChannelToken>(`${TOKEN_PREFIX}${channelId}`);
+      return token;
+    } catch (error) {
+      console.error(`[KV] Failed to get token for ${channelId}:`, error);
       return memoryStore.get(channelId) || null;
     }
   }
+  console.warn(`[KV] Not configured — using in-memory store for ${channelId}`);
   return memoryStore.get(channelId) || null;
 }
 
 export async function setChannelToken(channelId: string, token: ChannelToken): Promise<void> {
-  if (KV_AVAILABLE) {
+  if (isKVAvailable()) {
     try {
       await kv.set(`${TOKEN_PREFIX}${channelId}`, token);
-    } catch {
-      memoryStore.set(channelId, token);
+      console.log(`[KV] Token stored successfully for ${channelId}`);
+      return;
+    } catch (error) {
+      console.error(`[KV] Failed to store token for ${channelId}:`, error);
+      // Fall through to memory store
     }
   } else {
-    memoryStore.set(channelId, token);
+    console.warn(`[KV] Not configured — storing token in-memory for ${channelId} (will not persist across deployments)`);
   }
+  memoryStore.set(channelId, token);
 }
 
 export async function deleteChannelToken(channelId: string): Promise<void> {
-  if (KV_AVAILABLE) {
+  if (isKVAvailable()) {
     try {
       await kv.del(`${TOKEN_PREFIX}${channelId}`);
-    } catch {
-      memoryStore.delete(channelId);
+      console.log(`[KV] Token deleted for ${channelId}`);
+      return;
+    } catch (error) {
+      console.error(`[KV] Failed to delete token for ${channelId}:`, error);
     }
-  } else {
-    memoryStore.delete(channelId);
   }
+  memoryStore.delete(channelId);
 }
 
 export async function getTokenStatus(channelId: string): Promise<"valid" | "expired" | "none"> {
@@ -56,7 +68,11 @@ export async function getTokenStatus(channelId: string): Promise<"valid" | "expi
   if (!token) return "none";
 
   if (token.tokenExpiry && Date.now() > token.tokenExpiry) {
-    // Try to refresh
+    // Token expired — try to refresh using refresh_token
+    if (token.refreshToken) {
+      const refreshed = await refreshChannelToken(channelId);
+      if (refreshed) return "valid";
+    }
     return "expired";
   }
   return "valid";
@@ -111,5 +127,5 @@ export async function getValidAccessToken(channelId: string): Promise<string | n
 }
 
 export function isKVConfigured(): boolean {
-  return KV_AVAILABLE;
+  return isKVAvailable();
 }
