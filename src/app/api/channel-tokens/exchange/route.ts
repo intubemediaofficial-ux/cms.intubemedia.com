@@ -26,7 +26,9 @@ export async function POST(request: Request) {
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const baseUrl = process.env.NEXTAUTH_URL || "https://bainsla-music-cms.vercel.app";
+    // Use request origin so redirect_uri matches the OAuth authorization request
+    const requestUrl = new URL(request.url);
+    const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`;
     const redirectUri = `${baseUrl}/callback`;
 
     if (!clientId || !clientSecret) {

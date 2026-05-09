@@ -41,7 +41,9 @@ export async function GET(request: Request) {
         return Response.json({ error: "Google Client ID not configured" }, { status: 500 });
       }
 
-      const baseUrl = process.env.NEXTAUTH_URL || "https://bainsla-music-cms.vercel.app";
+      // Use request origin for redirect URI so it matches the current deployment
+      const requestUrl = new URL(request.url);
+      const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`;
       const redirectUri = `${baseUrl}/callback`;
       const state = channelId;
 
@@ -51,14 +53,17 @@ export async function GET(request: Request) {
         "https://www.googleapis.com/auth/yt-analytics-monetary.readonly",
       ];
 
+      // Build scope string with literal + separator (not encoded) — matches GMJ format
+      const scopeString = scopes.map(s => encodeURIComponent(s)).join("+");
+
       const oauthUrl = `https://accounts.google.com/o/oauth2/auth?` +
         `access_type=offline` +
         `&client_id=${encodeURIComponent(clientId)}` +
         `&prompt=consent` +
         `&redirect_uri=${encodeURIComponent(redirectUri)}` +
         `&response_type=code` +
-        `&scope=${encodeURIComponent(scopes.join("+"))}` +
-        `&state=${encodeURIComponent(state)}`;
+        `&scope=${scopeString}` +
+        `&state=${state}`;
 
       return Response.json({
         data: {
