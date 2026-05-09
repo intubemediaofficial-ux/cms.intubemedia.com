@@ -6,6 +6,12 @@ declare module "next-auth" {
     accessToken?: string;
     refreshToken?: string;
     error?: string;
+    user: {
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+      role?: "admin" | "client";
+    };
   }
 }
 
@@ -15,8 +21,14 @@ declare module "next-auth/jwt" {
     refreshToken?: string;
     accessTokenExpires?: number;
     error?: string;
+    role?: "admin" | "client";
   }
 }
+
+const ADMIN_EMAILS = [
+  "vijendrachoudhary95@gmail.com",
+  "ajeetgurjarofficial@gmail.com",
+];
 
 async function refreshAccessToken(token: import("next-auth/jwt").JWT) {
   try {
@@ -71,15 +83,15 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, account }) {
       if (account) {
-        return {
-          ...token,
-          accessToken: account.access_token,
-          refreshToken: account.refresh_token,
-          accessTokenExpires: account.expires_at
-            ? account.expires_at * 1000
-            : Date.now() + 3600 * 1000,
-        };
+        token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
+        token.accessTokenExpires = account.expires_at
+          ? account.expires_at * 1000
+          : Date.now() + 3600 * 1000;
       }
+
+      const email = token.email?.toLowerCase() || "";
+      token.role = ADMIN_EMAILS.includes(email) ? "admin" : "client";
 
       if (
         token.accessTokenExpires &&
@@ -93,6 +105,9 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       session.accessToken = token.accessToken;
       session.error = token.error;
+      if (session.user) {
+        session.user.role = token.role;
+      }
       return session;
     },
   },

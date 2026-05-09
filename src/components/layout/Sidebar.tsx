@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard,
   Video,
@@ -19,6 +19,9 @@ import {
   Users,
   LinkIcon,
   Unlink,
+  FileText,
+  Shield,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,9 +44,25 @@ const navItems: NavItem[] = [
     ],
   },
   { href: "/videos", label: "Videos", icon: Video },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/revenue", label: "Revenue", icon: DollarSign },
-  { href: "/users", label: "Users", icon: Users },
+  {
+    href: "/reports",
+    label: "Reports",
+    icon: BarChart3,
+    children: [
+      { href: "/reports/video-revenue", label: "Video Revenue", icon: FileText },
+      { href: "/reports/channel-revenue", label: "Channel Revenue", icon: FileText },
+      { href: "/reports/summary-channel", label: "Summary Channel", icon: FileText },
+    ],
+  },
+  {
+    href: "/onboarding-review",
+    label: "Onboarding Review",
+    icon: ClipboardCheck,
+    children: [
+      { href: "/onboarding-review/channel-revenue", label: "Channel Revenue", icon: FileText },
+      { href: "/onboarding-review/summary-channel", label: "Summary Channel", icon: FileText },
+    ],
+  },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -51,6 +70,8 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({ "/channels": true });
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin";
 
   const toggleMenu = (href: string) => {
     setOpenMenus((prev) => ({ ...prev, [href]: !prev[href] }));
@@ -172,6 +193,17 @@ export default function Sidebar() {
       </nav>
 
       <div className="px-3 pb-4 space-y-1">
+        {/* Admin Panel Link - only visible to admins */}
+        {isAdmin && (
+          <Link
+            href="/admin-dashboard"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"
+            title={collapsed ? "Admin Panel" : undefined}
+          >
+            <Shield className="w-5 h-5 shrink-0" />
+            {!collapsed && <span>Admin Panel</span>}
+          </Link>
+        )}
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-sidebar-hover transition-all"

@@ -19,7 +19,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (session) {
-      router.push("/dashboard");
+      router.push(session.user?.role === "admin" ? "/admin-dashboard" : "/dashboard");
     }
   }, [session, router]);
 
