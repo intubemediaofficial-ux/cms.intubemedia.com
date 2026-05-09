@@ -307,17 +307,29 @@ export default function ChannelsPage() {
     setAddError(null);
 
     try {
-      const res = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}`);
+      const existingIds = storedChannels.map((c) => c.id).join(",");
+      const res = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}&storedChannelIds=${encodeURIComponent(existingIds)}`);
       const json = await res.json();
 
-      if (!res.ok || !json.data?.length) {
-        setAddError("Channel not found. Please check the Channel ID.");
+      let actualId = id;
+      let channelData: YouTubeChannel | null = null;
+
+      if (res.ok && json.data?.length) {
+        channelData = json.data[0] as YouTubeChannel;
+        actualId = channelData.id || id;
+      }
+      // If lookup fails but ID starts with UC, still add it (channel data will load later when token is validated)
+      if (!channelData && !id.startsWith("UC")) {
+        setAddError("Channel not found. Please enter a valid Channel ID (starts with UC).");
         setAddingChannel(false);
         return;
       }
 
-      const channelData = json.data[0] as YouTubeChannel;
-      const actualId = channelData.id || id;
+      if (storedChannels.some((c) => c.id === actualId)) {
+        setAddError("Channel already exists");
+        setAddingChannel(false);
+        return;
+      }
 
       const newStored: StoredChannel = {
         id: actualId,
@@ -332,7 +344,9 @@ export default function ChannelsPage() {
       const updatedChannels = [...storedChannels, newStored];
       saveStoredChannels(updatedChannels);
       setStoredChannels(updatedChannels);
-      setChannelDataMap((prev) => ({ ...prev, [actualId]: channelData }));
+      if (channelData) {
+        setChannelDataMap((prev) => ({ ...prev, [actualId]: channelData! }));
+      }
       setShowModal(false);
       setChannelIdInput("");
       setCategoryInput("");

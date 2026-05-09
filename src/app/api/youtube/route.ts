@@ -144,12 +144,11 @@ export async function GET(request: Request) {
         const query = url.searchParams.get("query");
         if (!query)
           return Response.json({ error: "query required" }, { status: 400 });
-        // For admin credentials login, try using any available per-channel token for lookup
+        // Try OAuth token first
         let lookupToken = session.accessToken;
         if (!lookupToken) {
-          // Try to find any valid channel token to use for the lookup API call
+          // Try per-channel tokens
           const { getValidAccessToken: getToken } = await import("@/lib/channel-tokens");
-          // We need any token — iterate stored channel IDs from the query params
           const storedIds = url.searchParams.get("storedChannelIds")?.split(",").filter(Boolean) || [];
           for (const sid of storedIds) {
             const t = await getToken(sid);
@@ -157,6 +156,41 @@ export async function GET(request: Request) {
           }
         }
         if (!lookupToken) {
+          // Fallback: use YouTube Data API key for public channel lookup
+          const apiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_API_KEY;
+          if (apiKey) {
+            try {
+              const { google } = await import("googleapis");
+              const youtube = google.youtube({ version: "v3", auth: apiKey });
+              if (query.startsWith("UC") && query.length >= 20) {
+                const response = await youtube.channels.list({
+                  part: ["snippet", "statistics", "contentDetails", "brandingSettings"],
+                  id: [query],
+                });
+                if (response.data.items?.length) {
+                  return Response.json({ data: response.data.items });
+                }
+              }
+              // Try search as fallback
+              const searchResponse = await youtube.search.list({
+                part: ["snippet"],
+                q: query,
+                type: ["channel"],
+                maxResults: 5,
+              });
+              if (searchResponse.data.items?.length) {
+                const channelIds = searchResponse.data.items.map((item) => item.snippet?.channelId).filter(Boolean) as string[];
+                const channelResponse = await youtube.channels.list({
+                  part: ["snippet", "statistics", "contentDetails", "brandingSettings"],
+                  id: channelIds,
+                });
+                return Response.json({ data: channelResponse.data.items || [] });
+              }
+              return Response.json({ data: [] });
+            } catch (apiKeyError) {
+              console.error("[YouTube] API key lookup failed:", apiKeyError);
+            }
+          }
           return Response.json({ error: "No token available for channel lookup. Please validate at least one channel token first." }, { status: 401 });
         }
         const results = await lookupChannel(lookupToken, query);
