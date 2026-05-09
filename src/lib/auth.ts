@@ -74,14 +74,31 @@ async function refreshAccessToken(token: import("next-auth/jwt").JWT) {
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
+      id: "credentials",
       name: "Admin Login",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        loginType: { label: "Login Type", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        if (!credentials?.email) return null;
         const email = credentials.email.toLowerCase();
+
+        // OTP login — password field contains "otp-verified" marker
+        if (credentials.loginType === "otp") {
+          // OTP was already verified by /api/auth/verify-otp
+          // Just create the session
+          return {
+            id: email,
+            email,
+            name: email.split("@")[0],
+            image: null,
+          };
+        }
+
+        // Password login — admin credentials
+        if (!credentials.password) return null;
         const admin = ADMIN_CREDENTIALS[email];
         if (!admin || credentials.password !== admin.password) return null;
         return {
