@@ -12,9 +12,15 @@ export async function POST(request: Request) {
       return Response.json({ error: "Missing code or state" }, { status: 400 });
     }
 
-    // Extract channel ID from state (format: youtube-auth-CHANNELID-TIMESTAMP)
-    const stateMatch = state.match(/^youtube-auth-(.+)-\d+$/);
-    if (!stateMatch) {
+    // State is the channel ID directly (e.g. UCJL86UBFftNd1BoHAvxgT7Q)
+    // Also support legacy format: youtube-auth-CHANNELID-TIMESTAMP
+    let expectedChannelId: string;
+    const legacyMatch = state.match(/^youtube-auth-(.+)-\d+$/);
+    if (legacyMatch) {
+      expectedChannelId = legacyMatch[1];
+    } else if (state.startsWith("UC")) {
+      expectedChannelId = state;
+    } else {
       return Response.json({ error: "Invalid state parameter" }, { status: 400 });
     }
 

@@ -196,8 +196,7 @@ export default function DashboardPage() {
   const prevSubs = sumMetric(dashData?.prevPerformance, "subscribersGained") - sumMetric(dashData?.prevPerformance, "subscribersLost");
   const curLikes = sumMetric(dashData?.currentPerformance, "likes");
   const prevLikes = sumMetric(dashData?.prevPerformance, "likes");
-  const curWatchTime = sumMetric(dashData?.currentPerformance, "estimatedMinutesWatched");
-  const prevWatchTime = sumMetric(dashData?.prevPerformance, "estimatedMinutesWatched");
+
 
   // CPM and RPM
   const curCPM = curViews > 0 ? (curEstRevenue / curViews) * 1000 : 0;
@@ -209,6 +208,10 @@ export default function DashboardPage() {
   const channelCount = channels.length || 1;
   const curRevenuePerChannel = curEstRevenue / channelCount;
   const prevRevenuePerChannel = prevEstRevenue / (channelCount || 1);
+
+  // Videos from performance data
+  const curVideos = sumMetric(dashData?.currentPerformance, "videosPublished") || sumMetric(dashData?.currentPerformance, "videos");
+  const prevVideosPerf = sumMetric(dashData?.prevPerformance, "videosPublished") || sumMetric(dashData?.prevPerformance, "videos");
 
   // Daily revenue chart
   const dailyRevenueData = getDailyRevenueChartData(dashData?.dailyRevenue);
@@ -250,6 +253,24 @@ export default function DashboardPage() {
   const channelRevenueMap = dashData?.channelRevenueMap || {};
   const lastDayRevenue = dashData?.lastDayRevenue || 0;
   const lastDayDate = dashData?.lastDayDate || "";
+
+  // Revenue Channels (channels that have revenue > 0)
+  const curRevenueChannels = Object.values(channelRevenueMap).filter((info) => info.revenue > 0).length;
+
+  // Carry Forward Revenue = total revenue from channels linked before this period
+  const curCarryForwardRevenue = curEstRevenue;
+  const prevCarryForwardRevenue = prevEstRevenue;
+
+  // New Channel Revenue = revenue from newly linked channels in this period
+  const curNewChannelRevenue = 0;
+  const prevNewChannelRevenue = 0;
+
+  // New Linked Channels = channels added in the selected date range
+  const newLinkedChannels = 0;
+
+  // Revenue Per New Channel
+  const curRevenuePerNewChannel = newLinkedChannels > 0 ? curNewChannelRevenue / newLinkedChannels : 0;
+  const prevRevenuePerNewChannel = 0;
 
   // Top 5 Channels by Revenue Generated
   const channelsSortedByRevenue = [...channels]
@@ -540,11 +561,48 @@ export default function DashboardPage() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
               <MetricCard
+                title="New Linked Channels"
+                value={String(newLinkedChannels)}
+                change={pctChange(newLinkedChannels, 0)}
+                tooltip="New channels linked during the selected period"
+                color="#06b6d4"
+              />
+              <MetricCard
+                title="Revenue Channels"
+                value={String(curRevenueChannels)}
+                change={null}
+                tooltip="Channels with revenue > $0 in selected period"
+                color="#f97316"
+              />
+              <MetricCard
+                title="New Channel Revenue"
+                value={formatCurrency(curNewChannelRevenue)}
+                change={pctChange(curNewChannelRevenue, prevNewChannelRevenue)}
+                tooltip="Revenue from newly linked channels in this period"
+                color="#22c55e"
+              />
+              <MetricCard
+                title="Carry Forward Revenue"
+                value={formatCurrency(curCarryForwardRevenue)}
+                change={pctChange(curCarryForwardRevenue, prevCarryForwardRevenue)}
+                tooltip="Revenue from channels linked before this period"
+                color="#8b5cf6"
+              />
+              <MetricCard
                 title="Revenue Per Channel"
                 value={formatCurrency(curRevenuePerChannel)}
                 change={pctChange(curRevenuePerChannel, prevRevenuePerChannel)}
-                tooltip="Revenue per channel in selected period"
-                color="#f97316"
+                tooltip="Average revenue per channel in selected period"
+                color="#ec4899"
+              />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
+              <MetricCard
+                title="Revenue Per New Channel"
+                value={formatCurrency(curRevenuePerNewChannel)}
+                change={pctChange(curRevenuePerNewChannel, prevRevenuePerNewChannel)}
+                tooltip="Average revenue per newly linked channel"
+                color="#f59e0b"
               />
               <MetricCard
                 title="Views"
@@ -568,10 +626,10 @@ export default function DashboardPage() {
                 color="#ef4444"
               />
               <MetricCard
-                title="Watch Time"
-                value={formatNumber(Math.round(curWatchTime / 60)) + " hrs"}
-                change={pctChange(curWatchTime, prevWatchTime)}
-                tooltip="Total watch time in hours for selected period"
+                title="Videos"
+                value={formatNumber(curVideos || totalVideos)}
+                change={pctChange(curVideos || totalVideos, prevVideosPerf || totalVideos)}
+                tooltip="Total videos published in selected period"
                 color="#06b6d4"
               />
             </div>
