@@ -55,6 +55,7 @@ interface StoredChannel {
   tokenStatus: string;
   cms: string;
   addedDate: string;
+  delinkedDate?: string;
   status: "active" | "delinked" | "transferred";
 }
 
@@ -345,16 +346,18 @@ export default function ChannelsPage() {
   }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, storedChannels]);
 
   const handleDelink = (channelId: string) => {
+    const now = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
     const updated = storedChannels.map((c) =>
-      c.id === channelId ? { ...c, status: "delinked" as const } : c
+      c.id === channelId ? { ...c, status: "delinked" as const, delinkedDate: now } : c
     );
     saveStoredChannels(updated);
     setStoredChannels(updated);
   };
 
   const handleTransfer = (channelId: string) => {
+    const now = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
     const updated = storedChannels.map((c) =>
-      c.id === channelId ? { ...c, status: "transferred" as const } : c
+      c.id === channelId ? { ...c, status: "transferred" as const, delinkedDate: now } : c
     );
     saveStoredChannels(updated);
     setStoredChannels(updated);
@@ -362,7 +365,7 @@ export default function ChannelsPage() {
 
   const handleRelink = (channelId: string) => {
     const updated = storedChannels.map((c) =>
-      c.id === channelId ? { ...c, status: "active" as const } : c
+      c.id === channelId ? { ...c, status: "active" as const, delinkedDate: undefined } : c
     );
     saveStoredChannels(updated);
     setStoredChannels(updated);
@@ -496,6 +499,7 @@ export default function ChannelsPage() {
     tokenStatus: string;
     cms: string;
     addedDate: string;
+    delinkedDate: string;
     isOwn: boolean;
     status: "active" | "delinked" | "transferred";
   };
@@ -519,6 +523,7 @@ export default function ChannelsPage() {
           tokenStatus: tokenStatuses[ch.id || ""] || storedInfo?.tokenStatus || "Invalid",
           cms: storedInfo?.cms || "Bainsla Music",
           addedDate: storedInfo?.addedDate || "-",
+          delinkedDate: storedInfo?.delinkedDate || "-",
           isOwn: true,
           status: storedInfo?.status || "active",
         });
@@ -541,6 +546,7 @@ export default function ChannelsPage() {
         tokenStatus: tokenStatuses[sc.id] || sc.tokenStatus || "Invalid",
         cms: sc.cms || "Bainsla Music",
         addedDate: sc.addedDate,
+        delinkedDate: sc.delinkedDate || "-",
         isOwn: false,
         status: sc.status,
       });
@@ -593,10 +599,10 @@ export default function ChannelsPage() {
   const pageChannels = filteredChannels.slice((currentPage - 1) * perPage, currentPage * perPage);
 
   const handleExportCSV = () => {
-    const headers = ["Channel", "Channel ID", "Subscribers", "Videos", "Views", "Channel Type", "Token Status", "CMS", "Category", "Added Date"];
+    const headers = ["Channel", "Channel ID", "Subscribers", "Videos", "Views", "Channel Type", "Token Status", "CMS", "Category", "Linked Date", "Delinked Date"];
     const rows = filteredChannels.map((c) => [
       c.name, c.id, String(c.subscribers), String(c.videos), String(c.views),
-      c.channelType, c.tokenStatus, c.cms, c.category, c.addedDate,
+      c.channelType, c.tokenStatus, c.cms, c.category, c.addedDate, c.delinkedDate,
     ]);
     downloadCSV(headers, rows, `channels-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`);
   };
@@ -836,8 +842,13 @@ export default function ChannelsPage() {
                       CATEGORY {renderSortIcon("category")}
                     </th>
                     <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
-                      LINKING DATE
+                      LINKED DATE
                     </th>
+                    {activeTab === "transferred" && (
+                      <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                        DELINKED DATE
+                      </th>
+                    )}
                     <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
                       Actions
                     </th>
@@ -907,6 +918,9 @@ export default function ChannelsPage() {
                       <td className="px-4 py-3 text-foreground">{channel.cms}</td>
                       <td className="px-4 py-3 text-foreground">{channel.category}</td>
                       <td className="px-4 py-3 text-muted">{channel.addedDate}</td>
+                      {activeTab === "transferred" && (
+                        <td className="px-4 py-3 text-muted">{channel.delinkedDate}</td>
+                      )}
                       <td className="px-4 py-3">
                         <div className="relative">
                           <button
