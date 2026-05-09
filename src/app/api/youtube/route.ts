@@ -17,6 +17,11 @@ import { getValidAccessToken, getTokenStatus } from "@/lib/channel-tokens";
 
 export const dynamic = "force-dynamic";
 
+const ADMIN_EMAILS = [
+  "vijendrachoudhary95@gmail.com",
+  "ajeetgurjarofficial@gmail.com",
+];
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
 
@@ -27,7 +32,15 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!session.accessToken) {
+  const isAdminCredentials = !session.accessToken && ADMIN_EMAILS.includes(session.user?.email?.toLowerCase() || "");
+
+  const url = new URL(request.url);
+  const action = url.searchParams.get("action");
+  const startDate = url.searchParams.get("startDate") || getDefaultStartDate();
+  const endDate = url.searchParams.get("endDate") || getDefaultEndDate();
+
+  // Admin credentials login can access dashboardFull and lookupChannel via per-channel tokens
+  if (!session.accessToken && !isAdminCredentials) {
     return Response.json(
       {
         error: session.error === "RefreshAccessTokenError"
@@ -39,27 +52,39 @@ export async function GET(request: Request) {
     );
   }
 
-  const url = new URL(request.url);
-  const action = url.searchParams.get("action");
-  const startDate = url.searchParams.get("startDate") || getDefaultStartDate();
-  const endDate = url.searchParams.get("endDate") || getDefaultEndDate();
-
   try {
+    // Actions that require Google OAuth access token
+    if (isAdminCredentials && !["dashboardFull", "lookupChannel", "dashboard", "videos"].includes(action || "")) {
+      return Response.json(
+        { error: "This action requires Google OAuth login. Please sign in with Google.", needsGoogleAuth: true },
+        { status: 401 }
+      );
+    }
+
     switch (action) {
       case "channels": {
-        const channels = await getChannelStats(session.accessToken);
+        const channels = await getChannelStats(session.accessToken!);
         return Response.json({ data: channels });
       }
       case "videos": {
         const channelId = url.searchParams.get("channelId");
         if (!channelId)
           return Response.json({ error: "channelId required" }, { status: 400 });
-        const videos = await getChannelVideos(session.accessToken, channelId);
+        // Try using per-channel token first, then fall back to admin token
+        let videoToken = session.accessToken;
+        if (!videoToken) {
+          const channelSpecificToken = await getValidAccessToken(channelId);
+          if (channelSpecificToken) videoToken = channelSpecificToken;
+        }
+        if (!videoToken) {
+          return Response.json({ error: "No token available for this channel. Please validate the channel token first." }, { status: 401 });
+        }
+        const videos = await getChannelVideos(videoToken, channelId);
         return Response.json({ data: videos });
       }
       case "analytics": {
         const data = await getAnalyticsData(
-          session.accessToken,
+          session.accessToken!,
           startDate,
           endDate
         );
@@ -67,7 +92,7 @@ export async function GET(request: Request) {
       }
       case "traffic": {
         const data = await getTrafficSources(
-          session.accessToken,
+          session.accessToken!,
           startDate,
           endDate
         );
@@ -75,7 +100,7 @@ export async function GET(request: Request) {
       }
       case "countries": {
         const data = await getCountryData(
-          session.accessToken,
+          session.accessToken!,
           startDate,
           endDate
         );
@@ -83,7 +108,7 @@ export async function GET(request: Request) {
       }
       case "demographics": {
         const data = await getDemographics(
-          session.accessToken,
+          session.accessToken!,
           startDate,
           endDate
         );
@@ -91,7 +116,7 @@ export async function GET(request: Request) {
       }
       case "devices": {
         const data = await getDeviceData(
-          session.accessToken,
+          session.accessToken!,
           startDate,
           endDate
         );
@@ -99,7 +124,7 @@ export async function GET(request: Request) {
       }
       case "revenue": {
         const data = await getRevenueData(
-          session.accessToken,
+          session.accessToken!,
           startDate,
           endDate
         );
@@ -107,7 +132,7 @@ export async function GET(request: Request) {
       }
       case "topVideos": {
         const data = await getTopVideos(
-          session.accessToken,
+          session.accessToken!,
           startDate,
           endDate
         );
@@ -117,10 +142,28 @@ export async function GET(request: Request) {
         const query = url.searchParams.get("query");
         if (!query)
           return Response.json({ error: "query required" }, { status: 400 });
-        const results = await lookupChannel(session.accessToken, query);
+        // For admin credentials login, try using any available per-channel token for lookup
+        let lookupToken = session.accessToken;
+        if (!lookupToken) {
+          // Try to find any valid channel token to use for the lookup API call
+          const { getValidAccessToken: getToken } = await import("@/lib/channel-tokens");
+          // We need any token — iterate stored channel IDs from the query params
+          const storedIds = url.searchParams.get("storedChannelIds")?.split(",").filter(Boolean) || [];
+          for (const sid of storedIds) {
+            const t = await getToken(sid);
+            if (t) { lookupToken = t; break; }
+          }
+        }
+        if (!lookupToken) {
+          return Response.json({ error: "No token available for channel lookup. Please validate at least one channel token first." }, { status: 401 });
+        }
+        const results = await lookupChannel(lookupToken, query);
         return Response.json({ data: results });
       }
       case "dashboard": {
+        if (!session.accessToken) {
+          return Response.json({ error: "Google OAuth required for this action" }, { status: 401 });
+        }
         const [channels, analyticsData, topVideosData] = await Promise.all([
           getChannelStats(session.accessToken),
           getAnalyticsData(
@@ -151,18 +194,40 @@ export async function GET(request: Request) {
 
         const performanceMetrics = "views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes";
 
-        // Fetch channel stats for specific added channels (or user's own if none specified)
-        const channelsPromise = channelIds.length > 0
-          ? getChannelStatsById(session.accessToken, channelIds)
-          : getChannelStats(session.accessToken);
+        // For admin credentials login (no Google OAuth token), use per-channel tokens only
+        const adminToken = session.accessToken;
+        const hasAdminToken = !!adminToken;
+
+        // Fetch channel stats for specific added channels
+        // For credentials login, use any available per-channel token
+        let channelLookupToken = adminToken;
+        if (!channelLookupToken) {
+          for (const cid of channelIds) {
+            const t = await getValidAccessToken(cid);
+            if (t) { channelLookupToken = t; break; }
+          }
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let channelsPromise: Promise<any[]>;
+        if (channelIds.length > 0 && channelLookupToken) {
+          channelsPromise = getChannelStatsById(channelLookupToken, channelIds);
+        } else if (channelLookupToken) {
+          channelsPromise = getChannelStats(channelLookupToken);
+        } else {
+          channelsPromise = Promise.resolve([]);
+        }
 
         // Check if user's own channel is among the added channels
-        const myChannels = await getChannelStats(session.accessToken);
-        const myChannelIds = myChannels.map(
-          (ch: { id?: string | null }) => ch.id
-        ).filter(Boolean) as string[];
-        const hasOwnChannel = channelIds.length === 0 ||
-          myChannelIds.some((id) => channelIds.includes(id));
+        let myChannelIds: string[] = [];
+        let hasOwnChannel = false;
+        if (hasAdminToken) {
+          const myChannels = await getChannelStats(adminToken);
+          myChannelIds = myChannels.map(
+            (ch: { id?: string | null }) => ch.id
+          ).filter(Boolean) as string[];
+          hasOwnChannel = channelIds.length === 0 ||
+            myChannelIds.some((id) => channelIds.includes(id));
+        }
 
         // Get yesterday's date for last day revenue
         const yesterday = new Date();
@@ -181,10 +246,7 @@ export async function GET(request: Request) {
         const tokenizedChannelIds = Object.keys(channelTokenMap);
         const hasAnyToken = hasOwnChannel || tokenizedChannelIds.length > 0;
 
-        // Use admin token for own channel, per-channel tokens for others
-        const adminToken = session.accessToken;
-
-        // Fetch analytics using admin token (for own channel)
+        // Fetch analytics using admin token (for own channel) — only if admin has Google OAuth
         const [
           channels,
           currentPerformance,
@@ -197,28 +259,28 @@ export async function GET(request: Request) {
           channelRevenueData,
         ] = await Promise.all([
           channelsPromise,
-          hasOwnChannel
+          hasOwnChannel && hasAdminToken
             ? getAnalyticsData(adminToken, startDate, endDate, performanceMetrics, "")
             : Promise.resolve(null),
-          hasOwnChannel
+          hasOwnChannel && hasAdminToken
             ? getAnalyticsData(adminToken, prevStartDate, prevEndDate, performanceMetrics, "")
             : Promise.resolve(null),
-          hasOwnChannel
+          hasOwnChannel && hasAdminToken
             ? getRevenueData(adminToken, startDate, endDate).catch(() => null)
             : Promise.resolve(null),
-          hasOwnChannel
+          hasOwnChannel && hasAdminToken
             ? getRevenueData(adminToken, prevStartDate, prevEndDate).catch(() => null)
             : Promise.resolve(null),
-          hasOwnChannel
+          hasOwnChannel && hasAdminToken
             ? getAnalyticsData(adminToken, startDate, endDate, "estimatedRevenue", "day").catch(() => null)
             : Promise.resolve(null),
-          hasOwnChannel
+          hasOwnChannel && hasAdminToken
             ? getTopVideos(adminToken, startDate, endDate)
             : Promise.resolve({ analytics: null, videos: [] }),
-          hasOwnChannel
+          hasOwnChannel && hasAdminToken
             ? getAnalyticsData(adminToken, lastDayDate, lastDayDate, "estimatedRevenue,views", "").catch(() => null)
             : Promise.resolve(null),
-          hasOwnChannel
+          hasOwnChannel && hasAdminToken
             ? getAnalyticsData(adminToken, startDate, endDate, "estimatedRevenue,views", "").catch(() => null)
             : Promise.resolve(null),
         ]);
@@ -229,6 +291,7 @@ export async function GET(request: Request) {
           prevPerformance: Record<string, unknown> | null;
           revenue: Record<string, unknown> | null;
           prevRevenue: Record<string, unknown> | null;
+          dailyRevenue: Record<string, unknown> | null;
           revenueViews: Record<string, unknown> | null;
         }> = {};
 
@@ -236,11 +299,12 @@ export async function GET(request: Request) {
           // Skip if this is the admin's own channel (already fetched above)
           if (myChannelIds.includes(cid)) continue;
           try {
-            const [perf, prevPerf, rev, prevRev, revViews] = await Promise.all([
+            const [perf, prevPerf, rev, prevRev, daily, revViews] = await Promise.all([
               getAnalyticsData(token, startDate, endDate, performanceMetrics, "").catch(() => null),
               getAnalyticsData(token, prevStartDate, prevEndDate, performanceMetrics, "").catch(() => null),
               getRevenueData(token, startDate, endDate).catch(() => null),
               getRevenueData(token, prevStartDate, prevEndDate).catch(() => null),
+              getAnalyticsData(token, startDate, endDate, "estimatedRevenue", "day").catch(() => null),
               getAnalyticsData(token, startDate, endDate, "estimatedRevenue,views", "").catch(() => null),
             ]);
             perChannelAnalytics[cid] = {
@@ -248,6 +312,7 @@ export async function GET(request: Request) {
               prevPerformance: prevPerf as Record<string, unknown> | null,
               revenue: rev as Record<string, unknown> | null,
               prevRevenue: prevRev as Record<string, unknown> | null,
+              dailyRevenue: daily as Record<string, unknown> | null,
               revenueViews: revViews as Record<string, unknown> | null,
             };
           } catch {
