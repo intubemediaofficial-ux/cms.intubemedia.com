@@ -1,0 +1,215 @@
+import { kv } from "@vercel/kv";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import crypto from "crypto";
+
+export const dynamic = "force-dynamic";
+
+const USERS_KEY = "bainsla_users";
+
+export interface StoredUser {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  phone: string;
+  channels: string[];
+  status: "active" | "inactive";
+  joinedDate: string;
+  category: string;
+  role: "client";
+}
+
+function hashPassword(password: string): string {
+  return crypto.createHash("sha256").update(password).digest("hex");
+}
+
+async function getUsers(): Promise<StoredUser[]> {
+  try {
+    const users = await kv.get<StoredUser[]>(USERS_KEY);
+    return users || [];
+  } catch (error) {
+    console.error("[Users] Failed to read from KV:", error);
+    return [];
+  }
+}
+
+async function saveUsers(users: StoredUser[]): Promise<boolean> {
+  try {
+    await kv.set(USERS_KEY, users);
+    return true;
+  } catch (error) {
+    console.error("[Users] Failed to save to KV:", error);
+    return false;
+  }
+}
+
+const ADMIN_EMAILS = [
+  "vijendrachoudhary95@gmail.com",
+  "ajeetgurjarofficial@gmail.com",
+  "bainslamusicofficial@gmail.com",
+];
+
+async function isAdmin(): Promise<boolean> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return false;
+  return ADMIN_EMAILS.includes(session.user.email.toLowerCase());
+}
+
+export async function GET() {
+  if (!(await isAdmin())) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const users = await getUsers();
+  const safeUsers = users.map(({ password, ...u }) => u);
+  return Response.json({ data: safeUsers });
+}
+
+export async function POST(request: Request) {
+  if (!(await isAdmin())) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { name, email, password, phone, channels, category } = body;
+
+    if (!name || !email || !password) {
+      return Response.json(
+        { error: "Name, email, and password are required" },
+        { status: 400 }
+      );
+    }
+
+    const users = await getUsers();
+    const exists = users.some(
+      (u) => u.email.toLowerCase() === email.toLowerCase()
+    );
+    if (exists) {
+      return Response.json(
+        { error: "User with this email already exists" },
+        { status: 409 }
+      );
+    }
+
+    const newUser: StoredUser = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      password: hashPassword(password),
+      phone: phone?.trim() || "",
+      channels: channels || [],
+      status: "active",
+      joinedDate: new Date().toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }),
+      category: category || "Music",
+      role: "client",
+    };
+
+    users.push(newUser);
+    const saved = await saveUsers(users);
+    if (!saved) {
+      return Response.json(
+        { error: "Failed to save user" },
+        { status: 500 }
+      );
+    }
+
+    const { password: _, ...safeUser } = newUser;
+    return Response.json({ data: safeUser }, { status: 201 });
+  } catch (error) {
+    console.error("[Users] Error creating user:", error);
+    return Response.json(
+      { error: "Failed to create user" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: Request) {
+  if (!(await isAdmin())) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { id, name, email, password, phone, channels, category, status } = body;
+
+    if (!id) {
+      return Response.json({ error: "User ID is required" }, { status: 400 });
+    }
+
+    const users = await getUsers();
+    const idx = users.findIndex((u) => u.id === id);
+    if (idx === -1) {
+      return Response.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (name) users[idx].name = name.trim();
+    if (email) users[idx].email = email.toLowerCase().trim();
+    if (password) users[idx].password = hashPassword(password);
+    if (phone !== undefined) users[idx].phone = phone.trim();
+    if (channels) users[idx].channels = channels;
+    if (category) users[idx].category = category;
+    if (status) users[idx].status = status;
+
+    const saved = await saveUsers(users);
+    if (!saved) {
+      return Response.json(
+        { error: "Failed to update user" },
+        { status: 500 }
+      );
+    }
+
+    const { password: _, ...safeUser } = users[idx];
+    return Response.json({ data: safeUser });
+  } catch (error) {
+    console.error("[Users] Error updating user:", error);
+    return Response.json(
+      { error: "Failed to update user" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  if (!(await isAdmin())) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return Response.json({ error: "User ID is required" }, { status: 400 });
+    }
+
+    const users = await getUsers();
+    const filtered = users.filter((u) => u.id !== id);
+
+    if (filtered.length === users.length) {
+      return Response.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const saved = await saveUsers(filtered);
+    if (!saved) {
+      return Response.json(
+        { error: "Failed to delete user" },
+        { status: 500 }
+      );
+    }
+
+    return Response.json({ data: { success: true } });
+  } catch (error) {
+    console.error("[Users] Error deleting user:", error);
+    return Response.json(
+      { error: "Failed to delete user" },
+      { status: 500 }
+    );
+  }
+}

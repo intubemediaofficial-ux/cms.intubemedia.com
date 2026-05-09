@@ -6,18 +6,12 @@ import { signIn, useSession } from "next-auth/react";
 import { Music2, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
-  const [activeTab, setActiveTab] = useState<"password" | "otp">("otp");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [otp, setOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [otpSending, setOtpSending] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpCountdown, setOtpCountdown] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const router = useRouter();
   const { data: session } = useSession();
 
@@ -27,14 +21,7 @@ export default function LoginPage() {
     }
   }, [session, router]);
 
-  // OTP resend countdown timer
-  useEffect(() => {
-    if (otpCountdown <= 0) return;
-    const timer = setTimeout(() => setOtpCountdown(otpCountdown - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [otpCountdown]);
-
-  const handlePasswordLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError("Email and password are required");
@@ -45,89 +32,14 @@ export default function LoginPage() {
     const result = await signIn("credentials", {
       email,
       password,
-      loginType: "password",
       redirect: false,
     });
     setLoading(false);
     if (result?.error) {
       setError("Invalid email or password");
     } else {
-      router.push("/admin-dashboard");
-    }
-  };
-
-  const handleSendOTP = async () => {
-    if (!email) {
-      setError("Please enter your email address first");
-      return;
-    }
-    setOtpSending(true);
-    setError(null);
-    setSuccessMsg(null);
-
-    try {
-      const res = await fetch("/api/auth/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Failed to send OTP");
-      } else {
-        setOtpSent(true);
-        setOtpCountdown(60);
-        setSuccessMsg(`OTP sent to ${email}`);
-      }
-    } catch {
-      setError("Failed to send OTP. Please try again.");
-    } finally {
-      setOtpSending(false);
-    }
-  };
-
-  const handleOTPLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !otp) {
-      setError("Email and OTP are required");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-
-    try {
-      // First verify OTP
-      const verifyRes = await fetch("/api/auth/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp }),
-      });
-      const verifyData = await verifyRes.json();
-
-      if (!verifyRes.ok) {
-        setError(verifyData.error || "OTP verification failed");
-        setLoading(false);
-        return;
-      }
-
-      // OTP verified — now sign in via NextAuth credentials
-      const result = await signIn("credentials", {
-        email,
-        password: "",
-        loginType: "otp",
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError("Login failed. Please try again.");
-      } else {
-        router.push("/dashboard");
-      }
-    } catch {
-      setError("Login failed. Please try again.");
-    } finally {
-      setLoading(false);
+      router.push("/dashboard");
+      router.refresh();
     }
   };
 
@@ -157,43 +69,15 @@ export default function LoginPage() {
             Sign in to your account
           </h2>
           <p className="text-sm text-muted mt-1">
-            Please enter your email to continue.
+            Enter your email and password to continue.
           </p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-border p-8">
-          <div className="flex border-b border-border mb-6">
-            <button
-              onClick={() => { setActiveTab("otp"); setError(null); setSuccessMsg(null); }}
-              className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "otp"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted hover:text-foreground"
-              }`}
-            >
-              Email OTP
-            </button>
-            <button
-              onClick={() => { setActiveTab("password"); setError(null); setSuccessMsg(null); }}
-              className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "password"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted hover:text-foreground"
-              }`}
-            >
-              Admin Password
-            </button>
-          </div>
-
-          <form onSubmit={activeTab === "otp" ? handleOTPLogin : handlePasswordLogin}>
+          <form onSubmit={handleLogin}>
             {error && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
                 {error}
-              </div>
-            )}
-            {successMsg && (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-                {successMsg}
               </div>
             )}
 
@@ -211,98 +95,65 @@ export default function LoginPage() {
                 />
               </div>
 
-              {activeTab === "password" ? (
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all placeholder:text-muted-light pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all placeholder:text-muted-light pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        {showPassword ? (
-                          <>
-                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                            <line x1="1" y1="1" x2="23" y2="23" />
-                          </>
-                        ) : (
-                          <>
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                            <circle cx="12" cy="12" r="3" />
-                          </>
-                        )}
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    One-Time Password
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                      placeholder={otpSent ? "Enter 6-digit OTP" : "Click Send OTP first"}
-                      maxLength={6}
-                      disabled={!otpSent}
-                      className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all placeholder:text-muted-light tracking-widest text-center disabled:bg-slate-50 disabled:cursor-not-allowed"
-                    />
-                  </div>
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={handleSendOTP}
-                      disabled={otpSending || otpCountdown > 0 || !email}
-                      className="w-full flex items-center justify-center gap-2 py-2 px-4 text-sm font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {otpSending ? (
+                      {showPassword ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Sending OTP...
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
                         </>
-                      ) : otpCountdown > 0 ? (
-                        `Resend OTP in ${otpCountdown}s`
-                      ) : otpSent ? (
-                        "Resend OTP"
                       ) : (
-                        "Send OTP"
+                        <>
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </>
                       )}
-                    </button>
-                  </div>
+                    </svg>
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
 
             <button
               type="submit"
-              disabled={loading || (activeTab === "otp" && !otpSent)}
-              className="w-full mt-6 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed text-sm"
+              disabled={loading}
+              className="w-full mt-6 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2"
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                "Sign in"
+              )}
             </button>
           </form>
 
@@ -343,7 +194,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-muted mt-4">
-          Enter your email to receive a one-time password for login.
+          Contact admin for account creation.
         </p>
       </div>
     </div>
