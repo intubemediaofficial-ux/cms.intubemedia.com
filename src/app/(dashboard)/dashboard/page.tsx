@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Eye,
   Users,
@@ -11,6 +11,7 @@ import {
   WifiOff,
   Loader2,
   Share2,
+  AlertCircle,
 } from "lucide-react";
 import {
   LineChart,
@@ -28,6 +29,27 @@ import DateRangeFilter, { computeRange } from "@/components/dashboard/DateRangeF
 import type { DateRange } from "@/components/dashboard/DateRangeFilter";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
+
+const CHANNELS_STORAGE_KEY = "bainsla_channels";
+
+interface StoredChannel {
+  id: string;
+  status: "active" | "delinked" | "transferred";
+}
+
+function getActiveChannelIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(CHANNELS_STORAGE_KEY);
+    if (!stored) return [];
+    const channels: StoredChannel[] = JSON.parse(stored);
+    return channels
+      .filter((c) => c.status === "active")
+      .map((c) => c.id);
+  } catch {
+    return [];
+  }
+}
 
 interface ChannelItem {
   id?: string | null;
@@ -65,15 +87,16 @@ interface TopVideoItem {
 
 interface DashboardFullData {
   channels?: ChannelItem[];
-  currentPerformance?: AnalyticsResponse;
-  prevPerformance?: AnalyticsResponse;
+  currentPerformance?: AnalyticsResponse | null;
+  prevPerformance?: AnalyticsResponse | null;
   currentRevenue?: AnalyticsResponse | null;
   prevRevenue?: AnalyticsResponse | null;
   dailyRevenue?: AnalyticsResponse | null;
   topVideos?: {
-    analytics?: AnalyticsResponse;
+    analytics?: AnalyticsResponse | null;
     videos?: TopVideoItem[];
   };
+  hasOwnChannel?: boolean;
 }
 
 function sumMetric(data: AnalyticsResponse | undefined | null, metricName: string): number {
@@ -116,13 +139,19 @@ export default function DashboardPage() {
 
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
+  const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setActiveChannelIds(getActiveChannelIds());
+  }, []);
 
   const apiParams = useMemo(() => ({
     startDate: dateRange.startDate,
     endDate: dateRange.endDate,
     prevStartDate: dateRange.prevStartDate,
     prevEndDate: dateRange.prevEndDate,
-  }), [dateRange]);
+    ...(activeChannelIds.length > 0 ? { channelIds: activeChannelIds.join(",") } : {}),
+  }), [dateRange, activeChannelIds]);
 
   const { data: dashData, isReal, error, loading } = useYouTubeData<DashboardFullData>(
     "dashboardFull",
@@ -130,12 +159,13 @@ export default function DashboardPage() {
     {}
   );
 
-  const channel = dashData?.channels?.[0];
+  const channels = dashData?.channels || [];
+  const hasNoChannelsAdded = activeChannelIds.length === 0;
 
-  // Cumulative metrics (from channel statistics — date-independent)
-  const totalViews = Number(channel?.statistics?.viewCount || 0);
-  const totalSubscribers = Number(channel?.statistics?.subscriberCount || 0);
-  const totalVideos = Number(channel?.statistics?.videoCount || 0);
+  // Cumulative metrics — aggregate across ALL added channels
+  const totalViews = channels.reduce((sum, ch) => sum + Number(ch?.statistics?.viewCount || 0), 0);
+  const totalSubscribers = channels.reduce((sum, ch) => sum + Number(ch?.statistics?.subscriberCount || 0), 0);
+  const totalVideos = channels.reduce((sum, ch) => sum + Number(ch?.statistics?.videoCount || 0), 0);
 
   // Revenue metrics
   const curEstRevenue = sumRevenueMetric(dashData?.currentRevenue, "estimatedRevenue");
@@ -164,7 +194,7 @@ export default function DashboardPage() {
   const prevRPM = prevViews > 0 ? (prevEstRevenue / prevViews) * 1000 : 0;
 
   // Revenue per channel
-  const channelCount = dashData?.channels?.length || 1;
+  const channelCount = channels.length || 1;
   const curRevenuePerChannel = curEstRevenue / channelCount;
   const prevRevenuePerChannel = prevEstRevenue / (channelCount || 1);
 
@@ -218,7 +248,14 @@ export default function DashboardPage() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          {isAuthenticated && activeChannelIds.length > 0 && (
+            <p className="text-xs text-muted mt-0.5">
+              Showing data for {activeChannelIds.length} added channel{activeChannelIds.length !== 1 ? "s" : ""}
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           {isAuthenticated && isReal && (
             <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
@@ -279,7 +316,25 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {isAuthenticated && !loading && !isReal && (
+      {isAuthenticated && !loading && hasNoChannelsAdded && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <AlertCircle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">No Channels Added</h3>
+            <p className="text-sm text-muted mb-4">
+              Dashboard sirf added channels ka data dikhata hai. Pehle Channels section mein channels add karo.
+            </p>
+            <a
+              href="/channels"
+              className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors inline-block"
+            >
+              Go to Channels
+            </a>
+          </div>
+        </div>
+      )}
+
+      {isAuthenticated && !loading && !hasNoChannelsAdded && !isReal && (
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <WifiOff className="w-10 h-10 text-red-400 mx-auto mb-3" />
@@ -295,12 +350,12 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {isAuthenticated && !loading && isReal && (
+      {isAuthenticated && !loading && !hasNoChannelsAdded && isReal && (
         <>
           {/* ===== SECTION 1: Cumulative Metrics (date-independent) ===== */}
           <div className="bg-slate-50 rounded-xl border border-border p-5">
             <h3 className="text-sm font-semibold text-foreground mb-3">
-              Cumulative Metrics <span className="text-xs font-normal text-muted">(Overall, date-independent)</span>
+              Cumulative Metrics <span className="text-xs font-normal text-muted">(Aggregated across {channels.length} added channel{channels.length !== 1 ? "s" : ""})</span>
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               <MetricCard

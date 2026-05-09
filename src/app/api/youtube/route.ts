@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import {
   getChannelStats,
+  getChannelStatsById,
   getChannelVideos,
   getAnalyticsData,
   getTrafficSources,
@@ -142,8 +143,26 @@ export async function GET(request: Request) {
       case "dashboardFull": {
         const prevStartDate = url.searchParams.get("prevStartDate") || startDate;
         const prevEndDate = url.searchParams.get("prevEndDate") || endDate;
+        const channelIdsParam = url.searchParams.get("channelIds") || "";
+        const channelIds = channelIdsParam
+          ? channelIdsParam.split(",").filter(Boolean)
+          : [];
 
         const performanceMetrics = "views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes";
+
+        // Fetch channel stats for specific added channels (or user's own if none specified)
+        const channelsPromise = channelIds.length > 0
+          ? getChannelStatsById(session.accessToken, channelIds)
+          : getChannelStats(session.accessToken);
+
+        // Check if user's own channel is among the added channels
+        // Analytics API only works for owned channels (channel==MINE)
+        const myChannels = await getChannelStats(session.accessToken);
+        const myChannelIds = myChannels.map(
+          (ch: { id?: string | null }) => ch.id
+        ).filter(Boolean) as string[];
+        const hasOwnChannel = channelIds.length === 0 ||
+          myChannelIds.some((id) => channelIds.includes(id));
 
         const [
           channels,
@@ -154,13 +173,25 @@ export async function GET(request: Request) {
           dailyRevenue,
           topVideosByViews,
         ] = await Promise.all([
-          getChannelStats(session.accessToken),
-          getAnalyticsData(session.accessToken, startDate, endDate, performanceMetrics, ""),
-          getAnalyticsData(session.accessToken, prevStartDate, prevEndDate, performanceMetrics, ""),
-          getRevenueData(session.accessToken, startDate, endDate).catch(() => null),
-          getRevenueData(session.accessToken, prevStartDate, prevEndDate).catch(() => null),
-          getAnalyticsData(session.accessToken, startDate, endDate, "estimatedRevenue", "day").catch(() => null),
-          getTopVideos(session.accessToken, startDate, endDate),
+          channelsPromise,
+          hasOwnChannel
+            ? getAnalyticsData(session.accessToken, startDate, endDate, performanceMetrics, "")
+            : Promise.resolve(null),
+          hasOwnChannel
+            ? getAnalyticsData(session.accessToken, prevStartDate, prevEndDate, performanceMetrics, "")
+            : Promise.resolve(null),
+          hasOwnChannel
+            ? getRevenueData(session.accessToken, startDate, endDate).catch(() => null)
+            : Promise.resolve(null),
+          hasOwnChannel
+            ? getRevenueData(session.accessToken, prevStartDate, prevEndDate).catch(() => null)
+            : Promise.resolve(null),
+          hasOwnChannel
+            ? getAnalyticsData(session.accessToken, startDate, endDate, "estimatedRevenue", "day").catch(() => null)
+            : Promise.resolve(null),
+          hasOwnChannel
+            ? getTopVideos(session.accessToken, startDate, endDate)
+            : Promise.resolve({ analytics: null, videos: [] }),
         ]);
 
         return Response.json({
@@ -172,6 +203,7 @@ export async function GET(request: Request) {
             prevRevenue,
             dailyRevenue,
             topVideos: topVideosByViews,
+            hasOwnChannel,
           },
         });
       }

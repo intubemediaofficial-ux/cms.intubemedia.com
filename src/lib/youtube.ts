@@ -21,6 +21,33 @@ export async function getChannelStats(accessToken: string) {
   return response.data.items || [];
 }
 
+export async function getChannelStatsById(
+  accessToken: string,
+  channelIds: string[]
+) {
+  if (channelIds.length === 0) return [];
+  const auth = getAuthClient(accessToken);
+  const youtube = google.youtube({ version: "v3", auth });
+
+  const allItems: Array<Record<string, unknown>> = [];
+  // YouTube API allows max 50 IDs per request
+  for (let i = 0; i < channelIds.length; i += 50) {
+    const batch = channelIds.slice(i, i + 50);
+    const response = await youtube.channels.list({
+      part: ["snippet", "statistics", "contentDetails", "brandingSettings"],
+      id: batch,
+    });
+    if (response.data.items) {
+      allItems.push(
+        ...response.data.items.map((item) => ({
+          ...item,
+        }))
+      );
+    }
+  }
+  return allItems;
+}
+
 export async function lookupChannel(
   accessToken: string,
   query: string
