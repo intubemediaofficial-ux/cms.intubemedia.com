@@ -23,6 +23,8 @@ import {
   Check,
   MoreVertical,
   Key,
+  Trash2,
+  Eye,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
@@ -156,6 +158,17 @@ export default function ChannelsPage() {
   const [generatingLink, setGeneratingLink] = useState(false);
   const [activeActionMenu, setActiveActionMenu] = useState<string | null>(null);
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, string>>({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showChannelDetail, setShowChannelDetail] = useState<string | null>(null);
+  const [channelDetailData, setChannelDetailData] = useState<{
+    revenue?: number;
+    views?: number;
+    subscribers?: number;
+    videos?: number;
+    channelTitle?: string;
+    tokenUpdatedAt?: string;
+  } | null>(null);
+  const [channelDetailLoading, setChannelDetailLoading] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -183,13 +196,12 @@ export default function ChannelsPage() {
     fetchChannels();
   }, [isAuthenticated, storedChannels, channelDataMap]);
 
-  // Fetch token statuses for all stored channels
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const activeStored = storedChannels.filter((c) => c.status === "active");
-    if (activeStored.length === 0) return;
+  // Fetch token statuses for all stored channels + auto-refresh every 30s
+  const fetchTokenStatuses = useCallback(() => {
+    const allStored = storedChannels.filter((c) => c.status === "active" || c.status === "transferred");
+    if (allStored.length === 0) return;
 
-    const ids = activeStored.map((c) => c.id).join(",");
+    const ids = allStored.map((c) => c.id).join(",");
     fetch(`/api/channel-tokens?action=bulkTokenStatus&channelIds=${encodeURIComponent(ids)}`)
       .then((res) => res.json())
       .then((json) => {
@@ -203,7 +215,14 @@ export default function ChannelsPage() {
         }
       })
       .catch(() => {});
-  }, [isAuthenticated, storedChannels]);
+  }, [storedChannels]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchTokenStatuses();
+    const interval = setInterval(fetchTokenStatuses, 30000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, fetchTokenStatuses]);
 
   const [inviteError, setInviteError] = useState("");
 
@@ -347,6 +366,43 @@ export default function ChannelsPage() {
     );
     saveStoredChannels(updated);
     setStoredChannels(updated);
+  };
+
+  const handleDeleteChannel = (channelId: string) => {
+    const updated = storedChannels.filter((c) => c.id !== channelId);
+    saveStoredChannels(updated);
+    setStoredChannels(updated);
+    setChannelDataMap((prev) => {
+      const copy = { ...prev };
+      delete copy[channelId];
+      return copy;
+    });
+    setShowDeleteConfirm(null);
+  };
+
+  const handleViewChannelDetail = async (channelId: string) => {
+    setShowChannelDetail(channelId);
+    setChannelDetailLoading(true);
+    setChannelDetailData(null);
+
+    try {
+      const res = await fetch(`/api/channel-tokens?action=tokenStatus&channelId=${encodeURIComponent(channelId)}`);
+      const json = await res.json();
+      const channelRow = allChannelRows.find((c) => c.id === channelId);
+
+      setChannelDetailData({
+        revenue: 0,
+        views: channelRow?.views || 0,
+        subscribers: channelRow?.subscribers || 0,
+        videos: channelRow?.videos || 0,
+        channelTitle: json.data?.channelTitle || channelRow?.name || channelId,
+        tokenUpdatedAt: json.data?.updatedAt || undefined,
+      });
+    } catch {
+      setChannelDetailData(null);
+    } finally {
+      setChannelDetailLoading(false);
+    }
   };
 
   const handleBulkAdd = useCallback(async () => {
@@ -829,15 +885,24 @@ export default function ChannelsPage() {
                       <td className="px-4 py-3 text-foreground">{formatNumber(channel.views)}</td>
                       <td className="px-4 py-3 text-foreground">{channel.channelType}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          channel.tokenStatus === "Valid"
-                            ? "bg-green-100 text-green-700"
-                            : channel.tokenStatus === "Expired"
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-red-100 text-red-700"
-                        }`}>
+                        <button
+                          onClick={() => channel.tokenStatus === "Valid" ? handleViewChannelDetail(channel.id) : undefined}
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            channel.tokenStatus === "Valid"
+                              ? "bg-green-100 text-green-700 cursor-pointer hover:bg-green-200 transition-colors"
+                              : channel.tokenStatus === "Expired"
+                              ? "bg-amber-100 text-amber-700 cursor-default"
+                              : "bg-red-100 text-red-700 cursor-default"
+                          }`}
+                        >
+                          {channel.tokenStatus === "Valid" && (
+                            <Check className="w-3.5 h-3.5 text-green-600" />
+                          )}
                           {channel.tokenStatus}
-                        </span>
+                          {channel.tokenStatus === "Valid" && (
+                            <Eye className="w-3 h-3 ml-0.5 text-green-500" />
+                          )}
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-foreground">{channel.cms}</td>
                       <td className="px-4 py-3 text-foreground">{channel.category}</td>
@@ -878,6 +943,14 @@ export default function ChannelsPage() {
                                   </button>
                                 </>
                               )}
+                              <div className="border-t border-border my-1" />
+                              <button
+                                onClick={() => { setShowDeleteConfirm(channel.id); setActiveActionMenu(null); }}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Delete Channel
+                              </button>
                               {activeTab === "transferred" && (
                                 <button
                                   onClick={() => { handleRelink(channel.id); setActiveActionMenu(null); }}
@@ -1307,6 +1380,134 @@ export default function ChannelsPage() {
               <button
                 onClick={() => setShowInviteModal(false)}
                 className="px-4 py-2 text-sm font-medium text-muted hover:text-foreground border border-border rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Delete Channel?</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-1">
+              Channel ID: <span className="font-mono text-gray-900">{showDeleteConfirm}</span>
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              This will permanently remove this channel from your CMS. This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteChannel(showDeleteConfirm)}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Channel Detail Modal (when clicking Valid token) */}
+      {showChannelDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                  <Check className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Token Valid</h3>
+                  <p className="text-xs text-green-600 font-medium">Channel is authorized and active</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowChannelDetail(null); setChannelDetailData(null); }}
+                className="p-1.5 rounded hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {channelDetailLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                <span className="ml-2 text-gray-500">Loading channel data...</span>
+              </div>
+            ) : channelDetailData ? (
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    <span className="text-green-700 font-medium">Token validated successfully</span>
+                  </div>
+                  {channelDetailData.tokenUpdatedAt && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Last validated: {new Date(channelDetailData.tokenUpdatedAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Channel Data</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Channel ID</span>
+                      <span className="font-mono text-gray-900">{showChannelDetail}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Channel Name</span>
+                      <span className="text-gray-900 font-medium">{channelDetailData.channelTitle}</span>
+                    </div>
+                    <div className="border-t border-gray-100 my-2" />
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Subscribers</span>
+                      <span className="text-gray-900 font-semibold">{formatNumber(channelDetailData.subscribers || 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Total Views</span>
+                      <span className="text-gray-900 font-semibold">{formatNumber(channelDetailData.views || 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Total Videos</span>
+                      <span className="text-gray-900 font-semibold">{(channelDetailData.videos || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Revenue</span>
+                      <span className="text-gray-900 font-semibold">${(channelDetailData.revenue || 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-gray-400 text-center">
+                  Data is fetched using the channel&apos;s OAuth token. Revenue data requires YouTube Analytics API access.
+                </p>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                Failed to load channel details.
+              </div>
+            )}
+
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={() => { setShowChannelDetail(null); setChannelDetailData(null); }}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg transition-colors"
               >
                 Close
               </button>
