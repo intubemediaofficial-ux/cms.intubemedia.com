@@ -1,24 +1,27 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
-  Plus,
   ExternalLink,
   Search,
-  X,
   Wifi,
   WifiOff,
   Loader2,
   RotateCcw,
-  Radio,
-  CheckCircle2,
+  Unlink,
   ChevronLeft,
   ChevronRight,
+  RotateCw,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
-import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
-import { channels as mockChannels } from "@/lib/mock-data";
+
+interface StoredChannel {
+  id: string;
+  category: string;
+  addedDate: string;
+  status: "active" | "delinked";
+}
 
 interface YouTubeChannel {
   id?: string | null;
@@ -35,13 +38,6 @@ interface YouTubeChannel {
     videoCount?: string | null;
     viewCount?: string | null;
   } | null;
-}
-
-interface StoredChannel {
-  id: string;
-  category: string;
-  addedDate: string;
-  status: "active" | "delinked";
 }
 
 const STORAGE_KEY = "bainsla_channels";
@@ -63,29 +59,30 @@ function saveStoredChannels(channels: StoredChannel[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
 }
 
-export default function ChannelsPage() {
+type ChannelRow = {
+  id: string;
+  name: string;
+  thumbnail: string;
+  subscribers: number;
+  videos: number;
+  views: number;
+  category: string;
+  addedDate: string;
+};
+
+export default function DelinkedChannelsPage() {
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated" && !!session?.accessToken;
 
-  const { data: myChannels, isReal, loading } = useYouTubeData<YouTubeChannel[]>(
-    "channels",
-    {},
-    []
-  );
-
-  const [channelDataMap, setChannelDataMap] = useState<Record<string, YouTubeChannel>>({});
   const [storedChannels, setStoredChannels] = useState<StoredChannel[]>([]);
-  const [showModal, setShowModal] = useState(false);
-  const [channelIdInput, setChannelIdInput] = useState("");
-  const [categoryInput, setCategoryInput] = useState("");
-  const [addingChannel, setAddingChannel] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
+  const [channelDataMap, setChannelDataMap] = useState<Record<string, YouTubeChannel>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [perPage, setPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [sortField, setSortField] = useState<string>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [loadingData, setLoadingData] = useState(false);
 
   useEffect(() => {
     setStoredChannels(getStoredChannels());
@@ -93,14 +90,11 @@ export default function ChannelsPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const activeStored = storedChannels.filter((c) => c.status === "active");
-    if (activeStored.length === 0) return;
-
-    const idsToFetch = activeStored
-      .map((c) => c.id)
-      .filter((id) => !channelDataMap[id]);
+    const delinked = storedChannels.filter((c) => c.status === "delinked");
+    const idsToFetch = delinked.map((c) => c.id).filter((id) => !channelDataMap[id]);
     if (idsToFetch.length === 0) return;
 
+    setLoadingData(true);
     const fetchChannels = async () => {
       for (const id of idsToFetch) {
         try {
@@ -113,63 +107,21 @@ export default function ChannelsPage() {
           // skip
         }
       }
+      setLoadingData(false);
     };
     fetchChannels();
   }, [isAuthenticated, storedChannels, channelDataMap]);
 
-  const handleAddChannel = useCallback(async () => {
-    const id = channelIdInput.trim();
-    if (!id || !categoryInput) {
-      setAddError("Please enter Channel ID and select Category");
-      return;
-    }
-
-    if (storedChannels.some((c) => c.id === id)) {
-      setAddError("Channel already exists");
-      return;
-    }
-
-    setAddingChannel(true);
-    setAddError(null);
-
-    try {
-      const res = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}`);
-      const json = await res.json();
-
-      if (!res.ok || !json.data?.length) {
-        setAddError("Channel not found. Please check the Channel ID.");
-        setAddingChannel(false);
-        return;
-      }
-
-      const channelData = json.data[0] as YouTubeChannel;
-      const actualId = channelData.id || id;
-
-      const newStored: StoredChannel = {
-        id: actualId,
-        category: categoryInput,
-        addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
-        status: "active",
-      };
-
-      const updatedChannels = [...storedChannels, newStored];
-      saveStoredChannels(updatedChannels);
-      setStoredChannels(updatedChannels);
-      setChannelDataMap((prev) => ({ ...prev, [actualId]: channelData }));
-      setShowModal(false);
-      setChannelIdInput("");
-      setCategoryInput("");
-    } catch {
-      setAddError("Network error. Please try again.");
-    } finally {
-      setAddingChannel(false);
-    }
-  }, [channelIdInput, categoryInput, storedChannels]);
-
-  const handleDelink = (channelId: string) => {
+  const handleRelink = (channelId: string) => {
     const updated = storedChannels.map((c) =>
-      c.id === channelId ? { ...c, status: "delinked" as const } : c
+      c.id === channelId ? { ...c, status: "active" as const } : c
     );
+    saveStoredChannels(updated);
+    setStoredChannels(updated);
+  };
+
+  const handleRemove = (channelId: string) => {
+    const updated = storedChannels.filter((c) => c.id !== channelId);
     saveStoredChannels(updated);
     setStoredChannels(updated);
   };
@@ -189,85 +141,30 @@ export default function ChannelsPage() {
     setCurrentPage(1);
   };
 
-  type ChannelRow = {
-    id: string;
-    name: string;
-    handle: string;
-    thumbnail: string;
-    subscribers: number;
-    videos: number;
-    views: number;
-    category: string;
-    addedDate: string;
-    isOwn: boolean;
-    status: "active" | "delinked";
-  };
-
-  const activeChannels: ChannelRow[] = useMemo(() => {
-    const rows: ChannelRow[] = [];
-
-    if (isReal) {
-      for (const ch of myChannels) {
-        rows.push({
-          id: ch.id || "",
-          name: ch.snippet?.title || "Unknown",
-          handle: ch.snippet?.customUrl || "",
-          thumbnail: ch.snippet?.thumbnails?.medium?.url || ch.snippet?.thumbnails?.default?.url || "",
-          subscribers: Number(ch.statistics?.subscriberCount || 0),
-          videos: Number(ch.statistics?.videoCount || 0),
-          views: Number(ch.statistics?.viewCount || 0),
-          category: "Music",
-          addedDate: "-",
-          isOwn: true,
-          status: "active",
-        });
-      }
-    } else {
-      for (const c of mockChannels) {
-        rows.push({
-          id: c.id,
-          name: c.name,
-          handle: c.handle,
-          thumbnail: c.thumbnail,
-          subscribers: c.subscribers,
-          videos: c.videos,
-          views: c.views,
-          category: "Music",
-          addedDate: "-",
-          isOwn: true,
-          status: c.status,
-        });
-      }
-    }
-
-    for (const sc of storedChannels.filter((c) => c.status === "active")) {
-      if (rows.some((r) => r.id === sc.id)) continue;
+  const delinkedRows: ChannelRow[] = useMemo(() => {
+    const delinked = storedChannels.filter((c) => c.status === "delinked");
+    return delinked.map((sc) => {
       const data = channelDataMap[sc.id];
-      rows.push({
+      return {
         id: sc.id,
         name: data?.snippet?.title || sc.id,
-        handle: data?.snippet?.customUrl || "",
         thumbnail: data?.snippet?.thumbnails?.medium?.url || data?.snippet?.thumbnails?.default?.url || "",
         subscribers: Number(data?.statistics?.subscriberCount || 0),
         videos: Number(data?.statistics?.videoCount || 0),
         views: Number(data?.statistics?.viewCount || 0),
         category: sc.category,
         addedDate: sc.addedDate,
-        isOwn: false,
-        status: "active",
-      });
-    }
-
-    return rows;
-  }, [isReal, myChannels, storedChannels, channelDataMap]);
+      };
+    });
+  }, [storedChannels, channelDataMap]);
 
   const filteredChannels = useMemo(() => {
-    let result = activeChannels;
+    let result = delinkedRows;
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
-        (c) => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q) || c.handle.toLowerCase().includes(q)
+        (c) => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)
       );
     }
 
@@ -289,11 +186,10 @@ export default function ChannelsPage() {
     });
 
     return result;
-  }, [activeChannels, searchQuery, categoryFilter, sortField, sortDir]);
+  }, [delinkedRows, searchQuery, categoryFilter, sortField, sortDir]);
 
   const totalPages = Math.ceil(filteredChannels.length / perPage);
   const pageChannels = filteredChannels.slice((currentPage - 1) * perPage, currentPage * perPage);
-  const totalActive = activeChannels.length;
 
   const SortIcon = ({ field }: { field: string }) => (
     <svg
@@ -311,36 +207,26 @@ export default function ChannelsPage() {
       <div className="flex items-center gap-2 text-sm text-muted">
         <span>Channels</span>
         <span>›</span>
-        <span className="text-foreground font-medium">Active Channels</span>
+        <span className="text-foreground font-medium">Delinked Channels</span>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Card */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
-            <Radio className="w-6 h-6 text-white" />
+        <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-center gap-4">
+          <div className="w-12 h-12 bg-red-500 rounded-xl flex items-center justify-center">
+            <Unlink className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="text-sm text-blue-600 font-medium">Total Channels</p>
-            <p className="text-2xl font-bold text-blue-900">{totalActive}</p>
-            <p className="text-xs text-blue-500">All registered channels</p>
-          </div>
-        </div>
-        <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-4">
-          <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
-            <CheckCircle2 className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <p className="text-sm text-green-600 font-medium">Active Channels</p>
-            <p className="text-2xl font-bold text-green-900">{totalActive}</p>
-            <p className="text-xs text-green-500">Channels with active status</p>
+            <p className="text-sm text-red-600 font-medium">Delinked Channels</p>
+            <p className="text-2xl font-bold text-red-900">{delinkedRows.length}</p>
+            <p className="text-xs text-red-500">Channels removed from active list</p>
           </div>
         </div>
       </div>
 
       {/* Status Badge */}
       <div className="flex items-center gap-3">
-        {isReal && (
+        {isAuthenticated && (
           <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
             <Wifi className="w-3.5 h-3.5" />
             Live Data
@@ -354,7 +240,7 @@ export default function ChannelsPage() {
         )}
       </div>
 
-      {/* Filters & Search Row */}
+      {/* Filters */}
       <div className="bg-white rounded-xl border border-border p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
@@ -390,26 +276,15 @@ export default function ChannelsPage() {
             Reset
           </button>
         </div>
-
-        {/* Total + Add Channel */}
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+        <div className="mt-4 pt-3 border-t border-border">
           <p className="text-sm text-muted">
-            Total Channels: <span className="font-semibold text-primary">{filteredChannels.length}</span>
+            Total Delinked: <span className="font-semibold text-red-600">{filteredChannels.length}</span>
           </p>
-          {isAuthenticated && (
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Channel
-            </button>
-          )}
         </div>
       </div>
 
       {/* Loading */}
-      {loading && isAuthenticated && (
+      {loadingData && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
           <span className="ml-2 text-sm text-muted">Loading channels...</span>
@@ -441,9 +316,6 @@ export default function ChannelsPage() {
                   Status
                 </th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Added Date
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">
                   Actions
                 </th>
               </tr>
@@ -462,7 +334,7 @@ export default function ChannelsPage() {
                             referrerPolicy="no-referrer"
                           />
                         ) : (
-                          <div className="w-full h-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+                          <div className="w-full h-full bg-red-100 flex items-center justify-center text-red-500 font-bold text-sm">
                             {channel.name[0]}
                           </div>
                         )}
@@ -488,27 +360,34 @@ export default function ChannelsPage() {
                   <td className="px-4 py-3 text-foreground">{formatNumber(channel.views)}</td>
                   <td className="px-4 py-3 text-foreground">{channel.category}</td>
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                      Active
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                      Delinked
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-muted">{channel.addedDate}</td>
                   <td className="px-4 py-3">
-                    {!channel.isOwn && (
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => handleDelink(channel.id)}
+                        onClick={() => handleRelink(channel.id)}
+                        className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 font-medium px-2 py-1 rounded hover:bg-green-50 transition-colors"
+                        title="Re-link channel"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                        Relink
+                      </button>
+                      <button
+                        onClick={() => handleRemove(channel.id)}
                         className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
                       >
-                        Delink
+                        Remove
                       </button>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))}
               {pageChannels.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-muted">
-                    {loading ? "Loading..." : "No channels found"}
+                  <td colSpan={7} className="px-4 py-12 text-center text-muted">
+                    {loadingData ? "Loading..." : "No delinked channels"}
                   </td>
                 </tr>
               )}
@@ -566,86 +445,6 @@ export default function ChannelsPage() {
           </div>
         )}
       </div>
-
-      {/* Add Channel Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between p-5 border-b border-border">
-              <h2 className="text-lg font-semibold text-foreground">Add New Channel</h2>
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  setChannelIdInput("");
-                  setCategoryInput("");
-                  setAddError(null);
-                }}
-                className="p-1 hover:bg-slate-100 rounded-lg"
-              >
-                <X className="w-5 h-5 text-muted" />
-              </button>
-            </div>
-            <div className="p-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Channel ID <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={channelIdInput}
-                    onChange={(e) => setChannelIdInput(e.target.value)}
-                    placeholder="UC..."
-                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Category <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={categoryInput}
-                    onChange={(e) => setCategoryInput(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                  >
-                    <option value="">Select Category</option>
-                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              {addError && (
-                <p className="text-sm text-red-500 mt-3">{addError}</p>
-              )}
-            </div>
-            <div className="flex items-center justify-end gap-3 p-5 border-t border-border">
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  setChannelIdInput("");
-                  setCategoryInput("");
-                  setAddError(null);
-                }}
-                className="px-4 py-2 text-sm font-medium text-muted hover:text-foreground border border-border rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddChannel}
-                disabled={addingChannel}
-                className="flex items-center gap-2 bg-primary hover:bg-primary-dark disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                {addingChannel ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4" />
-                )}
-                Add Channel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

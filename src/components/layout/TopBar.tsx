@@ -2,9 +2,15 @@
 
 import { Bell, Search, ChevronDown } from "lucide-react";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 
 export default function TopBar() {
   const [searchQuery, setSearchQuery] = useState("");
+  const { data: session } = useSession();
+
+  const userName = session?.user?.name || "Bainsla Music";
+  const userRole = session?.user?.role === "admin" ? "Admin" : "Client";
+  const initials = userName.charAt(0).toUpperCase();
 
   return (
     <header className="h-16 bg-white border-b border-border flex items-center justify-between px-6 sticky top-0 z-30">
@@ -29,11 +35,11 @@ export default function TopBar() {
 
         <div className="flex items-center gap-3 pl-4 border-l border-border">
           <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-            <span className="text-white text-sm font-semibold">B</span>
+            <span className="text-white text-sm font-semibold">{initials}</span>
           </div>
           <div className="hidden sm:block">
-            <p className="text-sm font-medium text-foreground">Bainsla Music</p>
-            <p className="text-xs text-muted">Admin</p>
+            <p className="text-sm font-medium text-foreground">{userName}</p>
+            <p className="text-xs text-muted">{userRole}</p>
           </div>
           <ChevronDown className="w-4 h-4 text-muted" />
         </div>
