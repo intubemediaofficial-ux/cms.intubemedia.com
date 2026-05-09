@@ -12,6 +12,9 @@ import {
   Loader2,
   Share2,
   AlertCircle,
+  DollarSign,
+  TrendingUp,
+  Video,
 } from "lucide-react";
 import {
   LineChart,
@@ -85,6 +88,12 @@ interface TopVideoItem {
   } | null;
 }
 
+interface ChannelRevenueInfo {
+  revenue: number;
+  views: number;
+  rpm: number;
+}
+
 interface DashboardFullData {
   channels?: ChannelItem[];
   currentPerformance?: AnalyticsResponse | null;
@@ -97,6 +106,9 @@ interface DashboardFullData {
     videos?: TopVideoItem[];
   };
   hasOwnChannel?: boolean;
+  channelRevenueMap?: Record<string, ChannelRevenueInfo>;
+  lastDayRevenue?: number;
+  lastDayDate?: string;
 }
 
 function sumMetric(data: AnalyticsResponse | undefined | null, metricName: string): number {
@@ -232,6 +244,40 @@ export default function DashboardPage() {
   const videosSortedBySubs = [...topVideos]
     .map((v) => ({ ...v, analyticsSubs: videoAnalyticsMap[v.id || ""]?.subs || 0 }))
     .sort((a, b) => b.analyticsSubs - a.analyticsSubs)
+    .slice(0, 5);
+
+  // Channel leaderboard data
+  const channelRevenueMap = dashData?.channelRevenueMap || {};
+  const lastDayRevenue = dashData?.lastDayRevenue || 0;
+  const lastDayDate = dashData?.lastDayDate || "";
+
+  // Top 5 Channels by Revenue Generated
+  const channelsSortedByRevenue = [...channels]
+    .map((ch) => ({
+      ...ch,
+      channelRevenue: channelRevenueMap[ch.id || ""]?.revenue || 0,
+    }))
+    .sort((a, b) => b.channelRevenue - a.channelRevenue)
+    .slice(0, 5);
+
+  // Top 5 Channels by RPM
+  const channelsSortedByRPM = [...channels]
+    .map((ch) => {
+      const revInfo = channelRevenueMap[ch.id || ""];
+      const views = Number(ch.statistics?.viewCount || 0);
+      const rpm = revInfo ? revInfo.rpm : (views > 0 && curEstRevenue > 0 ? (curEstRevenue / views) * 1000 : 0);
+      return { ...ch, channelRPM: rpm };
+    })
+    .sort((a, b) => b.channelRPM - a.channelRPM)
+    .slice(0, 5);
+
+  // Top 5 Channels by Videos Published
+  const channelsSortedByVideos = [...channels]
+    .map((ch) => ({
+      ...ch,
+      totalVideos: Number(ch.statistics?.videoCount || 0),
+    }))
+    .sort((a, b) => b.totalVideos - a.totalVideos)
     .slice(0, 5);
 
   const displayStart = dateRange.startDate.split("-").reverse().join("-");
@@ -421,6 +467,21 @@ export default function DashboardPage() {
                 color="#14b8a6"
               />
             </div>
+            {/* Last Day Revenue */}
+            {lastDayRevenue > 0 && (
+              <div className="mt-3 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg border border-amber-200 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-amber-600" />
+                    <span className="text-sm font-medium text-amber-800">Last Day Revenue</span>
+                    {lastDayDate && (
+                      <span className="text-xs text-amber-600">({lastDayDate})</span>
+                    )}
+                  </div>
+                  <span className="text-lg font-bold text-amber-700">{formatCurrency(lastDayRevenue)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ===== NOTE ===== */}
@@ -587,6 +648,84 @@ export default function DashboardPage() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+
+          {/* ===== SECTION 3B: Top 5 Channel Leaderboards ===== */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            {/* Top 5 Channels by Revenue Generated */}
+            <div className="bg-white rounded-xl border border-border p-5">
+              <h3 className="font-semibold text-foreground text-sm mb-3 flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-amber-500" />
+                Top 5 Channels by Revenue
+              </h3>
+              <div className="space-y-2">
+                {channelsSortedByRevenue.length > 0 ? channelsSortedByRevenue.map((ch, i) => {
+                  const thumbnail = ch.snippet?.thumbnails?.default?.url || "";
+                  return (
+                    <div key={ch.id || i} className="flex items-center gap-3 py-1.5">
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-muted"}`}>
+                        {i + 1}
+                      </span>
+                      {thumbnail && <img src={thumbnail} alt="" className="w-8 h-8 rounded-full object-cover" referrerPolicy="no-referrer" />}
+                      <span className="flex-1 text-sm text-foreground truncate">{ch.snippet?.title || "Unknown"}</span>
+                      <span className="text-sm font-semibold text-amber-600">{formatCurrency(ch.channelRevenue)}</span>
+                    </div>
+                  );
+                }) : (
+                  <p className="text-xs text-muted py-4 text-center">No revenue data available</p>
+                )}
+              </div>
+            </div>
+
+            {/* Top 5 Channels by RPM */}
+            <div className="bg-white rounded-xl border border-border p-5">
+              <h3 className="font-semibold text-foreground text-sm mb-3 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-purple-500" />
+                Top 5 Channels by RPM
+              </h3>
+              <div className="space-y-2">
+                {channelsSortedByRPM.length > 0 ? channelsSortedByRPM.map((ch, i) => {
+                  const thumbnail = ch.snippet?.thumbnails?.default?.url || "";
+                  return (
+                    <div key={ch.id || i} className="flex items-center gap-3 py-1.5">
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-muted"}`}>
+                        {i + 1}
+                      </span>
+                      {thumbnail && <img src={thumbnail} alt="" className="w-8 h-8 rounded-full object-cover" referrerPolicy="no-referrer" />}
+                      <span className="flex-1 text-sm text-foreground truncate">{ch.snippet?.title || "Unknown"}</span>
+                      <span className="text-sm font-semibold text-purple-600">{formatCurrency(ch.channelRPM)}</span>
+                    </div>
+                  );
+                }) : (
+                  <p className="text-xs text-muted py-4 text-center">No RPM data available</p>
+                )}
+              </div>
+            </div>
+
+            {/* Top 5 Channels by Videos Published */}
+            <div className="bg-white rounded-xl border border-border p-5">
+              <h3 className="font-semibold text-foreground text-sm mb-3 flex items-center gap-2">
+                <Video className="w-4 h-4 text-red-500" />
+                Top 5 Channels by Videos Published
+              </h3>
+              <div className="space-y-2">
+                {channelsSortedByVideos.length > 0 ? channelsSortedByVideos.map((ch, i) => {
+                  const thumbnail = ch.snippet?.thumbnails?.default?.url || "";
+                  return (
+                    <div key={ch.id || i} className="flex items-center gap-3 py-1.5">
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-muted"}`}>
+                        {i + 1}
+                      </span>
+                      {thumbnail && <img src={thumbnail} alt="" className="w-8 h-8 rounded-full object-cover" referrerPolicy="no-referrer" />}
+                      <span className="flex-1 text-sm text-foreground truncate">{ch.snippet?.title || "Unknown"}</span>
+                      <span className="text-sm font-semibold text-red-600">{formatNumber(ch.totalVideos)} videos</span>
+                    </div>
+                  );
+                }) : (
+                  <p className="text-xs text-muted py-4 text-center">No channels found</p>
+                )}
               </div>
             </div>
           </div>
