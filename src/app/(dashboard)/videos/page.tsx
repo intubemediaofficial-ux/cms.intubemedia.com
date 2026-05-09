@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Search,
   Filter,
@@ -11,14 +11,16 @@ import {
   Eye,
   Loader2,
   WifiOff,
+  AlertCircle,
 } from "lucide-react";
 import { signIn, useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
-import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 
-interface YouTubeChannel {
-  id?: string | null;
-  snippet?: { title?: string | null };
+const CHANNELS_STORAGE_KEY = "bainsla_channels";
+
+interface StoredChannel {
+  id: string;
+  status: "active" | "delinked" | "transferred";
 }
 
 interface VideoItem {
@@ -55,23 +57,65 @@ function parseDuration(isoDuration: string | null | undefined): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+function getActiveChannelIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(CHANNELS_STORAGE_KEY);
+    if (!stored) return [];
+    const channels: StoredChannel[] = JSON.parse(stored);
+    return channels.filter((c) => c.status === "active").map((c) => c.id);
+  } catch {
+    return [];
+  }
+}
+
 export default function VideosPage() {
   const { data: session, status: sessionStatus } = useSession();
   const isAuthenticated = sessionStatus === "authenticated" && !!session?.accessToken;
 
-  const { data: channels, isReal: channelsReal, loading: channelsLoading } = useYouTubeData<YouTubeChannel[]>(
-    "channels",
-    {},
-    []
-  );
+  const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
+  const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isReal, setIsReal] = useState(false);
 
-  const channelId = channelsReal && channels?.[0]?.id ? channels[0].id : "";
+  useEffect(() => {
+    setActiveChannelIds(getActiveChannelIds());
+  }, []);
 
-  const { data: videos, isReal, loading, error } = useYouTubeData<VideoItem[]>(
-    "videos",
-    channelId ? { channelId } : {},
-    []
-  );
+  const fetchVideos = useCallback(async () => {
+    if (!isAuthenticated || activeChannelIds.length === 0) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const allVideos: VideoItem[] = [];
+    for (const channelId of activeChannelIds) {
+      try {
+        const res = await fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`);
+        const json = await res.json();
+        if (res.ok && json.data) {
+          allVideos.push(...json.data);
+        }
+      } catch {
+        // continue with other channels
+      }
+    }
+    if (allVideos.length > 0) {
+      setVideos(allVideos);
+      setIsReal(true);
+    } else {
+      setError("No videos found for added channels");
+    }
+    setLoading(false);
+  }, [isAuthenticated, activeChannelIds]);
+
+  useEffect(() => {
+    fetchVideos();
+  }, [fetchVideos]);
+
+  const hasNoChannelsAdded = activeChannelIds.length === 0;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "public" | "private" | "unlisted">("all");
@@ -84,7 +128,7 @@ export default function VideosPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const isLoading = channelsLoading || loading;
+  const isLoading = loading;
 
   return (
     <div className="space-y-6">
@@ -113,16 +157,34 @@ export default function VideosPage() {
         </div>
       )}
 
-      {isAuthenticated && isLoading && (
+      {isAuthenticated && hasNoChannelsAdded && (
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
-            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
-            <p className="text-sm text-muted">Loading your videos...</p>
+            <AlertCircle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">No Channels Added</h3>
+            <p className="text-sm text-muted mb-4">
+              Videos sirf added channels ki dikhti hain. Pehle Channels section mein channels add karo.
+            </p>
+            <a
+              href="/channels"
+              className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors inline-block"
+            >
+              Go to Channels
+            </a>
           </div>
         </div>
       )}
 
-      {isAuthenticated && !isLoading && !isReal && (
+      {isAuthenticated && !hasNoChannelsAdded && isLoading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
+            <p className="text-sm text-muted">Loading videos from {activeChannelIds.length} channel{activeChannelIds.length !== 1 ? "s" : ""}...</p>
+          </div>
+        </div>
+      )}
+
+      {isAuthenticated && !hasNoChannelsAdded && !isLoading && !isReal && (
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <WifiOff className="w-10 h-10 text-red-400 mx-auto mb-3" />
@@ -138,7 +200,7 @@ export default function VideosPage() {
         </div>
       )}
 
-      {isAuthenticated && !isLoading && isReal && (
+      {isAuthenticated && !hasNoChannelsAdded && !isLoading && isReal && (
         <div className="bg-white rounded-xl border border-border p-5">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
             <div className="relative flex-1 w-full">
