@@ -19,8 +19,11 @@ import { formatNumber } from "@/lib/utils";
 interface StoredChannel {
   id: string;
   category: string;
+  channelType?: string;
+  tokenStatus?: string;
+  cms?: string;
   addedDate: string;
-  status: "active" | "delinked";
+  status: "active" | "delinked" | "transferred";
 }
 
 interface YouTubeChannel {
@@ -74,7 +77,7 @@ export default function DelinkedChannelsPage() {
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated" && !!session?.accessToken;
 
-  const [storedChannels, setStoredChannels] = useState<StoredChannel[]>([]);
+  const [storedChannels, setStoredChannels] = useState<StoredChannel[]>(getStoredChannels);
   const [channelDataMap, setChannelDataMap] = useState<Record<string, YouTubeChannel>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [perPage, setPerPage] = useState(10);
@@ -85,17 +88,13 @@ export default function DelinkedChannelsPage() {
   const [loadingData, setLoadingData] = useState(false);
 
   useEffect(() => {
-    setStoredChannels(getStoredChannels());
-  }, []);
-
-  useEffect(() => {
     if (!isAuthenticated) return;
     const delinked = storedChannels.filter((c) => c.status === "delinked");
     const idsToFetch = delinked.map((c) => c.id).filter((id) => !channelDataMap[id]);
     if (idsToFetch.length === 0) return;
 
-    setLoadingData(true);
     const fetchChannels = async () => {
+      setLoadingData(true);
       for (const id of idsToFetch) {
         try {
           const res = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}`);
@@ -191,7 +190,7 @@ export default function DelinkedChannelsPage() {
   const totalPages = Math.ceil(filteredChannels.length / perPage);
   const pageChannels = filteredChannels.slice((currentPage - 1) * perPage, currentPage * perPage);
 
-  const SortIcon = ({ field }: { field: string }) => (
+  const renderSortIcon = (field: string) => (
     <svg
       className={`w-3 h-3 ml-1 inline cursor-pointer ${sortField === field ? "text-primary" : "text-gray-400"}`}
       onClick={() => handleSort(field)}
@@ -298,19 +297,19 @@ export default function DelinkedChannelsPage() {
             <thead>
               <tr className="bg-slate-50 border-b border-border">
                 <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Channel <SortIcon field="name" />
+                  Channel {renderSortIcon("name")}
                 </th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Subscribers <SortIcon field="subscribers" />
+                  Subscribers {renderSortIcon("subscribers")}
                 </th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Videos <SortIcon field="videos" />
+                  Videos {renderSortIcon("videos")}
                 </th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Views <SortIcon field="views" />
+                  Views {renderSortIcon("views")}
                 </th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Category <SortIcon field="category" />
+                  Category {renderSortIcon("category")}
                 </th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">
                   Status

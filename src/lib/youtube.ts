@@ -105,25 +105,44 @@ export async function getChannelVideos(
   const auth = getAuthClient(accessToken);
   const youtube = google.youtube({ version: "v3", auth });
 
-  const searchResponse = await youtube.search.list({
-    part: ["snippet"],
-    channelId,
-    maxResults,
-    order: "date",
-    type: ["video"],
+  // Get the uploads playlist for the channel
+  const channelRes = await youtube.channels.list({
+    part: ["contentDetails"],
+    id: [channelId],
   });
+  const uploadsPlaylistId =
+    channelRes.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
 
-  const videoIds =
-    searchResponse.data.items
-      ?.map((item) => item.id?.videoId)
-      .filter(Boolean)
-      .join(",") || "";
+  if (!uploadsPlaylistId) return [];
 
-  if (!videoIds) return [];
+  // Fetch videos from the uploads playlist (more reliable than search)
+  const allVideoIds: string[] = [];
+  let nextPageToken: string | undefined;
 
+  while (allVideoIds.length < maxResults) {
+    const remaining = maxResults - allVideoIds.length;
+    const playlistRes = await youtube.playlistItems.list({
+      part: ["contentDetails"],
+      playlistId: uploadsPlaylistId,
+      maxResults: Math.min(remaining, 50),
+      pageToken: nextPageToken,
+    });
+
+    const ids = playlistRes.data.items
+      ?.map((item) => item.contentDetails?.videoId)
+      .filter((id): id is string => !!id) || [];
+
+    allVideoIds.push(...ids);
+    nextPageToken = playlistRes.data.nextPageToken ?? undefined;
+    if (!nextPageToken) break;
+  }
+
+  if (allVideoIds.length === 0) return [];
+
+  // Fetch full video details (up to 50 per call)
   const videoResponse = await youtube.videos.list({
-    part: ["snippet", "statistics", "contentDetails"],
-    id: [videoIds],
+    part: ["snippet", "statistics", "contentDetails", "status"],
+    id: allVideoIds,
   });
 
   return videoResponse.data.items || [];

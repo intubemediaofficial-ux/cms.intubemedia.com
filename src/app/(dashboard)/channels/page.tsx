@@ -3,22 +3,25 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Plus,
-  ExternalLink,
   Search,
   X,
   Wifi,
   WifiOff,
   Loader2,
-  RotateCcw,
   Radio,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Download,
+  Upload,
+  RefreshCw,
+  ArrowRightLeft,
+  ClipboardList,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
-
+import { downloadCSV } from "@/lib/csv-export";
 
 interface YouTubeChannel {
   id?: string | null;
@@ -40,13 +43,31 @@ interface YouTubeChannel {
 interface StoredChannel {
   id: string;
   category: string;
+  channelType: string;
+  tokenStatus: string;
+  cms: string;
   addedDate: string;
-  status: "active" | "delinked";
+  status: "active" | "delinked" | "transferred";
+}
+
+interface ChannelRequest {
+  id: string;
+  channelId: string;
+  channelName: string;
+  requestedBy: string;
+  requestDate: string;
+  status: "pending" | "approved" | "rejected";
 }
 
 const STORAGE_KEY = "bainsla_channels";
+const REQUESTS_KEY = "bainsla_channel_requests";
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
-const CATEGORIES = ["Music", "Entertainment"];
+const CATEGORIES = ["Music", "Entertainment", "Education", "Comedy", "Gaming", "News", "Sports"];
+const CHANNEL_TYPES = ["Original", "Refurbished", "Licensed"];
+const TOKEN_STATUSES = ["Valid", "Invalid", "Expired"];
+const CMS_OPTIONS = ["Bainsla Music", "WMG - MUSIC", "Sony Music", "T-Series", "Other"];
+
+type TabType = "channels" | "requests" | "bulk" | "transferred";
 
 function getStoredChannels(): StoredChannel[] {
   if (typeof window === "undefined") return [];
@@ -63,6 +84,21 @@ function saveStoredChannels(channels: StoredChannel[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
 }
 
+function getChannelRequests(): ChannelRequest[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(REQUESTS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveChannelRequests(requests: ChannelRequest[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(REQUESTS_KEY, JSON.stringify(requests));
+}
+
 export default function ChannelsPage() {
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated" && !!session?.accessToken;
@@ -73,23 +109,32 @@ export default function ChannelsPage() {
     []
   );
 
+  const [activeTab, setActiveTab] = useState<TabType>("channels");
   const [channelDataMap, setChannelDataMap] = useState<Record<string, YouTubeChannel>>({});
-  const [storedChannels, setStoredChannels] = useState<StoredChannel[]>([]);
+  const [storedChannels, setStoredChannels] = useState<StoredChannel[]>(getStoredChannels);
+  const [channelRequests, setChannelRequests] = useState<ChannelRequest[]>(getChannelRequests);
   const [showModal, setShowModal] = useState(false);
   const [channelIdInput, setChannelIdInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("");
+  const [channelTypeInput, setChannelTypeInput] = useState("");
+  const [cmsInput, setCmsInput] = useState("");
   const [addingChannel, setAddingChannel] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [perPage, setPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [channelTypeFilter, setChannelTypeFilter] = useState("");
+  const [tokenStatusFilter, setTokenStatusFilter] = useState("");
+  const [cmsFilter, setCmsFilter] = useState("");
   const [sortField, setSortField] = useState<string>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-
-  useEffect(() => {
-    setStoredChannels(getStoredChannels());
-  }, []);
+  const [bulkInput, setBulkInput] = useState("");
+  const [bulkCategory, setBulkCategory] = useState("");
+  const [bulkChannelType, setBulkChannelType] = useState("");
+  const [bulkCms, setBulkCms] = useState("");
+  const [bulkAdding, setBulkAdding] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -148,6 +193,9 @@ export default function ChannelsPage() {
       const newStored: StoredChannel = {
         id: actualId,
         category: categoryInput,
+        channelType: channelTypeInput || "Original",
+        tokenStatus: "Valid",
+        cms: cmsInput || "Bainsla Music",
         addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
         status: "active",
       };
@@ -159,12 +207,14 @@ export default function ChannelsPage() {
       setShowModal(false);
       setChannelIdInput("");
       setCategoryInput("");
+      setChannelTypeInput("");
+      setCmsInput("");
     } catch {
       setAddError("Network error. Please try again.");
     } finally {
       setAddingChannel(false);
     }
-  }, [channelIdInput, categoryInput, storedChannels]);
+  }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, storedChannels]);
 
   const handleDelink = (channelId: string) => {
     const updated = storedChannels.map((c) =>
@@ -173,6 +223,74 @@ export default function ChannelsPage() {
     saveStoredChannels(updated);
     setStoredChannels(updated);
   };
+
+  const handleTransfer = (channelId: string) => {
+    const updated = storedChannels.map((c) =>
+      c.id === channelId ? { ...c, status: "transferred" as const } : c
+    );
+    saveStoredChannels(updated);
+    setStoredChannels(updated);
+  };
+
+  const handleBulkAdd = useCallback(async () => {
+    const ids = bulkInput
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    if (ids.length === 0) {
+      setBulkResult("Please enter at least one Channel ID");
+      return;
+    }
+
+    setBulkAdding(true);
+    setBulkResult(null);
+    let added = 0;
+    let skipped = 0;
+
+    for (const id of ids) {
+      if (storedChannels.some((c) => c.id === id)) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        const res = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}`);
+        const json = await res.json();
+
+        if (res.ok && json.data?.length) {
+          const channelData = json.data[0] as YouTubeChannel;
+          const actualId = channelData.id || id;
+
+          const newStored: StoredChannel = {
+            id: actualId,
+            category: bulkCategory || "Music",
+            channelType: bulkChannelType || "Original",
+            tokenStatus: "Valid",
+            cms: bulkCms || "Bainsla Music",
+            addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
+            status: "active",
+          };
+
+          setStoredChannels((prev) => {
+            const updated = [...prev, newStored];
+            saveStoredChannels(updated);
+            return updated;
+          });
+          setChannelDataMap((prev) => ({ ...prev, [actualId]: channelData }));
+          added++;
+        } else {
+          skipped++;
+        }
+      } catch {
+        skipped++;
+      }
+    }
+
+    setBulkAdding(false);
+    setBulkResult(`Added ${added} channel(s). ${skipped > 0 ? `Skipped ${skipped} (already exist or not found).` : ""}`);
+    if (added > 0) setBulkInput("");
+  }, [bulkInput, bulkCategory, bulkChannelType, bulkCms, storedChannels]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -186,6 +304,9 @@ export default function ChannelsPage() {
   const resetFilters = () => {
     setSearchQuery("");
     setCategoryFilter("");
+    setChannelTypeFilter("");
+    setTokenStatusFilter("");
+    setCmsFilter("");
     setCurrentPage(1);
   };
 
@@ -198,16 +319,20 @@ export default function ChannelsPage() {
     videos: number;
     views: number;
     category: string;
+    channelType: string;
+    tokenStatus: string;
+    cms: string;
     addedDate: string;
     isOwn: boolean;
-    status: "active" | "delinked";
+    status: "active" | "delinked" | "transferred";
   };
 
-  const activeChannels: ChannelRow[] = useMemo(() => {
+  const allChannelRows: ChannelRow[] = useMemo(() => {
     const rows: ChannelRow[] = [];
 
     if (isReal) {
       for (const ch of myChannels) {
+        const storedInfo = storedChannels.find((sc) => sc.id === ch.id);
         rows.push({
           id: ch.id || "",
           name: ch.snippet?.title || "Unknown",
@@ -216,15 +341,18 @@ export default function ChannelsPage() {
           subscribers: Number(ch.statistics?.subscriberCount || 0),
           videos: Number(ch.statistics?.videoCount || 0),
           views: Number(ch.statistics?.viewCount || 0),
-          category: "Music",
-          addedDate: "-",
+          category: storedInfo?.category || "Music",
+          channelType: storedInfo?.channelType || "Original",
+          tokenStatus: "Valid",
+          cms: storedInfo?.cms || "Bainsla Music",
+          addedDate: storedInfo?.addedDate || "-",
           isOwn: true,
-          status: "active",
+          status: storedInfo?.status || "active",
         });
       }
     }
 
-    for (const sc of storedChannels.filter((c) => c.status === "active")) {
+    for (const sc of storedChannels) {
       if (rows.some((r) => r.id === sc.id)) continue;
       const data = channelDataMap[sc.id];
       rows.push({
@@ -236,17 +364,25 @@ export default function ChannelsPage() {
         videos: Number(data?.statistics?.videoCount || 0),
         views: Number(data?.statistics?.viewCount || 0),
         category: sc.category,
+        channelType: sc.channelType || "Original",
+        tokenStatus: sc.tokenStatus || "Valid",
+        cms: sc.cms || "Bainsla Music",
         addedDate: sc.addedDate,
         isOwn: false,
-        status: "active",
+        status: sc.status,
       });
     }
 
     return rows;
   }, [isReal, myChannels, storedChannels, channelDataMap]);
 
+  const activeChannels = allChannelRows.filter((c) => c.status === "active");
+  const transferredChannels = allChannelRows.filter((c) => c.status === "transferred");
+  const channelsWithToken = activeChannels.filter((c) => c.tokenStatus === "Valid");
+
   const filteredChannels = useMemo(() => {
-    let result = activeChannels;
+    const source = activeTab === "transferred" ? transferredChannels : activeChannels;
+    let result = source;
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -255,9 +391,10 @@ export default function ChannelsPage() {
       );
     }
 
-    if (categoryFilter) {
-      result = result.filter((c) => c.category === categoryFilter);
-    }
+    if (categoryFilter) result = result.filter((c) => c.category === categoryFilter);
+    if (channelTypeFilter) result = result.filter((c) => c.channelType === channelTypeFilter);
+    if (tokenStatusFilter) result = result.filter((c) => c.tokenStatus === tokenStatusFilter);
+    if (cmsFilter) result = result.filter((c) => c.cms === cmsFilter);
 
     result.sort((a, b) => {
       let cmp = 0;
@@ -267,19 +404,30 @@ export default function ChannelsPage() {
         case "videos": cmp = a.videos - b.videos; break;
         case "views": cmp = a.views - b.views; break;
         case "category": cmp = a.category.localeCompare(b.category); break;
+        case "channelType": cmp = a.channelType.localeCompare(b.channelType); break;
+        case "tokenStatus": cmp = a.tokenStatus.localeCompare(b.tokenStatus); break;
+        case "cms": cmp = a.cms.localeCompare(b.cms); break;
         default: cmp = a.name.localeCompare(b.name);
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
 
     return result;
-  }, [activeChannels, searchQuery, categoryFilter, sortField, sortDir]);
+  }, [activeTab, activeChannels, transferredChannels, searchQuery, categoryFilter, channelTypeFilter, tokenStatusFilter, cmsFilter, sortField, sortDir]);
 
   const totalPages = Math.ceil(filteredChannels.length / perPage);
   const pageChannels = filteredChannels.slice((currentPage - 1) * perPage, currentPage * perPage);
-  const totalActive = activeChannels.length;
 
-  const SortIcon = ({ field }: { field: string }) => (
+  const handleExportCSV = () => {
+    const headers = ["Channel", "Channel ID", "Subscribers", "Videos", "Views", "Channel Type", "Token Status", "CMS", "Category", "Added Date"];
+    const rows = filteredChannels.map((c) => [
+      c.name, c.id, String(c.subscribers), String(c.videos), String(c.views),
+      c.channelType, c.tokenStatus, c.cms, c.category, c.addedDate,
+    ]);
+    downloadCSV(headers, rows, `channels-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
+  const renderSortIcon = (field: string) => (
     <svg
       className={`w-3 h-3 ml-1 inline cursor-pointer ${sortField === field ? "text-primary" : "text-gray-400"}`}
       onClick={() => handleSort(field)}
@@ -289,272 +437,522 @@ export default function ChannelsPage() {
     </svg>
   );
 
+  const tabs: { key: TabType; label: string; icon: React.ReactNode }[] = [
+    { key: "channels", label: "Channels", icon: <Radio className="w-4 h-4" /> },
+    { key: "requests", label: "Channel Requests", icon: <ClipboardList className="w-4 h-4" /> },
+    { key: "bulk", label: "Add Channel (Bulk)", icon: <Upload className="w-4 h-4" /> },
+    { key: "transferred", label: "Transferred Channels", icon: <ArrowRightLeft className="w-4 h-4" /> },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-muted">
         <span>Channels</span>
         <span>›</span>
-        <span className="text-foreground font-medium">Active Channels</span>
+        <span className="text-foreground font-medium">
+          {tabs.find((t) => t.key === activeTab)?.label || "Channels"}
+        </span>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
-            <Radio className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <p className="text-sm text-blue-600 font-medium">Total Channels</p>
-            <p className="text-2xl font-bold text-blue-900">{totalActive}</p>
-            <p className="text-xs text-blue-500">All registered channels</p>
-          </div>
-        </div>
-        <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-4">
-          <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
-            <CheckCircle2 className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <p className="text-sm text-green-600 font-medium">Active Channels</p>
-            <p className="text-2xl font-bold text-green-900">{totalActive}</p>
-            <p className="text-xs text-green-500">Channels with active status</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Status Badge */}
-      <div className="flex items-center gap-3">
-        {isReal && (
-          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
-            <Wifi className="w-3.5 h-3.5" />
-            Live Data
-          </div>
-        )}
-        {!isAuthenticated && (
-          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-            <WifiOff className="w-3.5 h-3.5" />
-            Sign in to see data
-          </div>
-        )}
-      </div>
-
-      {/* Filters & Search Row */}
-      <div className="bg-white rounded-xl border border-border p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-              placeholder="Search channels by name..."
-              className="w-full pl-10 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-            />
-          </div>
-          <select
-            value={categoryFilter}
-            onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-            className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="">All Categories</option>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select
-            value={perPage}
-            onChange={(e) => { setPerPage(Number(e.target.value)); setCurrentPage(1); }}
-            className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            {PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n} per page</option>)}
-          </select>
-          <button
-            onClick={resetFilters}
-            className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors px-3 py-2 border border-border rounded-lg"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            Reset
-          </button>
-        </div>
-
-        {/* Total + Add Channel */}
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-          <p className="text-sm text-muted">
-            Total Channels: <span className="font-semibold text-primary">{filteredChannels.length}</span>
-          </p>
-          {isAuthenticated && (
+      {/* Tabs */}
+      <div className="border-b border-border">
+        <nav className="flex gap-0 -mb-px">
+          {tabs.map((tab) => (
             <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              key={tab.key}
+              onClick={() => { setActiveTab(tab.key); setCurrentPage(1); }}
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.key
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted hover:text-foreground hover:border-gray-300"
+              }`}
             >
-              <Plus className="w-4 h-4" />
-              Add Channel
+              {tab.icon}
+              {tab.label}
             </button>
-          )}
-        </div>
+          ))}
+        </nav>
       </div>
 
-      {/* Loading */}
-      {loading && isAuthenticated && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          <span className="ml-2 text-sm text-muted">Loading channels...</span>
+      {/* Tab Content */}
+      {(activeTab === "channels" || activeTab === "transferred") && (
+        <>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
+                <Radio className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-blue-600 font-medium">Total Channels</p>
+                <p className="text-2xl font-bold text-blue-900">{activeChannels.length}</p>
+                <p className="text-xs text-blue-500">All registered channels</p>
+              </div>
+            </div>
+            <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-green-600 font-medium">Channels With Token</p>
+                <p className="text-2xl font-bold text-green-900">{channelsWithToken.length}</p>
+                <p className="text-xs text-green-500">Channels with active tokens</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Status Badge */}
+          <div className="flex items-center gap-3">
+            {isReal && (
+              <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+                <Wifi className="w-3.5 h-3.5" />
+                Live Data
+              </div>
+            )}
+            {!isAuthenticated && (
+              <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                <WifiOff className="w-3.5 h-3.5" />
+                Sign in to see data
+              </div>
+            )}
+          </div>
+
+          {/* Filters & Search Row */}
+          <div className="bg-white rounded-xl border border-border p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                  placeholder="Search channels by name..."
+                  className="w-full pl-10 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                />
+              </div>
+              <select
+                value={channelTypeFilter}
+                onChange={(e) => { setChannelTypeFilter(e.target.value); setCurrentPage(1); }}
+                className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">All Channel Types</option>
+                {CHANNEL_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select
+                value={tokenStatusFilter}
+                onChange={(e) => { setTokenStatusFilter(e.target.value); setCurrentPage(1); }}
+                className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">All Token Status</option>
+                {TOKEN_STATUSES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select
+                value={cmsFilter}
+                onChange={(e) => { setCmsFilter(e.target.value); setCurrentPage(1); }}
+                className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">All CMS</option>
+                {CMS_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select
+                value={categoryFilter}
+                onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+                className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">All Categories</option>
+                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <button
+                onClick={resetFilters}
+                className="flex items-center justify-center w-9 h-9 bg-green-700 hover:bg-green-800 text-white rounded-lg transition-colors"
+                title="Reset Filters"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 mt-3">
+              <select
+                value={perPage}
+                onChange={(e) => { setPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                {PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n} per page</option>)}
+              </select>
+              <button
+                onClick={() => window.location.reload()}
+                className="flex items-center justify-center w-9 h-9 border border-border rounded-lg text-muted hover:bg-slate-50 transition-colors"
+                title="Refresh"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Total + Add Channel + Download */}
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+              <p className="text-sm text-muted">
+                Total Channels: <span className="font-semibold text-primary">{filteredChannels.length}</span>
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleExportCSV}
+                  className="flex items-center gap-2 border border-border px-4 py-2 rounded-lg text-sm text-muted hover:bg-slate-50 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </button>
+                {isAuthenticated && activeTab === "channels" && (
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Channel
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Loading */}
+          {loading && isAuthenticated && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              <span className="ml-2 text-sm text-muted">Loading channels...</span>
+            </div>
+          )}
+
+          {/* Table */}
+          <div className="bg-white rounded-xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-border">
+                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                      CHANNEL {renderSortIcon("name")}
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                      SUBSCRIBERS {renderSortIcon("subscribers")}
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                      VIDEOS {renderSortIcon("videos")}
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                      VIEWS {renderSortIcon("views")}
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                      CHANNEL TYPE {renderSortIcon("channelType")}
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                      TOKEN STATUS {renderSortIcon("tokenStatus")}
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                      CMS {renderSortIcon("cms")}
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                      CATEGORY {renderSortIcon("category")}
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                      LINKING DATE
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageChannels.map((channel) => (
+                    <tr key={channel.id} className="border-b border-border hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 shrink-0">
+                            {channel.thumbnail ? (
+                              <img
+                                src={channel.thumbnail}
+                                alt={channel.name}
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+                                {channel.name[0]}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-foreground">{channel.name}</span>
+                              <a
+                                href={`https://www.youtube.com/channel/${channel.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="View on YouTube"
+                              >
+                                <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                </svg>
+                              </a>
+                            </div>
+                            <p className="text-xs text-muted">{channel.id}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-foreground">{formatNumber(channel.subscribers)}</td>
+                      <td className="px-4 py-3 text-foreground">{channel.videos.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-foreground">{formatNumber(channel.views)}</td>
+                      <td className="px-4 py-3 text-foreground">{channel.channelType}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          channel.tokenStatus === "Valid"
+                            ? "bg-green-100 text-green-700"
+                            : channel.tokenStatus === "Expired"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-red-100 text-red-700"
+                        }`}>
+                          {channel.tokenStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-foreground">{channel.cms}</td>
+                      <td className="px-4 py-3 text-foreground">{channel.category}</td>
+                      <td className="px-4 py-3 text-muted">{channel.addedDate}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {!channel.isOwn && activeTab === "channels" && (
+                            <>
+                              <button
+                                onClick={() => handleDelink(channel.id)}
+                                className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                              >
+                                Delink
+                              </button>
+                              <button
+                                onClick={() => handleTransfer(channel.id)}
+                                className="text-xs text-blue-500 hover:text-blue-700 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                              >
+                                Transfer
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {pageChannels.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="px-4 py-12 text-center text-muted">
+                        {loading ? "Loading..." : activeTab === "transferred" ? "No transferred channels" : "No channels found"}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-slate-50">
+                <p className="text-sm text-muted">
+                  Showing {(currentPage - 1) * perPage + 1} to {Math.min(currentPage * perPage, filteredChannels.length)} of {filteredChannels.length} results
+                </p>
+                <nav className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-lg border border-border disabled:opacity-50 hover:bg-white transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    let pageNum: number;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                          currentPage === pageNum
+                            ? "bg-primary text-white"
+                            : "hover:bg-white border border-border"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 rounded-lg border border-border disabled:opacity-50 hover:bg-white transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </nav>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Channel Requests Tab */}
+      {activeTab === "requests" && (
+        <div className="bg-white rounded-xl border border-border p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-foreground">Channel Requests</h2>
+            <span className="text-sm text-muted">{channelRequests.filter((r) => r.status === "pending").length} pending</span>
+          </div>
+
+          {channelRequests.length === 0 ? (
+            <div className="text-center py-16">
+              <ClipboardList className="w-12 h-12 text-muted mx-auto mb-3 opacity-40" />
+              <h3 className="text-lg font-semibold text-foreground mb-1">No Channel Requests</h3>
+              <p className="text-sm text-muted">Channel requests from clients will appear here.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-border">
+                    <th className="text-left px-4 py-3 font-semibold">Channel ID</th>
+                    <th className="text-left px-4 py-3 font-semibold">Channel Name</th>
+                    <th className="text-left px-4 py-3 font-semibold">Requested By</th>
+                    <th className="text-left px-4 py-3 font-semibold">Request Date</th>
+                    <th className="text-left px-4 py-3 font-semibold">Status</th>
+                    <th className="text-left px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {channelRequests.map((req) => (
+                    <tr key={req.id} className="border-b border-border">
+                      <td className="px-4 py-3 text-muted text-xs font-mono">{req.channelId}</td>
+                      <td className="px-4 py-3">{req.channelName}</td>
+                      <td className="px-4 py-3">{req.requestedBy}</td>
+                      <td className="px-4 py-3 text-muted">{req.requestDate}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          req.status === "pending" ? "bg-amber-100 text-amber-700" :
+                          req.status === "approved" ? "bg-green-100 text-green-700" :
+                          "bg-red-100 text-red-700"
+                        }`}>
+                          {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {req.status === "pending" && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                const updated = channelRequests.map((r) =>
+                                  r.id === req.id ? { ...r, status: "approved" as const } : r
+                                );
+                                saveChannelRequests(updated);
+                                setChannelRequests(updated);
+                              }}
+                              className="text-xs text-green-600 hover:text-green-700 font-medium px-2 py-1 rounded hover:bg-green-50"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => {
+                                const updated = channelRequests.map((r) =>
+                                  r.id === req.id ? { ...r, status: "rejected" as const } : r
+                                );
+                                saveChannelRequests(updated);
+                                setChannelRequests(updated);
+                              }}
+                              className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-border">
-                <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Channel <SortIcon field="name" />
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Subscribers <SortIcon field="subscribers" />
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Videos <SortIcon field="videos" />
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Views <SortIcon field="views" />
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Category <SortIcon field="category" />
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Status
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Added Date
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageChannels.map((channel) => (
-                <tr key={channel.id} className="border-b border-border hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 shrink-0">
-                        {channel.thumbnail ? (
-                          <img
-                            src={channel.thumbnail}
-                            alt={channel.name}
-                            className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-                            {channel.name[0]}
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-medium text-foreground">{channel.name}</span>
-                          <a
-                            href={`https://www.youtube.com/channel/${channel.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="View on YouTube"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5 text-red-500 hover:text-red-600" />
-                          </a>
-                        </div>
-                        <p className="text-xs text-muted">{channel.id}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-foreground">{formatNumber(channel.subscribers)}</td>
-                  <td className="px-4 py-3 text-foreground">{channel.videos.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-foreground">{formatNumber(channel.views)}</td>
-                  <td className="px-4 py-3 text-foreground">{channel.category}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                      Active
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted">{channel.addedDate}</td>
-                  <td className="px-4 py-3">
-                    {!channel.isOwn && (
-                      <button
-                        onClick={() => handleDelink(channel.id)}
-                        className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
-                      >
-                        Delink
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {pageChannels.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-muted">
-                    {loading ? "Loading..." : "No channels found"}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Add Channel (Bulk) Tab */}
+      {activeTab === "bulk" && (
+        <div className="bg-white rounded-xl border border-border p-6">
+          <h2 className="text-lg font-semibold text-foreground mb-2">Add Channels in Bulk</h2>
+          <p className="text-sm text-muted mb-6">
+            Enter multiple Channel IDs (one per line, or comma/semicolon separated) to add them all at once.
+          </p>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-slate-50">
-            <p className="text-sm text-muted">
-              Showing {(currentPage - 1) * perPage + 1} to {Math.min(currentPage * perPage, filteredChannels.length)} of {filteredChannels.length} results
-            </p>
-            <nav className="flex items-center gap-1">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="p-1.5 rounded-lg border border-border disabled:opacity-50 hover:bg-white transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                let pageNum: number;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                      currentPage === pageNum
-                        ? "bg-primary text-white"
-                        : "hover:bg-white border border-border"
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="p-1.5 rounded-lg border border-border disabled:opacity-50 hover:bg-white transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </nav>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <select
+              value={bulkCategory}
+              onChange={(e) => setBulkCategory(e.target.value)}
+              className="border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="">Select Category</option>
+              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select
+              value={bulkChannelType}
+              onChange={(e) => setBulkChannelType(e.target.value)}
+              className="border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="">Select Channel Type</option>
+              {CHANNEL_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select
+              value={bulkCms}
+              onChange={(e) => setBulkCms(e.target.value)}
+              className="border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="">Select CMS</option>
+              {CMS_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
-        )}
-      </div>
+
+          <textarea
+            value={bulkInput}
+            onChange={(e) => setBulkInput(e.target.value)}
+            placeholder="UC...\nUC...\nUC..."
+            className="w-full h-40 px-4 py-3 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
+          />
+
+          {bulkResult && (
+            <p className={`text-sm mt-3 ${bulkResult.startsWith("Added 0") ? "text-red-500" : "text-green-600"}`}>
+              {bulkResult}
+            </p>
+          )}
+
+          <div className="flex justify-end mt-4">
+            <button
+              onClick={handleBulkAdd}
+              disabled={bulkAdding || !isAuthenticated}
+              className="flex items-center gap-2 bg-primary hover:bg-primary-dark disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors"
+            >
+              {bulkAdding ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4" />
+              )}
+              {bulkAdding ? "Adding..." : "Add All Channels"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add Channel Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl">
             <div className="flex items-center justify-between p-5 border-b border-border">
               <h2 className="text-lg font-semibold text-foreground">Add New Channel</h2>
               <button
@@ -562,6 +960,8 @@ export default function ChannelsPage() {
                   setShowModal(false);
                   setChannelIdInput("");
                   setCategoryInput("");
+                  setChannelTypeInput("");
+                  setCmsInput("");
                   setAddError(null);
                 }}
                 className="p-1 hover:bg-slate-100 rounded-lg"
@@ -569,7 +969,7 @@ export default function ChannelsPage() {
                 <X className="w-5 h-5 text-muted" />
               </button>
             </div>
-            <div className="p-5">
+            <div className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
@@ -598,8 +998,36 @@ export default function ChannelsPage() {
                   </select>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Channel Type
+                  </label>
+                  <select
+                    value={channelTypeInput}
+                    onChange={(e) => setChannelTypeInput(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  >
+                    <option value="">Select Type</option>
+                    {CHANNEL_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    CMS
+                  </label>
+                  <select
+                    value={cmsInput}
+                    onChange={(e) => setCmsInput(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  >
+                    <option value="">Select CMS</option>
+                    {CMS_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
               {addError && (
-                <p className="text-sm text-red-500 mt-3">{addError}</p>
+                <p className="text-sm text-red-500">{addError}</p>
               )}
             </div>
             <div className="flex items-center justify-end gap-3 p-5 border-t border-border">
@@ -608,6 +1036,8 @@ export default function ChannelsPage() {
                   setShowModal(false);
                   setChannelIdInput("");
                   setCategoryInput("");
+                  setChannelTypeInput("");
+                  setCmsInput("");
                   setAddError(null);
                 }}
                 className="px-4 py-2 text-sm font-medium text-muted hover:text-foreground border border-border rounded-lg transition-colors"
