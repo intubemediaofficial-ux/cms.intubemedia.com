@@ -316,6 +316,14 @@ export default function ChannelsPage() {
     setStoredChannels(updated);
   };
 
+  const handleRelink = (channelId: string) => {
+    const updated = storedChannels.map((c) =>
+      c.id === channelId ? { ...c, status: "active" as const } : c
+    );
+    saveStoredChannels(updated);
+    setStoredChannels(updated);
+  };
+
   const handleBulkAdd = useCallback(async () => {
     const ids = bulkInput
       .split(/[\n,;]+/)
@@ -463,6 +471,7 @@ export default function ChannelsPage() {
   const activeChannels = allChannelRows.filter((c) => c.status === "active");
   const transferredChannels = allChannelRows.filter((c) => c.status === "transferred");
   const channelsWithToken = activeChannels.filter((c) => c.tokenStatus === "Valid");
+  const transferredWithToken = transferredChannels.filter((c) => c.tokenStatus === "Valid");
 
   const filteredChannels = useMemo(() => {
     const source = activeTab === "transferred" ? transferredChannels : activeChannels;
@@ -564,14 +573,20 @@ export default function ChannelsPage() {
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
-                <Radio className="w-6 h-6 text-white" />
+            <div className={`${activeTab === "transferred" ? "bg-purple-50 border-purple-200" : "bg-blue-50 border-blue-200"} border rounded-xl p-5 flex items-center gap-4`}>
+              <div className={`w-12 h-12 ${activeTab === "transferred" ? "bg-purple-500" : "bg-blue-500"} rounded-xl flex items-center justify-center`}>
+                {activeTab === "transferred" ? <ArrowRightLeft className="w-6 h-6 text-white" /> : <Radio className="w-6 h-6 text-white" />}
               </div>
               <div>
-                <p className="text-sm text-blue-600 font-medium">Total Channels</p>
-                <p className="text-2xl font-bold text-blue-900">{activeChannels.length}</p>
-                <p className="text-xs text-blue-500">All registered channels</p>
+                <p className={`text-sm ${activeTab === "transferred" ? "text-purple-600" : "text-blue-600"} font-medium`}>
+                  {activeTab === "transferred" ? "Transferred Channels" : "Total Channels"}
+                </p>
+                <p className={`text-2xl font-bold ${activeTab === "transferred" ? "text-purple-900" : "text-blue-900"}`}>
+                  {activeTab === "transferred" ? transferredChannels.length : activeChannels.length}
+                </p>
+                <p className={`text-xs ${activeTab === "transferred" ? "text-purple-500" : "text-blue-500"}`}>
+                  {activeTab === "transferred" ? "Channels transferred to other partners" : "All registered channels"}
+                </p>
               </div>
             </div>
             <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-4">
@@ -580,7 +595,9 @@ export default function ChannelsPage() {
               </div>
               <div>
                 <p className="text-sm text-green-600 font-medium">Channels With Token</p>
-                <p className="text-2xl font-bold text-green-900">{channelsWithToken.length}</p>
+                <p className="text-2xl font-bold text-green-900">
+                  {activeTab === "transferred" ? transferredWithToken.length : channelsWithToken.length}
+                </p>
                 <p className="text-xs text-green-500">Channels with active tokens</p>
               </div>
             </div>
@@ -835,6 +852,15 @@ export default function ChannelsPage() {
                                     Transfer Channel
                                   </button>
                                 </>
+                              )}
+                              {activeTab === "transferred" && (
+                                <button
+                                  onClick={() => { handleRelink(channel.id); setActiveActionMenu(null); }}
+                                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-green-600 hover:bg-green-50 transition-colors"
+                                >
+                                  <RefreshCw className="w-4 h-4" />
+                                  Relink Channel
+                                </button>
                               )}
                             </div>
                           )}
