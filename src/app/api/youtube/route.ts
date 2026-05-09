@@ -10,6 +10,7 @@ import {
   getDeviceData,
   getRevenueData,
   getTopVideos,
+  lookupChannel,
 } from "@/lib/youtube";
 
 export async function GET(request: Request) {
@@ -92,6 +93,13 @@ export async function GET(request: Request) {
           endDate
         );
         return Response.json({ data });
+      }
+      case "lookupChannel": {
+        const query = url.searchParams.get("query");
+        if (!query)
+          return Response.json({ error: "query required" }, { status: 400 });
+        const results = await lookupChannel(session.accessToken, query);
+        return Response.json({ data: results });
       }
       case "dashboard": {
         const [channels, analyticsData, topVideosData] = await Promise.all([

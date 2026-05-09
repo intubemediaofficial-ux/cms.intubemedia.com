@@ -21,6 +21,82 @@ export async function getChannelStats(accessToken: string) {
   return response.data.items || [];
 }
 
+export async function lookupChannel(
+  accessToken: string,
+  query: string
+) {
+  const auth = getAuthClient(accessToken);
+  const youtube = google.youtube({ version: "v3", auth });
+
+  // Try by channel ID first (starts with UC)
+  if (query.startsWith("UC") && query.length >= 20) {
+    const response = await youtube.channels.list({
+      part: ["snippet", "statistics", "contentDetails", "brandingSettings"],
+      id: [query],
+    });
+    if (response.data.items?.length) return response.data.items;
+  }
+
+  // Try by handle (@username)
+  if (query.startsWith("@")) {
+    const response = await youtube.channels.list({
+      part: ["snippet", "statistics", "contentDetails", "brandingSettings"],
+      forHandle: query,
+    });
+    if (response.data.items?.length) return response.data.items;
+  }
+
+  // Try extracting channel ID from URL
+  const urlPatterns = [
+    /youtube\.com\/channel\/(UC[\w-]+)/,
+    /youtube\.com\/@([\w.-]+)/,
+    /youtube\.com\/c\/([\w.-]+)/,
+  ];
+  for (const pattern of urlPatterns) {
+    const match = query.match(pattern);
+    if (match) {
+      const idOrHandle = match[1];
+      if (idOrHandle.startsWith("UC")) {
+        const response = await youtube.channels.list({
+          part: ["snippet", "statistics", "contentDetails", "brandingSettings"],
+          id: [idOrHandle],
+        });
+        if (response.data.items?.length) return response.data.items;
+      } else {
+        const response = await youtube.channels.list({
+          part: ["snippet", "statistics", "contentDetails", "brandingSettings"],
+          forHandle: `@${idOrHandle}`,
+        });
+        if (response.data.items?.length) return response.data.items;
+      }
+    }
+  }
+
+  // Fallback: search for channel
+  const searchResponse = await youtube.search.list({
+    part: ["snippet"],
+    q: query,
+    type: ["channel"],
+    maxResults: 5,
+  });
+
+  if (!searchResponse.data.items?.length) return [];
+
+  const channelIds = searchResponse.data.items
+    .map((item) => item.snippet?.channelId)
+    .filter(Boolean)
+    .join(",");
+
+  if (!channelIds) return [];
+
+  const channelResponse = await youtube.channels.list({
+    part: ["snippet", "statistics", "contentDetails", "brandingSettings"],
+    id: [channelIds],
+  });
+
+  return channelResponse.data.items || [];
+}
+
 export async function getChannelVideos(
   accessToken: string,
   channelId: string,
