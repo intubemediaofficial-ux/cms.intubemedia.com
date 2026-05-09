@@ -13,11 +13,28 @@ import {
   lookupChannel,
 } from "@/lib/youtube";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.accessToken) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  if (!session) {
+    return Response.json(
+      { error: "No session found. Please log in again." },
+      { status: 401 }
+    );
+  }
+
+  if (!session.accessToken) {
+    return Response.json(
+      {
+        error: session.error === "RefreshAccessTokenError"
+          ? "Session expired. Please log out and log in again."
+          : "No access token. Please log out and sign in with Google again.",
+        sessionError: session.error || null,
+      },
+      { status: 401 }
+    );
   }
 
   const url = new URL(request.url);

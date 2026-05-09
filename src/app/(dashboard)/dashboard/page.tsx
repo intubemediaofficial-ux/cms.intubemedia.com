@@ -13,7 +13,7 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import StatsCard from "@/components/dashboard/StatsCard";
 import ViewsChart from "@/components/charts/ViewsChart";
 import SubscriberChart from "@/components/charts/SubscriberChart";
@@ -69,9 +69,17 @@ export default function DashboardPage() {
           </div>
         )}
         {isAuthenticated && !isReal && !loading && (
-          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-            <WifiOff className="w-3.5 h-3.5" />
-            {error || "Could not load YouTube data"}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+              <WifiOff className="w-3.5 h-3.5" />
+              {error || "Could not load YouTube data"}
+            </span>
+            <button
+              onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+              className="px-3 py-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              Re-authenticate
+            </button>
           </div>
         )}
         {isAuthenticated && loading && (
