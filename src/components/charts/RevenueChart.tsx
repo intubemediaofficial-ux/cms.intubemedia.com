@@ -10,22 +10,38 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { revenueData } from "@/lib/mock-data";
 
-export default function RevenueChart() {
+interface RevenueDataPoint {
+  date: string;
+  revenue: number;
+  adRevenue: number;
+  ytPremium: number;
+}
+
+interface RevenueChartProps {
+  data?: RevenueDataPoint[];
+}
+
+export default function RevenueChart({ data }: RevenueChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-border p-5">
+        <h3 className="font-semibold text-foreground mb-4">Revenue Breakdown</h3>
+        <div className="h-[280px] flex items-center justify-center text-sm text-muted">
+          Sign in with Google to see revenue data
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-xl border border-border p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-foreground">Revenue Breakdown</h3>
-        <select className="text-sm border border-border rounded-lg px-3 py-1.5 text-muted focus:outline-none focus:ring-2 focus:ring-primary/30">
-          <option>Last 12 months</option>
-          <option>Last 6 months</option>
-          <option>Last 30 days</option>
-        </select>
       </div>
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={revenueData}>
+          <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis
               dataKey="date"

@@ -9,22 +9,36 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { viewsData } from "@/lib/mock-data";
 
-export default function ViewsChart() {
+interface ViewsDataPoint {
+  date: string;
+  views: number;
+}
+
+interface ViewsChartProps {
+  data?: ViewsDataPoint[];
+}
+
+export default function ViewsChart({ data }: ViewsChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-border p-5">
+        <h3 className="font-semibold text-foreground mb-4">Views Overview</h3>
+        <div className="h-[280px] flex items-center justify-center text-sm text-muted">
+          Sign in with Google to see views data
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-xl border border-border p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-foreground">Views Overview</h3>
-        <select className="text-sm border border-border rounded-lg px-3 py-1.5 text-muted focus:outline-none focus:ring-2 focus:ring-primary/30">
-          <option>Last 12 months</option>
-          <option>Last 6 months</option>
-          <option>Last 30 days</option>
-        </select>
       </div>
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={viewsData}>
+          <AreaChart data={data}>
             <defs>
               <linearGradient id="viewsGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />

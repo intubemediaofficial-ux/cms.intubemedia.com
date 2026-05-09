@@ -9,22 +9,36 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { viewsData } from "@/lib/mock-data";
 
-export default function SubscriberChart() {
+interface SubscriberDataPoint {
+  date: string;
+  subscribers: number;
+}
+
+interface SubscriberChartProps {
+  data?: SubscriberDataPoint[];
+}
+
+export default function SubscriberChart({ data }: SubscriberChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-border p-5">
+        <h3 className="font-semibold text-foreground mb-4">Subscriber Growth</h3>
+        <div className="h-[280px] flex items-center justify-center text-sm text-muted">
+          Sign in with Google to see subscriber data
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-xl border border-border p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-foreground">Subscriber Growth</h3>
-        <select className="text-sm border border-border rounded-lg px-3 py-1.5 text-muted focus:outline-none focus:ring-2 focus:ring-primary/30">
-          <option>Last 12 months</option>
-          <option>Last 6 months</option>
-          <option>Last 30 days</option>
-        </select>
       </div>
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={viewsData}>
+          <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis
               dataKey="date"
@@ -34,7 +48,9 @@ export default function SubscriberChart() {
             <YAxis
               tick={{ fill: "#64748b", fontSize: 12 }}
               axisLine={{ stroke: "#e2e8f0" }}
-              tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`}
+              tickFormatter={(v) =>
+                v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : `${(v / 1000).toFixed(0)}K`
+              }
             />
             <Tooltip
               contentStyle={{

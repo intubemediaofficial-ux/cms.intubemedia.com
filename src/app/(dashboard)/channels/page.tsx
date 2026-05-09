@@ -18,7 +18,7 @@ import {
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
-import { channels as mockChannels } from "@/lib/mock-data";
+
 
 interface YouTubeChannel {
   id?: string | null;
@@ -220,22 +220,6 @@ export default function ChannelsPage() {
           addedDate: "-",
           isOwn: true,
           status: "active",
-        });
-      }
-    } else {
-      for (const c of mockChannels) {
-        rows.push({
-          id: c.id,
-          name: c.name,
-          handle: c.handle,
-          thumbnail: c.thumbnail,
-          subscribers: c.subscribers,
-          videos: c.videos,
-          views: c.views,
-          category: "Music",
-          addedDate: "-",
-          isOwn: true,
-          status: c.status,
         });
       }
     }
