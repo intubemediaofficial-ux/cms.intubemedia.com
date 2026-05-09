@@ -23,6 +23,7 @@ interface StoredChannel {
   tokenStatus?: string;
   cms?: string;
   addedDate: string;
+  delinkedDate?: string;
   status: "active" | "delinked" | "transferred";
 }
 
@@ -71,6 +72,7 @@ type ChannelRow = {
   views: number;
   category: string;
   addedDate: string;
+  delinkedDate: string;
 };
 
 export default function DelinkedChannelsPage() {
@@ -113,7 +115,7 @@ export default function DelinkedChannelsPage() {
 
   const handleRelink = (channelId: string) => {
     const updated = storedChannels.map((c) =>
-      c.id === channelId ? { ...c, status: "active" as const } : c
+      c.id === channelId ? { ...c, status: "active" as const, delinkedDate: undefined } : c
     );
     saveStoredChannels(updated);
     setStoredChannels(updated);
@@ -153,6 +155,7 @@ export default function DelinkedChannelsPage() {
         views: Number(data?.statistics?.viewCount || 0),
         category: sc.category,
         addedDate: sc.addedDate,
+        delinkedDate: sc.delinkedDate || "-",
       };
     });
   }, [storedChannels, channelDataMap]);
@@ -311,6 +314,15 @@ export default function DelinkedChannelsPage() {
                 <th className="text-left px-4 py-3 font-semibold text-foreground">
                   Category {renderSortIcon("category")}
                 </th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                  Linked Date
+                </th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                  Delinked Date
+                </th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                  Report Period
+                </th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">
                   Status
                 </th>
@@ -358,6 +370,26 @@ export default function DelinkedChannelsPage() {
                   <td className="px-4 py-3 text-foreground">{channel.videos.toLocaleString()}</td>
                   <td className="px-4 py-3 text-foreground">{formatNumber(channel.views)}</td>
                   <td className="px-4 py-3 text-foreground">{channel.category}</td>
+                  <td className="px-4 py-3 text-muted whitespace-nowrap">{channel.addedDate}</td>
+                  <td className="px-4 py-3 text-muted whitespace-nowrap">{channel.delinkedDate}</td>
+                  <td className="px-4 py-3">
+                    {channel.delinkedDate !== "-" ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 whitespace-nowrap">
+                        {(() => {
+                          const parts = channel.delinkedDate.split("/");
+                          if (parts.length === 3) {
+                            const delinked = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+                            const threeMonthsBefore = new Date(delinked);
+                            threeMonthsBefore.setMonth(threeMonthsBefore.getMonth() - 3);
+                            return `${threeMonthsBefore.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} — ${delinked.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`;
+                          }
+                          return "N/A";
+                        })()}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted">N/A</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
                       Delinked
@@ -385,7 +417,7 @@ export default function DelinkedChannelsPage() {
               ))}
               {pageChannels.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={10} className="px-4 py-12 text-center text-muted">
                     {loadingData ? "Loading..." : "No delinked channels"}
                   </td>
                 </tr>
