@@ -207,7 +207,7 @@ export default function ChannelsPage() {
 
   const [inviteError, setInviteError] = useState("");
 
-  const handleGenerateInviteLink = useCallback(async (channelId: string, channelTitle: string) => {
+  const handleGenerateInviteLink = useCallback((channelId: string, channelTitle: string) => {
     setGeneratingLink(true);
     setInviteChannelId(channelId);
     setInviteChannelTitle(channelTitle || channelId);
@@ -217,26 +217,27 @@ export default function ChannelsPage() {
     setInviteError("");
     setActiveActionMenu(null);
 
-    try {
-      const res = await fetch(
-        `/api/channel-tokens?action=generateInviteLink&channelId=${encodeURIComponent(channelId)}&channelTitle=${encodeURIComponent(channelTitle || channelId)}`
-      );
-      const json = await res.json();
-      if (res.ok && json.data?.oauthUrl) {
-        setInviteOAuthUrl(json.data.oauthUrl);
-        setShowInviteModal(true);
-      } else {
-        setInviteError(json.error || "Failed to generate invite link");
-        setInviteOAuthUrl("");
-        setShowInviteModal(true);
-      }
-    } catch (err) {
-      setInviteError("Network error — please try again");
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      setInviteError("Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID.");
       setInviteOAuthUrl("");
       setShowInviteModal(true);
-    } finally {
       setGeneratingLink(false);
+      return;
     }
+
+    const redirectUri = `${window.location.origin}/callback`;
+    const scopes = [
+      "https://www.googleapis.com/auth/youtube.readonly",
+      "https://www.googleapis.com/auth/yt-analytics.readonly",
+      "https://www.googleapis.com/auth/yt-analytics-monetary.readonly",
+    ].join("+");
+
+    const oauthUrl = `https://accounts.google.com/o/oauth2/auth?access_type=offline&client_id=${encodeURIComponent(clientId)}&prompt=consent&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}&state=${channelId}`;
+
+    setInviteOAuthUrl(oauthUrl);
+    setShowInviteModal(true);
+    setGeneratingLink(false);
   }, []);
 
   const handleCopyInviteUrl = useCallback(async () => {
