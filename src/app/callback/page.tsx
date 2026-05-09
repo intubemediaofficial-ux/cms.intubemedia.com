@@ -40,9 +40,8 @@ function CallbackContent() {
       return;
     }
 
-    // Extract channel ID from state (format: youtube-auth-CHANNELID-TIMESTAMP)
-    const stateMatch = state.match(/^youtube-auth-(.+)-\d+$/);
-    if (!stateMatch) {
+    // State is the channel ID directly (e.g. UCJL86UBFftNd1BoHAvxgT7Q)
+    if (!state.startsWith("UC") && !state.startsWith("youtube-auth-")) {
       setStatus("error");
       setErrorMessage("Invalid state parameter.");
       return;

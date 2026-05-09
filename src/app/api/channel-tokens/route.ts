@@ -43,7 +43,7 @@ export async function GET(request: Request) {
 
       const baseUrl = process.env.NEXTAUTH_URL || "https://bainsla-music-cms.vercel.app";
       const redirectUri = `${baseUrl}/callback`;
-      const state = `youtube-auth-${channelId}-${Date.now()}`;
+      const state = channelId;
 
       const scopes = [
         "https://www.googleapis.com/auth/youtube.readonly",
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
         `&prompt=consent` +
         `&redirect_uri=${encodeURIComponent(redirectUri)}` +
         `&response_type=code` +
-        `&scope=${encodeURIComponent(scopes.join(" "))}` +
+        `&scope=${encodeURIComponent(scopes.join("+"))}` +
         `&state=${encodeURIComponent(state)}`;
 
       return Response.json({
