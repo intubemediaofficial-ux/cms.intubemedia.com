@@ -70,7 +70,7 @@ const REQUESTS_KEY = "bainsla_channel_requests";
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 const CATEGORIES = ["Music", "Entertainment", "Education", "Comedy", "Gaming", "News", "Sports"];
 const CHANNEL_TYPES = ["Original", "Refurbished", "Licensed"];
-const TOKEN_STATUSES = ["Valid", "Invalid", "Expired"];
+const TOKEN_STATUSES = ["Valid", "Invalid", "Expired", "N/A"];
 const CMS_OPTIONS = ["Bainsla Music", "WMG - MUSIC", "Sony Music", "T-Series", "Other"];
 
 type TabType = "channels" | "requests" | "bulk" | "transferred";
@@ -195,7 +195,7 @@ export default function ChannelsPage() {
           const statusMap: Record<string, string> = {};
           for (const [id, info] of Object.entries(json.data.statuses)) {
             const typedInfo = info as { status: string };
-            statusMap[id] = typedInfo.status === "valid" ? "Valid" : typedInfo.status === "expired" ? "Expired" : "N/A";
+            statusMap[id] = typedInfo.status === "valid" ? "Valid" : typedInfo.status === "expired" ? "Expired" : "Invalid";
           }
           setTokenStatuses(statusMap);
         }
@@ -203,35 +203,57 @@ export default function ChannelsPage() {
       .catch(() => {});
   }, [isAuthenticated, storedChannels]);
 
+  const [inviteError, setInviteError] = useState("");
+
   const handleGenerateInviteLink = useCallback(async (channelId: string, channelTitle: string) => {
     setGeneratingLink(true);
     setInviteChannelId(channelId);
-    setInviteChannelTitle(channelTitle);
+    setInviteChannelTitle(channelTitle || channelId);
     setInviteCopied(false);
     setInviteEmails("");
     setInviteSentMessage("");
+    setInviteError("");
     setActiveActionMenu(null);
 
     try {
       const res = await fetch(
-        `/api/channel-tokens?action=generateInviteLink&channelId=${encodeURIComponent(channelId)}&channelTitle=${encodeURIComponent(channelTitle)}`
+        `/api/channel-tokens?action=generateInviteLink&channelId=${encodeURIComponent(channelId)}&channelTitle=${encodeURIComponent(channelTitle || channelId)}`
       );
       const json = await res.json();
       if (res.ok && json.data?.oauthUrl) {
         setInviteOAuthUrl(json.data.oauthUrl);
         setShowInviteModal(true);
+      } else {
+        setInviteError(json.error || "Failed to generate invite link");
+        setInviteOAuthUrl("");
+        setShowInviteModal(true);
       }
-    } catch {
-      // error
+    } catch (err) {
+      setInviteError("Network error — please try again");
+      setInviteOAuthUrl("");
+      setShowInviteModal(true);
     } finally {
       setGeneratingLink(false);
     }
   }, []);
 
-  const handleCopyInviteUrl = useCallback(() => {
-    navigator.clipboard.writeText(inviteOAuthUrl);
-    setInviteCopied(true);
-    setTimeout(() => setInviteCopied(false), 2000);
+  const handleCopyInviteUrl = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(inviteOAuthUrl);
+      setInviteCopied(true);
+    } catch {
+      // Fallback: select text for manual copy
+      const textArea = document.createElement("textarea");
+      textArea.value = inviteOAuthUrl;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+      setInviteCopied(true);
+    }
+    setTimeout(() => setInviteCopied(false), 3000);
   }, [inviteOAuthUrl]);
 
   const handleSendInviteEmail = useCallback(async () => {
@@ -457,7 +479,7 @@ export default function ChannelsPage() {
         views: Number(data?.statistics?.viewCount || 0),
         category: sc.category,
         channelType: sc.channelType || "Original",
-        tokenStatus: tokenStatuses[sc.id] || sc.tokenStatus || "N/A",
+        tokenStatus: tokenStatuses[sc.id] || sc.tokenStatus || "Invalid",
         cms: sc.cms || "Bainsla Music",
         addedDate: sc.addedDate,
         isOwn: false,
@@ -1210,7 +1232,13 @@ export default function ChannelsPage() {
               </div>
             </div>
             <div className="p-5 space-y-5">
+              {inviteError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-700 font-medium">Error: {inviteError}</p>
+                </div>
+              )}
               {/* OAuth URL */}
+              {inviteOAuthUrl && (
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-medium text-foreground">OAuth Authorization URL:</label>
@@ -1235,12 +1263,15 @@ export default function ChannelsPage() {
                     )}
                   </button>
                 </div>
-                <div className="bg-slate-50 border border-border rounded-lg p-3 max-h-32 overflow-y-auto">
-                  <p className="text-xs text-muted break-all font-mono">{inviteOAuthUrl}</p>
+                <div className="bg-slate-50 border border-border rounded-lg p-3 max-h-32 overflow-y-auto select-all cursor-text">
+                  <p className="text-xs text-foreground break-all font-mono select-all">{inviteOAuthUrl}</p>
                 </div>
+                <p className="text-xs text-muted mt-1.5">Share this link with the channel owner. They need to open it, sign in with their Google account, and authorize access.</p>
               </div>
+              )}
 
               {/* Send via Email */}
+              {inviteOAuthUrl && (
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">
                   Send Invite via Email (max 5):
@@ -1267,6 +1298,7 @@ export default function ChannelsPage() {
                   )}
                 </div>
               </div>
+              )}
             </div>
             <div className="flex items-center justify-end p-5 border-t border-border">
               <button
