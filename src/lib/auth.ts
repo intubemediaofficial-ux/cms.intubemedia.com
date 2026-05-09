@@ -154,6 +154,8 @@ export const authOptions: NextAuthOptions = {
       session.error = token.error as string | undefined;
       if (session.user) {
         session.user.role = token.role as "admin" | "client" | undefined;
+        session.user.email = (token.email as string) || session.user.email;
+        session.user.name = (token.name as string) || session.user.name;
       }
       return session;
     },

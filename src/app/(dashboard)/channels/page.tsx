@@ -107,7 +107,9 @@ function saveChannelRequests(requests: ChannelRequest[]) {
 
 export default function ChannelsPage() {
   const { data: session, status } = useSession();
-  const isAuthenticated = status === "authenticated" && !!session?.accessToken;
+  const hasAccessToken = !!session?.accessToken;
+  const isAdmin = session?.user?.role === "admin";
+  const isAuthenticated = status === "authenticated" && (hasAccessToken || isAdmin);
 
   const { data: myChannels, isReal, loading } = useYouTubeData<YouTubeChannel[]>(
     "channels",
@@ -300,7 +302,7 @@ export default function ChannelsPage() {
         id: actualId,
         category: categoryInput,
         channelType: channelTypeInput || "Original",
-        tokenStatus: "Valid",
+        tokenStatus: "Invalid",
         cms: cmsInput || "Bainsla Music",
         addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
         status: "active",
@@ -380,7 +382,7 @@ export default function ChannelsPage() {
             id: actualId,
             category: bulkCategory || "Music",
             channelType: bulkChannelType || "Original",
-            tokenStatus: "Valid",
+            tokenStatus: "Invalid",
             cms: bulkCms || "Bainsla Music",
             addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
             status: "active",
@@ -457,7 +459,7 @@ export default function ChannelsPage() {
           views: Number(ch.statistics?.viewCount || 0),
           category: storedInfo?.category || "Music",
           channelType: storedInfo?.channelType || "Original",
-          tokenStatus: tokenStatuses[ch.id || ""] || storedInfo?.tokenStatus || "Valid",
+          tokenStatus: tokenStatuses[ch.id || ""] || storedInfo?.tokenStatus || "Invalid",
           cms: storedInfo?.cms || "Bainsla Music",
           addedDate: storedInfo?.addedDate || "-",
           isOwn: true,

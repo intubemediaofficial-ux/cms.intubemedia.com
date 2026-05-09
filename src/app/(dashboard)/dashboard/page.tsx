@@ -94,6 +94,15 @@ interface ChannelRevenueInfo {
   rpm: number;
 }
 
+interface PerChannelAnalytics {
+  performance: AnalyticsResponse | null;
+  prevPerformance: AnalyticsResponse | null;
+  revenue: AnalyticsResponse | null;
+  prevRevenue: AnalyticsResponse | null;
+  dailyRevenue: AnalyticsResponse | null;
+  revenueViews: AnalyticsResponse | null;
+}
+
 interface DashboardFullData {
   channels?: ChannelItem[];
   currentPerformance?: AnalyticsResponse | null;
@@ -109,6 +118,8 @@ interface DashboardFullData {
   channelRevenueMap?: Record<string, ChannelRevenueInfo>;
   lastDayRevenue?: number;
   lastDayDate?: string;
+  perChannelAnalytics?: Record<string, PerChannelAnalytics>;
+  tokenizedChannels?: string[];
 }
 
 function sumMetric(data: AnalyticsResponse | undefined | null, metricName: string): number {
@@ -147,7 +158,9 @@ function getDailyRevenueChartData(data: AnalyticsResponse | null | undefined) {
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
-  const isAuthenticated = status === "authenticated" && !!session?.accessToken;
+  const hasAccessToken = !!session?.accessToken;
+  const isAdminSession = session?.user?.role === "admin";
+  const isAuthenticated = status === "authenticated" && (hasAccessToken || isAdminSession);
 
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
@@ -179,23 +192,46 @@ export default function DashboardPage() {
   const totalSubscribers = channels.reduce((sum, ch) => sum + Number(ch?.statistics?.subscriberCount || 0), 0);
   const totalVideos = channels.reduce((sum, ch) => sum + Number(ch?.statistics?.videoCount || 0), 0);
 
-  // Revenue metrics
-  const curEstRevenue = sumRevenueMetric(dashData?.currentRevenue, "estimatedRevenue");
-  const curAdRevenue = sumRevenueMetric(dashData?.currentRevenue, "estimatedAdRevenue");
-  const curGrossRevenue = sumRevenueMetric(dashData?.currentRevenue, "grossRevenue");
+  // Aggregate per-channel analytics data
+  const perChannelAnalytics = dashData?.perChannelAnalytics || {};
+  const perChannelEntries = Object.values(perChannelAnalytics);
+
+  // Revenue metrics — aggregate admin's own + all per-channel token data
+  let curEstRevenue = sumRevenueMetric(dashData?.currentRevenue, "estimatedRevenue");
+  let curAdRevenue = sumRevenueMetric(dashData?.currentRevenue, "estimatedAdRevenue");
+  let curGrossRevenue = sumRevenueMetric(dashData?.currentRevenue, "grossRevenue");
+  let prevEstRevenue = sumRevenueMetric(dashData?.prevRevenue, "estimatedRevenue");
+  let prevAdRevenue = sumRevenueMetric(dashData?.prevRevenue, "estimatedAdRevenue");
+  let prevGrossRevenue = sumRevenueMetric(dashData?.prevRevenue, "grossRevenue");
+
+  for (const pca of perChannelEntries) {
+    curEstRevenue += sumRevenueMetric(pca.revenue, "estimatedRevenue");
+    curAdRevenue += sumRevenueMetric(pca.revenue, "estimatedAdRevenue");
+    curGrossRevenue += sumRevenueMetric(pca.revenue, "grossRevenue");
+    prevEstRevenue += sumRevenueMetric(pca.prevRevenue, "estimatedRevenue");
+    prevAdRevenue += sumRevenueMetric(pca.prevRevenue, "estimatedAdRevenue");
+    prevGrossRevenue += sumRevenueMetric(pca.prevRevenue, "grossRevenue");
+  }
+
   const curPremiumRevenue = Math.max(0, curGrossRevenue - curAdRevenue);
-  const prevEstRevenue = sumRevenueMetric(dashData?.prevRevenue, "estimatedRevenue");
-  const prevAdRevenue = sumRevenueMetric(dashData?.prevRevenue, "estimatedAdRevenue");
-  const prevGrossRevenue = sumRevenueMetric(dashData?.prevRevenue, "grossRevenue");
   const prevPremiumRevenue = Math.max(0, prevGrossRevenue - prevAdRevenue);
 
-  // Performance metrics
-  const curViews = sumMetric(dashData?.currentPerformance, "views");
-  const prevViews = sumMetric(dashData?.prevPerformance, "views");
-  const curSubs = sumMetric(dashData?.currentPerformance, "subscribersGained") - sumMetric(dashData?.currentPerformance, "subscribersLost");
-  const prevSubs = sumMetric(dashData?.prevPerformance, "subscribersGained") - sumMetric(dashData?.prevPerformance, "subscribersLost");
-  const curLikes = sumMetric(dashData?.currentPerformance, "likes");
-  const prevLikes = sumMetric(dashData?.prevPerformance, "likes");
+  // Performance metrics — aggregate admin's own + per-channel token data
+  let curViews = sumMetric(dashData?.currentPerformance, "views");
+  let prevViews = sumMetric(dashData?.prevPerformance, "views");
+  let curSubs = sumMetric(dashData?.currentPerformance, "subscribersGained") - sumMetric(dashData?.currentPerformance, "subscribersLost");
+  let prevSubs = sumMetric(dashData?.prevPerformance, "subscribersGained") - sumMetric(dashData?.prevPerformance, "subscribersLost");
+  let curLikes = sumMetric(dashData?.currentPerformance, "likes");
+  let prevLikes = sumMetric(dashData?.prevPerformance, "likes");
+
+  for (const pca of perChannelEntries) {
+    curViews += sumMetric(pca.performance, "views");
+    prevViews += sumMetric(pca.prevPerformance, "views");
+    curSubs += sumMetric(pca.performance, "subscribersGained") - sumMetric(pca.performance, "subscribersLost");
+    prevSubs += sumMetric(pca.prevPerformance, "subscribersGained") - sumMetric(pca.prevPerformance, "subscribersLost");
+    curLikes += sumMetric(pca.performance, "likes");
+    prevLikes += sumMetric(pca.prevPerformance, "likes");
+  }
 
 
   // CPM and RPM
@@ -213,8 +249,24 @@ export default function DashboardPage() {
   const curVideos = sumMetric(dashData?.currentPerformance, "videosPublished") || sumMetric(dashData?.currentPerformance, "videos");
   const prevVideosPerf = sumMetric(dashData?.prevPerformance, "videosPublished") || sumMetric(dashData?.prevPerformance, "videos");
 
-  // Daily revenue chart
-  const dailyRevenueData = getDailyRevenueChartData(dashData?.dailyRevenue);
+  // Daily revenue chart — aggregate admin's own + per-channel token daily data
+  const adminDailyData = getDailyRevenueChartData(dashData?.dailyRevenue);
+  const perChannelDailyDataArrays = perChannelEntries
+    .map((pca) => getDailyRevenueChartData(pca.dailyRevenue))
+    .filter((d) => d.length > 0);
+
+  let dailyRevenueData = adminDailyData;
+  if (perChannelDailyDataArrays.length > 0) {
+    const dailyMap: Record<string, number> = {};
+    for (const d of adminDailyData) dailyMap[d.date] = (dailyMap[d.date] || 0) + d.revenue;
+    for (const arr of perChannelDailyDataArrays) {
+      for (const d of arr) dailyMap[d.date] = (dailyMap[d.date] || 0) + d.revenue;
+    }
+    dailyRevenueData = Object.entries(dailyMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, revenue]) => ({ date, revenue: Math.round(revenue * 100) / 100 }));
+  }
+
   const avgDailyRevenue = dailyRevenueData.length > 0
     ? dailyRevenueData.reduce((s, d) => s + d.revenue, 0) / dailyRevenueData.length
     : 0;

@@ -71,7 +71,9 @@ function getActiveChannelIds(): string[] {
 
 export default function VideosPage() {
   const { data: session, status: sessionStatus } = useSession();
-  const isAuthenticated = sessionStatus === "authenticated" && !!session?.accessToken;
+  const hasAccessToken = !!session?.accessToken;
+  const isAdminSession = session?.user?.role === "admin";
+  const isAuthenticated = sessionStatus === "authenticated" && (hasAccessToken || isAdminSession);
 
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
   const [videos, setVideos] = useState<VideoItem[]>([]);
