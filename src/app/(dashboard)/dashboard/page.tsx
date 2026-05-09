@@ -515,7 +515,12 @@ export default function DashboardPage() {
           <DateRangeFilter value={datePreset} onChange={handleDateChange} />
 
           {/* ===== SECTION 2: Performance Overview (with % change) ===== */}
-          <div>
+          <div className="relative">
+            {loading && (
+              <div className="absolute inset-0 bg-white/60 z-10 flex items-center justify-center rounded-lg">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            )}
             <h3 className="text-sm font-semibold text-foreground mb-1">
               Performance Overview
               <span className="text-xs font-normal text-muted ml-2">

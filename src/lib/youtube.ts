@@ -190,7 +190,7 @@ export async function getAnalyticsData(
     startDate,
     endDate,
     metrics,
-    dimensions,
+    dimensions: dimensions || undefined,
     sort: dimensions === "day" ? "day" : undefined,
   });
 
