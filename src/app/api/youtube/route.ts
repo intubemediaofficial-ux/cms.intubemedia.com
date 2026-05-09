@@ -20,6 +20,7 @@ export const dynamic = "force-dynamic";
 const ADMIN_EMAILS = [
   "vijendrachoudhary95@gmail.com",
   "ajeetgurjarofficial@gmail.com",
+  "bainslamusicofficial@gmail.com",
 ];
 
 export async function GET(request: Request) {
@@ -33,14 +34,15 @@ export async function GET(request: Request) {
   }
 
   const isAdminCredentials = !session.accessToken && ADMIN_EMAILS.includes(session.user?.email?.toLowerCase() || "");
+  const isCredentialsLogin = !session.accessToken;
 
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
   const startDate = url.searchParams.get("startDate") || getDefaultStartDate();
   const endDate = url.searchParams.get("endDate") || getDefaultEndDate();
 
-  // Admin credentials login can access dashboardFull and lookupChannel via per-channel tokens
-  if (!session.accessToken && !isAdminCredentials) {
+  // Credentials login (admin or client) can access dashboardFull and lookupChannel via per-channel tokens
+  if (!session.accessToken && !isAdminCredentials && !isCredentialsLogin) {
     return Response.json(
       {
         error: session.error === "RefreshAccessTokenError"
@@ -53,8 +55,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Actions that require Google OAuth access token
-    if (isAdminCredentials && !["dashboardFull", "lookupChannel", "dashboard", "videos"].includes(action || "")) {
+    // Credentials login (admin or client) can only access certain actions via per-channel tokens
+    if (isCredentialsLogin && !["dashboardFull", "lookupChannel", "dashboard", "videos"].includes(action || "")) {
       return Response.json(
         { error: "This action requires Google OAuth login. Please sign in with Google.", needsGoogleAuth: true },
         { status: 401 }

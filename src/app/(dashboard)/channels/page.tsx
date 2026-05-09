@@ -112,7 +112,7 @@ export default function ChannelsPage() {
   const { data: session, status } = useSession();
   const hasAccessToken = !!session?.accessToken;
   const isAdmin = session?.user?.role === "admin";
-  const isAuthenticated = status === "authenticated" && (hasAccessToken || isAdmin);
+  const isAuthenticated = status === "authenticated";
 
   const { data: myChannels, isReal, loading } = useYouTubeData<YouTubeChannel[]>(
     "channels",

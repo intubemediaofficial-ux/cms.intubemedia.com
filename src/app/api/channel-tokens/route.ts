@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 const ADMIN_EMAILS = [
   "vijendrachoudhary95@gmail.com",
   "ajeetgurjarofficial@gmail.com",
+  "bainslamusicofficial@gmail.com",
 ];
 
 function isAdmin(email: string | null | undefined): boolean {
@@ -21,15 +22,20 @@ function isAdmin(email: string | null | undefined): boolean {
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session || !isAdmin(session.user?.email)) {
+  if (!session?.user?.email) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const isAdminUser = isAdmin(session.user.email);
 
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
 
   switch (action) {
     case "generateInviteLink": {
+      if (!isAdminUser) {
+        return Response.json({ error: "Admin access required" }, { status: 403 });
+      }
       const channelId = url.searchParams.get("channelId");
       const channelTitle = url.searchParams.get("channelTitle") || "";
       if (!channelId) {
@@ -114,6 +120,9 @@ export async function GET(request: Request) {
     }
 
     case "deleteToken": {
+      if (!isAdminUser) {
+        return Response.json({ error: "Admin access required" }, { status: 403 });
+      }
       const channelId = url.searchParams.get("channelId");
       if (!channelId) {
         return Response.json({ error: "channelId required" }, { status: 400 });
