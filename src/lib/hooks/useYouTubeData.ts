@@ -8,13 +8,15 @@ export function useYouTubeData<T>(
   params: Record<string, string> = {},
   fallback: T
 ) {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [data, setData] = useState<T>(fallback);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isReal, setIsReal] = useState(false);
 
   useEffect(() => {
+    if (status === "loading") return;
+
     if (!session?.accessToken) {
       setLoading(false);
       return;
@@ -22,6 +24,7 @@ export function useYouTubeData<T>(
 
     const fetchData = async () => {
       setLoading(true);
+      setError(null);
       try {
         const queryParams = new URLSearchParams({ action, ...params });
         const res = await fetch(`/api/youtube?${queryParams}`);
@@ -31,17 +34,20 @@ export function useYouTubeData<T>(
           setData(json.data);
           setIsReal(true);
         } else {
+          console.error(`YouTube API error [${action}]:`, json.error);
           setError(json.error || "Failed to fetch data");
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Network error");
+        const msg = err instanceof Error ? err.message : "Network error";
+        console.error(`YouTube fetch error [${action}]:`, msg);
+        setError(msg);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [session?.accessToken, action]);
+  }, [session?.accessToken, status, action]);
 
   return { data, loading, error, isReal };
 }

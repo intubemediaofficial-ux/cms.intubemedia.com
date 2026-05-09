@@ -118,9 +118,16 @@ export async function GET(request: Request) {
         return Response.json({ error: "Invalid action" }, { status: 400 });
     }
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "YouTube API error";
-    console.error("YouTube API error:", error);
-    return Response.json({ error: message }, { status: 500 });
+    let message = "YouTube API error";
+    if (error instanceof Error) {
+      message = error.message;
+    }
+    const errorObj = error as { response?: { data?: { error?: { message?: string; code?: number } } }; code?: number };
+    if (errorObj?.response?.data?.error?.message) {
+      message = errorObj.response.data.error.message;
+    }
+    console.error("YouTube API error:", JSON.stringify(error, null, 2));
+    return Response.json({ error: message, action }, { status: 500 });
   }
 }
 

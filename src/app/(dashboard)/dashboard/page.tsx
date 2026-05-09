@@ -27,8 +27,8 @@ import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
-  const { data: channelsData, isReal } = useYouTubeData<
+  const { data: session, status } = useSession();
+  const { data: channelsData, isReal, error, loading } = useYouTubeData<
     Array<{
       snippet?: { title?: string | null };
       statistics?: {
@@ -51,6 +51,8 @@ export default function DashboardPage() {
       }
     : mockStats;
 
+  const isAuthenticated = status === "authenticated" && !!session?.accessToken;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -60,13 +62,25 @@ export default function DashboardPage() {
             Welcome back, {isReal && channel?.snippet?.title ? channel.snippet.title : "Bainsla Music"}. Here&apos;s your channel overview.
           </p>
         </div>
-        {session?.accessToken && (
+        {isAuthenticated && isReal && (
           <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
             <Wifi className="w-3.5 h-3.5" />
             Live YouTube Data
           </div>
         )}
-        {!session?.accessToken && (
+        {isAuthenticated && !isReal && !loading && (
+          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+            <WifiOff className="w-3.5 h-3.5" />
+            {error || "Could not load YouTube data"}
+          </div>
+        )}
+        {isAuthenticated && loading && (
+          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+            <Wifi className="w-3.5 h-3.5" />
+            Loading YouTube Data...
+          </div>
+        )}
+        {!isAuthenticated && (
           <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
             <WifiOff className="w-3.5 h-3.5" />
             Demo Data — Sign in with Google for real data
