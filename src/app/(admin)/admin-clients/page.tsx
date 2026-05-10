@@ -35,6 +35,15 @@ interface ChannelDetail {
   videos: number;
   thumbnail: string;
   tokenStatus: string;
+  revenue?: number;
+}
+
+interface ClientRevenueData {
+  totalRevenue: number;
+  totalViews: number;
+  totalSubscribers: number;
+  cpm: number;
+  rpm: number;
 }
 
 interface Client {
@@ -83,6 +92,7 @@ export default function AdminClientsPage() {
   const [viewingClient, setViewingClient] = useState<Client | null>(null);
   const [clientChannels, setClientChannels] = useState<ChannelDetail[]>([]);
   const [clientChannelsLoading, setClientChannelsLoading] = useState(false);
+  const [clientRevenue, setClientRevenue] = useState<ClientRevenueData | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -254,18 +264,67 @@ export default function AdminClientsPage() {
   const openClientView = useCallback(async (client: Client) => {
     setViewingClient(client);
     setClientChannels([]);
+    setClientRevenue(null);
     setClientChannelsLoading(true);
 
     try {
-      // Fetch channel details and token statuses for this client's channels
       const channelDetails: ChannelDetail[] = [];
       const channelIds = client.channels;
 
       if (channelIds.length > 0) {
-        // Fetch token statuses
-        const tokenRes = await fetch(`/api/channel-tokens?action=bulkTokenStatus&channelIds=${encodeURIComponent(channelIds.join(","))}`);
+        // Fetch token statuses + channel info + revenue in parallel
+        const [tokenRes, revenueRes] = await Promise.all([
+          fetch(`/api/channel-tokens?action=bulkTokenStatus&channelIds=${encodeURIComponent(channelIds.join(","))}`),
+          fetch(`/api/youtube?action=dashboardFull&channelIds=${encodeURIComponent(channelIds.join(","))}`),
+        ]);
+
         const tokenJson = await tokenRes.json();
         const tokenStatuses = tokenJson.data?.statuses || {};
+
+        // Parse revenue data
+        let totalRevenue = 0;
+        let totalAnalyticsViews = 0;
+        let totalSubs = 0;
+        if (revenueRes.ok) {
+          const revJson = await revenueRes.json();
+          const revData = revJson.data;
+          if (revData) {
+            // Sum from main revenue
+            if (revData.currentRevenue?.rows?.length && revData.currentRevenue?.columnHeaders) {
+              const headers = revData.currentRevenue.columnHeaders.map((h: { name?: string | null }) => h.name || "");
+              const revIdx = headers.indexOf("estimatedRevenue");
+              const viewIdx = headers.indexOf("views");
+              if (revIdx !== -1) {
+                totalRevenue += revData.currentRevenue.rows.reduce((s: number, r: (string | number)[]) => s + (Number(r[revIdx]) || 0), 0);
+              }
+              if (viewIdx !== -1) {
+                totalAnalyticsViews += revData.currentRevenue.rows.reduce((s: number, r: (string | number)[]) => s + (Number(r[viewIdx]) || 0), 0);
+              }
+            }
+            // Sum from per-channel analytics
+            if (revData.perChannelAnalytics) {
+              for (const pca of Object.values(revData.perChannelAnalytics) as Array<{ revenue?: { columnHeaders?: Array<{ name?: string | null }>; rows?: Array<Array<string | number>> } | null }>) {
+                if (pca.revenue?.rows?.length && pca.revenue?.columnHeaders) {
+                  const headers = pca.revenue.columnHeaders.map((h: { name?: string | null }) => h.name || "");
+                  const revIdx = headers.indexOf("estimatedRevenue");
+                  if (revIdx !== -1) {
+                    totalRevenue += pca.revenue.rows.reduce((s: number, r: (string | number)[]) => s + (Number(r[revIdx]) || 0), 0);
+                  }
+                }
+              }
+            }
+            // Subscribers from channel data
+            if (revData.channels) {
+              totalSubs = (revData.channels as Array<{ statistics?: { subscriberCount?: string | null } }>).reduce(
+                (s: number, ch) => s + Number(ch?.statistics?.subscriberCount || 0), 0
+              );
+            }
+          }
+        }
+
+        const cpm = totalAnalyticsViews > 0 ? (totalRevenue / totalAnalyticsViews) * 1000 : 0;
+        const rpm = cpm;
+        setClientRevenue({ totalRevenue, totalViews: totalAnalyticsViews, totalSubscribers: totalSubs, cpm, rpm });
 
         // Fetch channel info for each channel
         for (const chId of channelIds) {
@@ -287,24 +346,13 @@ export default function AdminClientsPage() {
             } else {
               const tokenInfo = tokenStatuses[chId] as { status?: string } | undefined;
               channelDetails.push({
-                id: chId,
-                name: chId,
-                subscribers: 0,
-                views: 0,
-                videos: 0,
-                thumbnail: "",
+                id: chId, name: chId, subscribers: 0, views: 0, videos: 0, thumbnail: "",
                 tokenStatus: tokenInfo?.status === "valid" ? "Valid" : "Invalid",
               });
             }
           } catch {
             channelDetails.push({
-              id: chId,
-              name: chId,
-              subscribers: 0,
-              views: 0,
-              videos: 0,
-              thumbnail: "",
-              tokenStatus: "Invalid",
+              id: chId, name: chId, subscribers: 0, views: 0, videos: 0, thumbnail: "", tokenStatus: "Invalid",
             });
           }
         }
@@ -826,7 +874,7 @@ export default function AdminClientsPage() {
 
             <div className="p-5 overflow-y-auto flex-1">
               {/* Client Info Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                   <p className="text-xs text-blue-600 font-medium">Category</p>
                   <p className="text-lg font-bold text-blue-900">{viewingClient.category}</p>
@@ -852,6 +900,41 @@ export default function AdminClientsPage() {
                   <p className="text-lg font-bold text-slate-900">{viewingClient.joinedDate}</p>
                 </div>
               </div>
+
+              {/* Revenue & Analytics Cards */}
+              {clientRevenue && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                    <div className="flex items-center gap-1.5">
+                      <DollarSign className="w-3.5 h-3.5 text-green-500" />
+                      <p className="text-xs text-green-600 font-medium">Revenue (28d)</p>
+                    </div>
+                    <p className="text-lg font-bold text-green-900">${clientRevenue.totalRevenue.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div className="flex items-center gap-1.5">
+                      <BarChart3 className="w-3.5 h-3.5 text-blue-500" />
+                      <p className="text-xs text-blue-600 font-medium">Views (28d)</p>
+                    </div>
+                    <p className="text-lg font-bold text-blue-900">{clientRevenue.totalViews.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-purple-500" />
+                      <p className="text-xs text-purple-600 font-medium">Subscribers</p>
+                    </div>
+                    <p className="text-lg font-bold text-purple-900">{clientRevenue.totalSubscribers.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <p className="text-xs text-amber-600 font-medium">CPM</p>
+                    <p className="text-lg font-bold text-amber-900">${clientRevenue.cpm.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-4">
+                    <p className="text-xs text-cyan-600 font-medium">RPM</p>
+                    <p className="text-lg font-bold text-cyan-900">${clientRevenue.rpm.toFixed(2)}</p>
+                  </div>
+                </div>
+              )}
 
               {viewingClient.phone && (
                 <div className="mb-4 text-sm text-muted">
