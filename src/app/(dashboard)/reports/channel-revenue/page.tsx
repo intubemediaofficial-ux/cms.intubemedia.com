@@ -1,17 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
-  Search,
   Download,
   Loader2,
   Wifi,
   WifiOff,
+  DollarSign,
+  TrendingUp,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { formatNumber } from "@/lib/utils";
+import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import { downloadCSV } from "@/lib/csv-export";
+
+const CHANNELS_STORAGE_KEY = "bainsla_channels";
+
+interface StoredChannel {
+  id: string;
+  status: "active" | "delinked" | "transferred";
+}
+
+interface ChannelRevenueInfo {
+  revenue: number;
+  views: number;
+  rpm: number;
+}
 
 interface YouTubeChannel {
   id?: string | null;
@@ -29,25 +43,80 @@ interface YouTubeChannel {
   } | null;
 }
 
+interface DashboardData {
+  channels?: YouTubeChannel[];
+  channelRevenueMap?: Record<string, ChannelRevenueInfo>;
+}
+
+function getActiveChannelIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(CHANNELS_STORAGE_KEY);
+    if (!stored) return [];
+    const channels: StoredChannel[] = JSON.parse(stored);
+    return channels.filter((c) => c.status === "active").map((c) => c.id);
+  } catch {
+    return [];
+  }
+}
+
+function getDateRange(range: string) {
+  const end = new Date();
+  end.setDate(end.getDate() - 1);
+  const start = new Date(end);
+  switch (range) {
+    case "7d": start.setDate(start.getDate() - 7); break;
+    case "28d": start.setDate(start.getDate() - 28); break;
+    case "90d": start.setDate(start.getDate() - 90); break;
+    case "365d": start.setDate(start.getDate() - 365); break;
+  }
+  return {
+    startDate: start.toISOString().split("T")[0],
+    endDate: end.toISOString().split("T")[0],
+  };
+}
+
 export default function ChannelRevenuePage() {
   const { data: session, status } = useSession();
-  const isAuthenticated = status === "authenticated" && !!session?.accessToken;
+  const isAuthenticated = status === "authenticated" && (!!session?.accessToken || session?.user?.role === "admin");
 
-  const { data: channels, isReal, loading } = useYouTubeData<YouTubeChannel[]>("channels", {}, []);
+  const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState("28d");
+
+  useEffect(() => {
+    setActiveChannelIds(getActiveChannelIds());
+  }, []);
+
+  const dates = getDateRange(dateRange);
+
+  const apiParams = useMemo(() => ({
+    startDate: dates.startDate,
+    endDate: dates.endDate,
+    prevStartDate: dates.startDate,
+    prevEndDate: dates.endDate,
+    ...(activeChannelIds.length > 0 ? { channelIds: activeChannelIds.join(",") } : {}),
+  }), [dates.startDate, dates.endDate, activeChannelIds]);
+
+  const { data: dashData, isReal, loading } = useYouTubeData<DashboardData>("dashboardFull", apiParams, {});
+
+  const channels = dashData?.channels || [];
+  const channelRevenueMap = dashData?.channelRevenueMap || {};
+
+  const totalRevenue = Object.values(channelRevenueMap).reduce((s, r) => s + r.revenue, 0);
+  const totalViews = channels.reduce((s, ch) => s + Number(ch.statistics?.viewCount || 0), 0);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 text-sm text-muted">
         <span>Reports</span>
-        <span>›</span>
+        <span>&rsaquo;</span>
         <span className="text-foreground font-medium">Channel Revenue</span>
       </div>
 
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Channel Revenue</h1>
-          <p className="text-sm text-muted mt-1">Revenue breakdown by channel.</p>
+          <p className="text-sm text-muted mt-1">Revenue breakdown by channel with RPM.</p>
         </div>
         <div className="flex items-center gap-3">
           {isReal && (
@@ -76,13 +145,18 @@ export default function ChannelRevenuePage() {
             onClick={() => {
               if (channels.length > 0) {
                 downloadCSV(
-                  ["Channel", "Subscribers", "Videos", "Views"],
-                  channels.map((ch) => [
-                    ch.snippet?.title || "",
-                    Number(ch.statistics?.subscriberCount || 0),
-                    Number(ch.statistics?.videoCount || 0),
-                    Number(ch.statistics?.viewCount || 0),
-                  ]),
+                  ["Channel", "Subscribers", "Videos", "Views", "Est. Revenue ($)", "RPM ($)"],
+                  channels.map((ch) => {
+                    const revInfo = channelRevenueMap[ch.id || ""];
+                    return [
+                      ch.snippet?.title || "",
+                      Number(ch.statistics?.subscriberCount || 0),
+                      Number(ch.statistics?.videoCount || 0),
+                      Number(ch.statistics?.viewCount || 0),
+                      revInfo ? revInfo.revenue.toFixed(2) : "0.00",
+                      revInfo ? revInfo.rpm.toFixed(2) : "0.00",
+                    ];
+                  }),
                   "channel-revenue-report"
                 );
               }
@@ -95,10 +169,38 @@ export default function ChannelRevenuePage() {
         </div>
       </div>
 
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-border p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted uppercase tracking-wide">Total Est. Revenue</p>
+              <p className="text-xl font-bold text-foreground">{formatCurrency(totalRevenue)}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-border p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted uppercase tracking-wide">Avg. RPM</p>
+              <p className="text-xl font-bold text-foreground">
+                ${totalViews > 0 ? ((totalRevenue / totalViews) * 1000).toFixed(2) : "0.00"}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {loading && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          <span className="ml-2 text-sm text-muted">Loading...</span>
+          <span className="ml-2 text-sm text-muted">Loading channel revenue data...</span>
         </div>
       )}
 
@@ -108,42 +210,76 @@ export default function ChannelRevenuePage() {
             <thead>
               <tr className="bg-slate-50 border-b border-border">
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Channel</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Subscribers</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Videos</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Views</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Est. Revenue</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">RPM</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground">Subscribers</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground">Videos</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground">Views</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground">Est. Revenue</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground">RPM</th>
               </tr>
             </thead>
             <tbody>
-              {channels.map((ch) => (
-                <tr key={ch.id} className="border-b border-border hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 shrink-0">
-                        {(ch.snippet?.thumbnails?.default?.url || ch.snippet?.thumbnails?.medium?.url) && (
-                          <img
-                            src={ch.snippet?.thumbnails?.default?.url || ch.snippet?.thumbnails?.medium?.url || ""}
-                            alt=""
-                            className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                        )}
+              {channels.map((ch) => {
+                const revInfo = channelRevenueMap[ch.id || ""];
+                const revenue = revInfo?.revenue || 0;
+                const rpm = revInfo?.rpm || 0;
+
+                return (
+                  <tr key={ch.id} className="border-b border-border hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 shrink-0">
+                          {(ch.snippet?.thumbnails?.default?.url || ch.snippet?.thumbnails?.medium?.url) && (
+                            <img
+                              src={ch.snippet?.thumbnails?.default?.url || ch.snippet?.thumbnails?.medium?.url || ""}
+                              alt=""
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          )}
+                        </div>
+                        <span className="font-medium text-foreground">{ch.snippet?.title}</span>
                       </div>
-                      <span className="font-medium text-foreground">{ch.snippet?.title}</span>
-                    </div>
+                    </td>
+                    <td className="px-4 py-3 text-right text-foreground">{formatNumber(Number(ch.statistics?.subscriberCount || 0))}</td>
+                    <td className="px-4 py-3 text-right text-foreground">{Number(ch.statistics?.videoCount || 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-foreground">{formatNumber(Number(ch.statistics?.viewCount || 0))}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={`font-medium ${revenue > 0 ? "text-green-600" : "text-muted"}`}>
+                        {revenue > 0 ? formatCurrency(revenue) : "$0.00"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={`${rpm > 0 ? "text-foreground" : "text-muted"}`}>
+                        ${rpm > 0 ? rpm.toFixed(2) : "0.00"}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {channels.length > 1 && (
+                <tr className="bg-slate-50 font-semibold">
+                  <td className="px-4 py-3 text-foreground">Total ({channels.length} channels)</td>
+                  <td className="px-4 py-3 text-right text-foreground">
+                    {formatNumber(channels.reduce((s, ch) => s + Number(ch.statistics?.subscriberCount || 0), 0))}
                   </td>
-                  <td className="px-4 py-3 text-foreground">{formatNumber(Number(ch.statistics?.subscriberCount || 0))}</td>
-                  <td className="px-4 py-3 text-foreground">{Number(ch.statistics?.videoCount || 0).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-foreground">{formatNumber(Number(ch.statistics?.viewCount || 0))}</td>
-                  <td className="px-4 py-3 text-foreground font-medium">--</td>
-                  <td className="px-4 py-3 text-foreground">--</td>
+                  <td className="px-4 py-3 text-right text-foreground">
+                    {channels.reduce((s, ch) => s + Number(ch.statistics?.videoCount || 0), 0).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-right text-foreground">
+                    {formatNumber(totalViews)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-green-600">
+                    {formatCurrency(totalRevenue)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-foreground">
+                    ${totalViews > 0 ? ((totalRevenue / totalViews) * 1000).toFixed(2) : "0.00"}
+                  </td>
                 </tr>
-              ))}
+              )}
               {channels.length === 0 && !loading && (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-muted">
-                    No channels found
+                    No channels found. Add channels first to see revenue data.
                   </td>
                 </tr>
               )}
