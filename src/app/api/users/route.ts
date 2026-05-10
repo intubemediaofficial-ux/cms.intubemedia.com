@@ -219,6 +219,57 @@ export async function PUT(request: Request) {
   }
 }
 
+// PATCH: Allow logged-in client to sync their localStorage channels to KV
+export async function PATCH(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { channels } = body;
+
+    if (!Array.isArray(channels)) {
+      return Response.json({ error: "channels array required" }, { status: 400 });
+    }
+
+    // Only allow valid-looking channel IDs
+    const validChannels = channels.filter((c: unknown) => typeof c === "string" && (c as string).length > 0);
+
+    const users = await getUsers();
+    const userEmail = session.user.email.toLowerCase();
+    const idx = users.findIndex((u) => u.email.toLowerCase() === userEmail);
+
+    if (idx === -1) {
+      return Response.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Merge: add new channels from client, keep any admin-added channels that client doesn't have
+    const existingChannels = new Set(users[idx].channels);
+    for (const ch of validChannels) {
+      existingChannels.add(ch);
+    }
+    // Remove test/placeholder channels if real ones are being synced
+    const realChannels = Array.from(existingChannels).filter((ch) => {
+      if (ch.startsWith("UCtest") || ch === "test") return false;
+      return true;
+    });
+
+    users[idx].channels = realChannels.length > 0 ? realChannels : Array.from(existingChannels);
+
+    const saved = await saveUsers(users);
+    if (!saved) {
+      return Response.json({ error: "Failed to sync channels" }, { status: 500 });
+    }
+
+    return Response.json({ data: { success: true, channels: users[idx].channels } });
+  } catch (error) {
+    console.error("[Users] Error syncing channels:", error);
+    return Response.json({ error: "Failed to sync channels" }, { status: 500 });
+  }
+}
+
 export async function DELETE(request: Request) {
   if (!(await isAdmin())) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });

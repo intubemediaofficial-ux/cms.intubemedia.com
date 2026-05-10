@@ -147,6 +147,7 @@ export default function AdminVideosPage() {
   const [loadingVideos, setLoadingVideos] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [monetizationFilter, setMonetizationFilter] = useState<MonetizationFilter>("all");
+  const [privacyFilter, setPrivacyFilter] = useState<string>("all");
 
   // Add claim modal
   const [showAddClaim, setShowAddClaim] = useState(false);
@@ -211,21 +212,50 @@ export default function AdminVideosPage() {
     }
   }, [status, session, fetchClients, fetchClaims]);
 
+  // Also fetch real channel IDs from cached data (in case KV has test IDs)
+  const [cachedChannelIds, setCachedChannelIds] = useState<string[]>([]);
+  useEffect(() => {
+    fetch("/api/client-data?action=getAllCachedData")
+      .then((r) => r.json())
+      .then((j) => {
+        const ids: string[] = [];
+        for (const cd of (j.data || [])) {
+          for (const ch of (cd.channels || [])) {
+            if (ch.channelId && !ch.channelId.startsWith("UCtest")) {
+              ids.push(ch.channelId);
+            }
+          }
+        }
+        setCachedChannelIds(ids);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (selectedClient === "all") {
-      const allChannels = clients.reduce<string[]>((acc, c) => [...acc, ...c.channels], []);
-      fetchVideosForChannels(allChannels);
+      const kvChannels = clients.reduce<string[]>((acc, c) => [...acc, ...c.channels], []);
+      // Merge KV channels + cached channels (dedup), skip test IDs
+      const allSet = new Set([...kvChannels, ...cachedChannelIds].filter((id) => !id.startsWith("UCtest") && id !== "test"));
+      fetchVideosForChannels(Array.from(allSet));
     } else {
       const client = clients.find((c) => c.id === selectedClient);
       fetchVideosForChannels(client?.channels || []);
     }
-  }, [selectedClient, clients, fetchVideosForChannels]);
+  }, [selectedClient, clients, cachedChannelIds, fetchVideosForChannels]);
 
   const filteredVideos = useMemo(() => {
     return videos.filter((video) => {
       const title = video.snippet?.title || "";
       const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
+
+      // Privacy filter
+      if (privacyFilter !== "all") {
+        const privacy = video.status?.privacyStatus?.toLowerCase() || "public";
+        if (privacyFilter !== privacy) return false;
+      }
+
+      // Monetization filter
       if (monetizationFilter === "all") return true;
       const mStatus = getMonetizationStatus(video, claims);
       switch (monetizationFilter) {
@@ -237,19 +267,28 @@ export default function AdminVideosPage() {
         default: return true;
       }
     });
-  }, [videos, searchQuery, monetizationFilter, claims]);
+  }, [videos, searchQuery, monetizationFilter, privacyFilter, claims]);
 
   const claimStats = useMemo(() => {
     let copyrightClaims = 0;
     let contentIdClaims = 0;
     let monetized = 0;
+    let publicCount = 0;
+    let privateCount = 0;
+    let unlistedCount = 0;
+    let draftCount = 0;
     for (const v of videos) {
       const s = getMonetizationStatus(v, claims);
       if (s.claimType === "copyright") copyrightClaims++;
       else if (s.claimType === "content_id") contentIdClaims++;
       if (s.isMonetized && !s.hasActiveClaim) monetized++;
+      const privacy = v.status?.privacyStatus?.toLowerCase() || "public";
+      if (privacy === "public") publicCount++;
+      else if (privacy === "private") privateCount++;
+      else if (privacy === "unlisted") unlistedCount++;
+      else draftCount++;
     }
-    return { total: videos.length, copyrightClaims, contentIdClaims, monetized };
+    return { total: videos.length, copyrightClaims, contentIdClaims, monetized, publicCount, privateCount, unlistedCount, draftCount };
   }, [videos, claims]);
 
   const handleAddClaim = async () => {
@@ -447,6 +486,17 @@ export default function AdminVideosPage() {
               <option value="copyright_claim">Copyright Claim</option>
               <option value="content_id_claim">Content ID Claim</option>
               <option value="no_claim">No Claim</option>
+            </select>
+            <select
+              value={privacyFilter}
+              onChange={(e) => setPrivacyFilter(e.target.value)}
+              className="border border-border rounded-lg px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="all">All Privacy ({claimStats.total})</option>
+              <option value="public">Public ({claimStats.publicCount})</option>
+              <option value="private">Private ({claimStats.privateCount})</option>
+              <option value="unlisted">Unlisted ({claimStats.unlistedCount})</option>
+              <option value="draft">Draft ({claimStats.draftCount})</option>
             </select>
             <button
               onClick={handleExportCSV}
