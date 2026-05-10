@@ -166,13 +166,21 @@ export async function getChannelVideos(
 
   if (allVideoIds.length === 0) return [];
 
-  // Fetch full video details (up to 50 per call)
-  const videoResponse = await youtube.videos.list({
-    part: ["snippet", "statistics", "contentDetails", "status"],
-    id: allVideoIds,
-  });
+  // Fetch full video details in batches of 50
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allItems: any[] = [];
+  for (let i = 0; i < allVideoIds.length; i += 50) {
+    const batch = allVideoIds.slice(i, i + 50);
+    const videoResponse = await youtube.videos.list({
+      part: ["snippet", "statistics", "contentDetails", "status"],
+      id: batch,
+    });
+    if (videoResponse.data.items) {
+      allItems.push(...videoResponse.data.items);
+    }
+  }
 
-  return videoResponse.data.items || [];
+  return allItems;
 }
 
 export async function getAnalyticsData(

@@ -434,6 +434,22 @@ export default function AdminDashboardPage() {
             }}
           />
         </div>
+        {/* Token status info */}
+        {!ytLoading && (dashData?.tokenizedChannels?.length || 0) === 0 && allChannelIds.length > 0 && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+            <strong>No channel tokens found.</strong> Analytics data requires valid OAuth tokens for each channel.
+            Clients need to validate their channel tokens via the OAuth invite link in Channels page, or admin needs to login with Google.
+            <span className="block mt-1 text-xs text-amber-600">
+              Channels without tokens: {allChannelIds.length} | With tokens: {dashData?.tokenizedChannels?.length || 0}
+            </span>
+          </div>
+        )}
+        {!ytLoading && (dashData?.tokenizedChannels?.length || 0) > 0 && (dashData?.tokenizedChannels?.length || 0) < allChannelIds.length && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+            Showing analytics for <strong>{dashData?.tokenizedChannels?.length || 0}</strong> of <strong>{allChannelIds.length}</strong> channels with valid tokens.
+            Remaining channels need token validation.
+          </div>
+        )}
         {ytLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-5 h-5 animate-spin text-primary" />

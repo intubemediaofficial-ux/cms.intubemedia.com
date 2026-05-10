@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Search,
   Play,
@@ -19,6 +19,11 @@ import {
   X,
   MoreHorizontal,
   Image,
+  DollarSign,
+  ShieldAlert,
+  CheckCircle,
+  XCircle,
+  Filter,
 } from "lucide-react";
 import { signIn, useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
@@ -36,6 +41,7 @@ interface VideoItem {
     title?: string | null;
     description?: string | null;
     channelId?: string | null;
+    channelTitle?: string | null;
     publishedAt?: string | null;
     thumbnails?: {
       medium?: { url?: string | null } | null;
@@ -49,10 +55,23 @@ interface VideoItem {
   } | null;
   contentDetails?: {
     duration?: string | null;
+    licensedContent?: boolean | null;
   } | null;
   status?: {
     privacyStatus?: string | null;
+    license?: string | null;
+    madeForKids?: boolean | null;
   } | null;
+}
+
+interface VideoClaim {
+  videoId: string;
+  channelId: string;
+  claimType: "copyright" | "content_id" | "manual";
+  claimant: string;
+  status: "active" | "released" | "disputed";
+  notes: string;
+  createdDate: string;
 }
 
 function parseDuration(isoDuration: string | null | undefined): string {
@@ -78,6 +97,58 @@ function getActiveChannelIds(): string[] {
   }
 }
 
+type MonetizationFilter = "all" | "monetized" | "not_monetized" | "copyright_claim" | "content_id_claim" | "no_claim";
+
+function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
+  isMonetized: boolean;
+  hasActiveClaim: boolean;
+  claimType: string | null;
+  claimant: string | null;
+  label: string;
+  color: string;
+} {
+  const activeClaims = claims.filter(
+    (c) => c.videoId === video.id && c.status === "active"
+  );
+  const hasActiveClaim = activeClaims.length > 0;
+  const isLicensed = video.contentDetails?.licensedContent === true;
+  const isMonetized = isLicensed || !hasActiveClaim;
+
+  if (hasActiveClaim) {
+    const claim = activeClaims[0];
+    const typeLabel = claim.claimType === "copyright" ? "Copyright Claim" :
+                      claim.claimType === "content_id" ? "Content ID Claim" : "Manual Claim";
+    return {
+      isMonetized: false,
+      hasActiveClaim: true,
+      claimType: claim.claimType,
+      claimant: claim.claimant,
+      label: typeLabel,
+      color: "bg-red-100 text-red-700",
+    };
+  }
+
+  if (isLicensed) {
+    return {
+      isMonetized: true,
+      hasActiveClaim: false,
+      claimType: null,
+      claimant: null,
+      label: "Monetized",
+      color: "bg-green-100 text-green-700",
+    };
+  }
+
+  return {
+    isMonetized: true,
+    hasActiveClaim: false,
+    claimType: null,
+    claimant: null,
+    label: "No Claim",
+    color: "bg-slate-100 text-slate-600",
+  };
+}
+
 export default function VideosPage() {
   const { data: session, status: sessionStatus } = useSession();
   const hasAccessToken = !!session?.accessToken;
@@ -86,11 +157,11 @@ export default function VideosPage() {
 
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
   const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [claims, setClaims] = useState<VideoClaim[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isReal, setIsReal] = useState(false);
 
-  // Edit modal
   const [editVideo, setEditVideo] = useState<VideoItem | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
@@ -98,15 +169,25 @@ export default function VideosPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
-  // Delete confirm
   const [deleteVideo, setDeleteVideo] = useState<VideoItem | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Action menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     setActiveChannelIds(getActiveChannelIds());
+  }, []);
+
+  const fetchClaims = useCallback(async () => {
+    try {
+      const res = await fetch("/api/video-claims");
+      if (res.ok) {
+        const json = await res.json();
+        setClaims(json.data || []);
+      }
+    } catch {
+      // silent
+    }
   }, []);
 
   const fetchVideos = useCallback(async () => {
@@ -139,20 +220,81 @@ export default function VideosPage() {
 
   useEffect(() => {
     fetchVideos();
-  }, [fetchVideos]);
+    if (isAuthenticated) fetchClaims();
+  }, [fetchVideos, fetchClaims, isAuthenticated]);
 
   const hasNoChannelsAdded = activeChannelIds.length === 0;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "public" | "private" | "unlisted">("all");
+  const [monetizationFilter, setMonetizationFilter] = useState<MonetizationFilter>("all");
 
-  const filteredVideos = (isReal ? videos : []).filter((video) => {
-    const title = video.snippet?.title || "";
-    const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase());
-    const privacy = video.status?.privacyStatus || "public";
-    const matchesStatus = statusFilter === "all" || privacy === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredVideos = useMemo(() => {
+    return (isReal ? videos : []).filter((video) => {
+      const title = video.snippet?.title || "";
+      const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase());
+      const privacy = video.status?.privacyStatus || "public";
+      const matchesStatus = statusFilter === "all" || privacy === statusFilter;
+
+      if (!matchesSearch || !matchesStatus) return false;
+
+      if (monetizationFilter === "all") return true;
+
+      const mStatus = getMonetizationStatus(video, claims);
+      switch (monetizationFilter) {
+        case "monetized": return mStatus.isMonetized && !mStatus.hasActiveClaim;
+        case "not_monetized": return !mStatus.isMonetized;
+        case "copyright_claim": return mStatus.hasActiveClaim && mStatus.claimType === "copyright";
+        case "content_id_claim": return mStatus.hasActiveClaim && mStatus.claimType === "content_id";
+        case "no_claim": return !mStatus.hasActiveClaim;
+        default: return true;
+      }
+    });
+  }, [videos, isReal, searchQuery, statusFilter, monetizationFilter, claims]);
+
+  const claimStats = useMemo(() => {
+    const total = videos.length;
+    let copyrightClaims = 0;
+    let contentIdClaims = 0;
+    let monetized = 0;
+    for (const v of videos) {
+      const status = getMonetizationStatus(v, claims);
+      if (status.claimType === "copyright") copyrightClaims++;
+      else if (status.claimType === "content_id") contentIdClaims++;
+      if (status.isMonetized && !status.hasActiveClaim) monetized++;
+    }
+    return { total, copyrightClaims, contentIdClaims, monetized, noClaim: total - copyrightClaims - contentIdClaims };
+  }, [videos, claims]);
+
+  const handleExportCSV = () => {
+    const headers = ["Video Title", "Video ID", "Channel", "Privacy", "Monetization Status", "Claim Type", "Claimant", "Views", "Likes", "Comments", "Duration", "Published Date"];
+    const rows = filteredVideos.map((v) => {
+      const mStatus = getMonetizationStatus(v, claims);
+      return [
+        (v.snippet?.title || "").replace(/,/g, " "),
+        v.id || "",
+        v.snippet?.channelTitle || v.snippet?.channelId || "",
+        v.status?.privacyStatus || "public",
+        mStatus.label,
+        mStatus.claimType || "-",
+        mStatus.claimant || "-",
+        v.statistics?.viewCount || "0",
+        v.statistics?.likeCount || "0",
+        v.statistics?.commentCount || "0",
+        parseDuration(v.contentDetails?.duration),
+        v.snippet?.publishedAt ? new Date(v.snippet.publishedAt).toLocaleDateString() : "-",
+      ];
+    });
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const filterLabel = monetizationFilter !== "all" ? `_${monetizationFilter}` : "";
+    a.download = `videos_report${filterLabel}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const isLoading = loading;
 
@@ -169,7 +311,6 @@ export default function VideosPage() {
     if (!editVideo?.id || !editVideo.snippet?.channelId) return;
     setEditSaving(true);
     setEditError("");
-
     try {
       const res = await fetch("/api/youtube/video", {
         method: "PUT",
@@ -258,7 +399,7 @@ export default function VideosPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Videos</h1>
           <p className="text-sm text-muted mt-1">
-            Manage your YouTube videos — edit, delete, change privacy, and more.
+            Manage your YouTube videos — edit, delete, change privacy, and view monetization status.
           </p>
         </div>
       </div>
@@ -323,208 +464,277 @@ export default function VideosPage() {
       )}
 
       {isAuthenticated && !hasNoChannelsAdded && !isLoading && isReal && (
-        <div className="bg-white rounded-xl border border-border p-5">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-            <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search videos..."
-                className="w-full pl-10 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-muted-light"
-              />
+        <>
+          {/* Monetization Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl border border-border p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Play className="w-4 h-4 text-blue-500" />
+                <span className="text-xs font-medium text-muted">Total Videos</span>
+              </div>
+              <p className="text-xl font-bold text-foreground">{claimStats.total}</p>
             </div>
-            <div className="flex items-center gap-3">
-              <select
-                value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(e.target.value as "all" | "public" | "private" | "unlisted")
-                }
-                className="border border-border rounded-lg px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                <option value="all">All Status</option>
-                <option value="public">Public</option>
-                <option value="private">Private</option>
-                <option value="unlisted">Unlisted</option>
-              </select>
-              <button className="flex items-center gap-2 border border-border px-3 py-2 rounded-lg text-sm text-muted hover:bg-slate-50 transition-colors">
-                <Download className="w-4 h-4" />
-                Export
-              </button>
+            <div className="bg-white rounded-xl border border-border p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle className="w-4 h-4 text-green-500" />
+                <span className="text-xs font-medium text-muted">Monetized</span>
+              </div>
+              <p className="text-xl font-bold text-green-600">{claimStats.monetized}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-border p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <ShieldAlert className="w-4 h-4 text-red-500" />
+                <span className="text-xs font-medium text-muted">Copyright Claims</span>
+              </div>
+              <p className="text-xl font-bold text-red-600">{claimStats.copyrightClaims}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-border p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <DollarSign className="w-4 h-4 text-orange-500" />
+                <span className="text-xs font-medium text-muted">Content ID Claims</span>
+              </div>
+              <p className="text-xl font-bold text-orange-600">{claimStats.contentIdClaims}</p>
             </div>
           </div>
 
-          {filteredVideos.length === 0 ? (
-            <div className="text-center py-10 text-sm text-muted">
-              {videos.length === 0 ? "No videos found on your channel" : "No videos match your search"}
+          {/* Filters and Table */}
+          <div className="bg-white rounded-xl border border-border p-5">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search videos..."
+                  className="w-full pl-10 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-muted-light"
+                />
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <select
+                  value={statusFilter}
+                  onChange={(e) =>
+                    setStatusFilter(e.target.value as "all" | "public" | "private" | "unlisted")
+                  }
+                  className="border border-border rounded-lg px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="all">All Status</option>
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                  <option value="unlisted">Unlisted</option>
+                </select>
+                <select
+                  value={monetizationFilter}
+                  onChange={(e) => setMonetizationFilter(e.target.value as MonetizationFilter)}
+                  className="border border-border rounded-lg px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="all">All Monetization</option>
+                  <option value="monetized">Monetized</option>
+                  <option value="not_monetized">Not Monetized</option>
+                  <option value="copyright_claim">Copyright Claim</option>
+                  <option value="content_id_claim">Content ID Claim</option>
+                  <option value="no_claim">No Claim</option>
+                </select>
+                <button
+                  onClick={handleExportCSV}
+                  className="flex items-center gap-2 border border-border px-3 py-2 rounded-lg text-sm text-muted hover:bg-slate-50 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Export Report
+                </button>
+              </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
-                      Video
-                    </th>
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
-                      Views
-                    </th>
-                    <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
-                      Likes
-                    </th>
-                    <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
-                      Comments
-                    </th>
-                    <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
-                      Duration
-                    </th>
-                    <th className="text-center py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredVideos.map((video) => {
-                    const thumbnail = video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url || "";
-                    const privacy = video.status?.privacyStatus || "public";
-                    const publishedDate = video.snippet?.publishedAt
-                      ? new Date(video.snippet.publishedAt).toLocaleDateString()
-                      : "-";
 
-                    return (
-                      <tr
-                        key={video.id}
-                        className="border-b border-border/50 hover:bg-slate-50 transition-colors"
-                      >
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-20 h-12 bg-slate-200 rounded-lg overflow-hidden shrink-0">
-                              {thumbnail && (
-                                <img
-                                  src={thumbnail}
-                                  alt={video.snippet?.title || ""}
-                                  className="w-full h-full object-cover"
-                                />
+            {filteredVideos.length === 0 ? (
+              <div className="text-center py-10 text-sm text-muted">
+                {videos.length === 0 ? "No videos found on your channel" : "No videos match your filters"}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                        Video
+                      </th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                        Monetization
+                      </th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                        Views
+                      </th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                        Likes
+                      </th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                        Duration
+                      </th>
+                      <th className="text-center py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredVideos.map((video) => {
+                      const thumbnail = video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url || "";
+                      const privacy = video.status?.privacyStatus || "public";
+                      const publishedDate = video.snippet?.publishedAt
+                        ? new Date(video.snippet.publishedAt).toLocaleDateString()
+                        : "-";
+                      const mStatus = getMonetizationStatus(video, claims);
+
+                      return (
+                        <tr
+                          key={video.id}
+                          className="border-b border-border/50 hover:bg-slate-50 transition-colors"
+                        >
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-20 h-12 bg-slate-200 rounded-lg overflow-hidden shrink-0">
+                                {thumbnail && (
+                                  <img
+                                    src={thumbnail}
+                                    alt={video.snippet?.title || ""}
+                                    className="w-full h-full object-cover"
+                                  />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate max-w-[250px]">
+                                  {video.snippet?.title || "Untitled"}
+                                </p>
+                                <p className="text-xs text-muted mt-0.5">
+                                  {publishedDate}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${getPrivacyColor(privacy)}`}>
+                              {getPrivacyIcon(privacy)}
+                              {privacy}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div>
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${mStatus.color}`}>
+                                {mStatus.hasActiveClaim ? (
+                                  <ShieldAlert className="w-3 h-3" />
+                                ) : mStatus.isMonetized ? (
+                                  <CheckCircle className="w-3 h-3" />
+                                ) : (
+                                  <XCircle className="w-3 h-3" />
+                                )}
+                                {mStatus.label}
+                              </span>
+                              {mStatus.claimant && (
+                                <p className="text-xs text-muted mt-0.5 truncate max-w-[150px]">
+                                  by {mStatus.claimant}
+                                </p>
                               )}
                             </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-foreground truncate max-w-[250px]">
-                                {video.snippet?.title || "Untitled"}
-                              </p>
-                              <p className="text-xs text-muted mt-0.5">
-                                {publishedDate}
-                              </p>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <span className="text-sm text-foreground flex items-center justify-end gap-1">
+                              <Eye className="w-3.5 h-3.5 text-muted" />
+                              {formatNumber(Number(video.statistics?.viewCount || 0))}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <span className="text-sm text-foreground flex items-center justify-end gap-1">
+                              <ThumbsUp className="w-3.5 h-3.5 text-muted" />
+                              {formatNumber(Number(video.statistics?.likeCount || 0))}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <span className="text-sm text-muted">
+                              {parseDuration(video.contentDetails?.duration)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <div className="relative inline-block">
+                              <button
+                                onClick={() => setOpenMenuId(openMenuId === video.id ? null : (video.id || null))}
+                                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                              >
+                                <MoreHorizontal className="w-4 h-4 text-muted" />
+                              </button>
+                              {openMenuId === video.id && (
+                                <div className="absolute right-0 top-8 bg-white border border-border rounded-lg shadow-lg z-20 w-48 py-1">
+                                  <button
+                                    onClick={() => openEdit(video)}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-slate-50"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" /> Edit Title / Description
+                                  </button>
+                                  <button
+                                    onClick={() => { window.open(`https://studio.youtube.com/video/${video.id}/edit`, "_blank"); setOpenMenuId(null); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-slate-50"
+                                  >
+                                    <Image className="w-3.5 h-3.5" /> Change Thumbnail
+                                  </button>
+                                  <div className="border-t border-border my-1" />
+                                  <button
+                                    onClick={() => handlePrivacyChange(video, "public")}
+                                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${privacy === "public" ? "text-green-600 font-medium" : "text-foreground"}`}
+                                  >
+                                    <Globe className="w-3.5 h-3.5" /> Public
+                                  </button>
+                                  <button
+                                    onClick={() => handlePrivacyChange(video, "private")}
+                                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${privacy === "private" ? "text-red-600 font-medium" : "text-foreground"}`}
+                                  >
+                                    <Lock className="w-3.5 h-3.5" /> Private
+                                  </button>
+                                  <button
+                                    onClick={() => handlePrivacyChange(video, "unlisted")}
+                                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${privacy === "unlisted" ? "text-yellow-600 font-medium" : "text-foreground"}`}
+                                  >
+                                    <EyeOff className="w-3.5 h-3.5" /> Unlisted
+                                  </button>
+                                  <div className="border-t border-border my-1" />
+                                  <a
+                                    href={`https://www.youtube.com/watch?v=${video.id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => setOpenMenuId(null)}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-slate-50"
+                                  >
+                                    <Play className="w-3.5 h-3.5" /> Watch on YouTube
+                                  </a>
+                                  <button
+                                    onClick={() => { setDeleteVideo(video); setOpenMenuId(null); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" /> Delete Video
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${getPrivacyColor(privacy)}`}>
-                            {getPrivacyIcon(privacy)}
-                            {privacy}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <span className="text-sm text-foreground flex items-center justify-end gap-1">
-                            <Eye className="w-3.5 h-3.5 text-muted" />
-                            {formatNumber(Number(video.statistics?.viewCount || 0))}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <span className="text-sm text-foreground flex items-center justify-end gap-1">
-                            <ThumbsUp className="w-3.5 h-3.5 text-muted" />
-                            {formatNumber(Number(video.statistics?.likeCount || 0))}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <span className="text-sm text-foreground flex items-center justify-end gap-1">
-                            <MessageSquare className="w-3.5 h-3.5 text-muted" />
-                            {formatNumber(Number(video.statistics?.commentCount || 0))}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <span className="text-sm text-muted">
-                            {parseDuration(video.contentDetails?.duration)}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <div className="relative inline-block">
-                            <button
-                              onClick={() => setOpenMenuId(openMenuId === video.id ? null : (video.id || null))}
-                              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                              <MoreHorizontal className="w-4 h-4 text-muted" />
-                            </button>
-                            {openMenuId === video.id && (
-                              <div className="absolute right-0 top-8 bg-white border border-border rounded-lg shadow-lg z-20 w-48 py-1">
-                                <button
-                                  onClick={() => openEdit(video)}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-slate-50"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" /> Edit Title / Description
-                                </button>
-                                <button
-                                  onClick={() => { window.open(`https://studio.youtube.com/video/${video.id}/edit`, "_blank"); setOpenMenuId(null); }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-slate-50"
-                                >
-                                  <Image className="w-3.5 h-3.5" /> Change Thumbnail
-                                </button>
-                                <div className="border-t border-border my-1" />
-                                <button
-                                  onClick={() => handlePrivacyChange(video, "public")}
-                                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${privacy === "public" ? "text-green-600 font-medium" : "text-foreground"}`}
-                                >
-                                  <Globe className="w-3.5 h-3.5" /> Public
-                                </button>
-                                <button
-                                  onClick={() => handlePrivacyChange(video, "private")}
-                                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${privacy === "private" ? "text-red-600 font-medium" : "text-foreground"}`}
-                                >
-                                  <Lock className="w-3.5 h-3.5" /> Private
-                                </button>
-                                <button
-                                  onClick={() => handlePrivacyChange(video, "unlisted")}
-                                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${privacy === "unlisted" ? "text-yellow-600 font-medium" : "text-foreground"}`}
-                                >
-                                  <EyeOff className="w-3.5 h-3.5" /> Unlisted
-                                </button>
-                                <div className="border-t border-border my-1" />
-                                <a
-                                  href={`https://www.youtube.com/watch?v=${video.id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={() => setOpenMenuId(null)}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-slate-50"
-                                >
-                                  <Play className="w-3.5 h-3.5" /> Watch on YouTube
-                                </a>
-                                <button
-                                  onClick={() => { setDeleteVideo(video); setOpenMenuId(null); }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" /> Delete Video
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-            <p className="text-sm text-muted">
-              Showing {filteredVideos.length} of {videos.length} videos
-            </p>
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+              <p className="text-sm text-muted">
+                Showing {filteredVideos.length} of {videos.length} videos
+                {monetizationFilter !== "all" && (
+                  <span className="ml-2 text-primary font-medium">
+                    (filtered: {monetizationFilter.replace(/_/g, " ")})
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Edit Video Modal */}
