@@ -77,7 +77,7 @@ const adminNavItems: NavItem[] = [
       { href: "/delinked-channels", label: "Delinked Channels", icon: Unlink },
     ],
   },
-  { href: "/videos", label: "Videos", icon: Video },
+  { href: "/admin-videos", label: "Videos & Claims", icon: Video },
   {
     href: "/reports",
     label: "Reports",
