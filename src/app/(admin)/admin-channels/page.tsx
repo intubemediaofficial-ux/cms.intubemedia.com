@@ -10,6 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  DollarSign,
+  Eye,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -63,6 +65,7 @@ type ChannelRow = {
   subscribers: number;
   videos: number;
   views: number;
+  revenue: number;
   clientName: string;
   category: string;
   tokenStatus?: string;
@@ -75,6 +78,7 @@ export default function AdminChannelsPage() {
 
   const [clients, setClients] = useState<Client[]>([]);
   const [channelDataMap, setChannelDataMap] = useState<Record<string, YouTubeChannel>>({});
+  const [channelRevenueMap, setChannelRevenueMap] = useState<Record<string, number>>({});
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [perPage, setPerPage] = useState(10);
@@ -131,28 +135,64 @@ export default function AdminChannelsPage() {
   }, [clients, isAuthenticated]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    const allIds = clients.flatMap((c) => c.channels).filter((id) => !channelDataMap[id]);
+    if (!isAuthenticated || clients.length === 0) return;
+    const allIds = clients.flatMap((c) => c.channels);
     if (allIds.length === 0) return;
 
     setLoadingChannels(true);
-    const allChannelIds = clients.flatMap((c) => c.channels);
     const fetchAll = async () => {
-      for (const id of allIds) {
+      const newMap: Record<string, YouTubeChannel> = {};
+      const revMap: Record<string, number> = {};
+
+      // First try to get cached data for all channels
+      try {
+        const cachedRes = await fetch("/api/client-data?action=getAllCachedData");
+        if (cachedRes.ok) {
+          const cachedJson = await cachedRes.json();
+          const cachedData = cachedJson.data || [];
+          for (const cd of cachedData) {
+            for (const ch of (cd.channels || [])) {
+              if (allIds.includes(ch.channelId)) {
+                newMap[ch.channelId] = {
+                  id: ch.channelId,
+                  snippet: {
+                    title: ch.channelTitle,
+                    thumbnails: { default: { url: ch.thumbnail }, medium: { url: ch.thumbnail } },
+                  },
+                  statistics: {
+                    subscriberCount: String(ch.subscribers || 0),
+                    videoCount: String(ch.videoCount || 0),
+                    viewCount: String(ch.views || 0),
+                  },
+                };
+                revMap[ch.channelId] = ch.estimatedRevenue || 0;
+              }
+            }
+          }
+        }
+      } catch { /* silent */ }
+
+      // Then try YouTube API for channels not in cache
+      const remainingIds = allIds.filter((id) => !newMap[id]);
+      for (const id of remainingIds) {
         try {
-          const res = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}&allChannelIds=${allChannelIds.join(",")}`);
+          const res = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}&allChannelIds=${allIds.join(",")}`);
           const json = await res.json();
           if (res.ok && json.data?.length) {
-            setChannelDataMap((prev) => ({ ...prev, [id]: json.data[0] }));
+            newMap[id] = json.data[0];
           }
         } catch {
           // skip
         }
       }
+
+      setChannelDataMap((prev) => ({ ...prev, ...newMap }));
+      setChannelRevenueMap((prev) => ({ ...prev, ...revMap }));
       setLoadingChannels(false);
     };
     fetchAll();
-  }, [isAuthenticated, clients, channelDataMap]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, clients]);
 
   const allChannelRows: ChannelRow[] = useMemo(() => {
     const rows: ChannelRow[] = [];
@@ -166,6 +206,7 @@ export default function AdminChannelsPage() {
           subscribers: Number(data?.statistics?.subscriberCount || 0),
           videos: Number(data?.statistics?.videoCount || 0),
           views: Number(data?.statistics?.viewCount || 0),
+          revenue: channelRevenueMap[chId] || 0,
           clientName: client.name,
           category: client.category,
           tokenStatus: tokenStatuses[chId] || "none",
@@ -173,7 +214,7 @@ export default function AdminChannelsPage() {
       }
     }
     return rows;
-  }, [clients, channelDataMap, tokenStatuses]);
+  }, [clients, channelDataMap, channelRevenueMap, tokenStatuses]);
 
   const filteredChannels = useMemo(() => {
     let result = allChannelRows;
@@ -213,7 +254,7 @@ export default function AdminChannelsPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-purple-50 border border-purple-200 rounded-xl p-5 flex items-center gap-4">
           <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center">
             <Radio className="w-6 h-6 text-white" />
@@ -221,6 +262,33 @@ export default function AdminChannelsPage() {
           <div>
             <p className="text-sm text-purple-600 font-medium">Total Channels</p>
             <p className="text-2xl font-bold text-purple-900">{allChannelRows.length}</p>
+          </div>
+        </div>
+        <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-4">
+          <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
+            <DollarSign className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <p className="text-sm text-green-600 font-medium">Total Revenue</p>
+            <p className="text-2xl font-bold text-green-900">${allChannelRows.reduce((s, c) => s + c.revenue, 0).toFixed(2)}</p>
+          </div>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
+            <Eye className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <p className="text-sm text-blue-600 font-medium">Total Subscribers</p>
+            <p className="text-2xl font-bold text-blue-900">{formatNumber(allChannelRows.reduce((s, c) => s + c.subscribers, 0))}</p>
+          </div>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-center gap-4">
+          <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center">
+            <Shield className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <p className="text-sm text-amber-600 font-medium">Valid Tokens</p>
+            <p className="text-2xl font-bold text-amber-900">{allChannelRows.filter(c => c.tokenStatus === "valid").length} / {allChannelRows.length}</p>
           </div>
         </div>
       </div>
@@ -282,6 +350,7 @@ export default function AdminChannelsPage() {
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Subscribers</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Videos</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Views</th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground">Revenue</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Client</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Category</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Token</th>
@@ -316,6 +385,7 @@ export default function AdminChannelsPage() {
                   <td className="px-4 py-3 text-foreground">{formatNumber(channel.subscribers)}</td>
                   <td className="px-4 py-3 text-foreground">{channel.videos.toLocaleString()}</td>
                   <td className="px-4 py-3 text-foreground">{formatNumber(channel.views)}</td>
+                  <td className="px-4 py-3 text-green-600 font-medium">${channel.revenue.toFixed(2)}</td>
                   <td className="px-4 py-3">
                     <span className="text-sm font-medium text-primary">{channel.clientName}</span>
                   </td>

@@ -171,27 +171,27 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
-  // Trigger server-side sync of all client YouTube data, then fetch cached data
+  // Fetch cached data first, then trigger server-side sync in background
   const fetchCachedData = useCallback(async () => {
     try {
-      // Trigger background sync — fetches YouTube data for all clients using stored tokens
-      fetch("/api/sync-client-data").catch(() => {});
-      // Also immediately load existing cached data
+      // 1. Load existing cached data immediately
       const res = await fetch("/api/client-data?action=getAllCachedData");
       if (res.ok) {
         const json = await res.json();
         setCachedClientData(json.data || []);
       }
-      // After sync completes, refresh cached data (delayed)
-      setTimeout(async () => {
-        try {
-          const res2 = await fetch("/api/client-data?action=getAllCachedData");
-          if (res2.ok) {
-            const json2 = await res2.json();
-            if (json2.data?.length) setCachedClientData(json2.data);
-          }
-        } catch { /* silent */ }
-      }, 15000);
+      // 2. Trigger background sync — fetches fresh YouTube data for all clients
+      setSyncing(true);
+      try {
+        await fetch("/api/sync-client-data");
+        // 3. Reload cached data after sync completes
+        const res2 = await fetch("/api/client-data?action=getAllCachedData");
+        if (res2.ok) {
+          const json2 = await res2.json();
+          if (json2.data?.length) setCachedClientData(json2.data);
+        }
+      } catch { /* silent */ }
+      finally { setSyncing(false); }
     } catch { /* silent */ }
   }, []);
 
@@ -444,6 +444,16 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {/* Syncing indicator */}
+      {syncing && cachedClientData.length === 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center gap-2">
+          <RefreshCw className="w-4 h-4 animate-spin text-yellow-600" />
+          <p className="text-sm text-yellow-700">
+            <strong>Syncing YouTube data for all clients...</strong> This may take a minute on first load.
+          </p>
+        </div>
+      )}
+
       {/* Cached Data Info */}
       {cachedClientData.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
@@ -588,8 +598,17 @@ export default function AdminDashboardPage() {
           if (totalCount === 0) return null;
           if (validCount === 0) return (
             <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-              <strong>No channel tokens found.</strong> Revenue & analytics data requires valid OAuth tokens.
-              Clients need to login with Google or validate their channel token via OAuth invite link.
+              {cachedClientData.length > 0 ? (
+                <>
+                  <strong>Showing cached data.</strong> Live YouTube API tokens not found — displaying last synced data.
+                  {syncing && <span className="ml-2 text-xs">(Syncing fresh data...)</span>}
+                </>
+              ) : (
+                <>
+                  <strong>No channel tokens found.</strong> Revenue & analytics data requires valid OAuth tokens.
+                  Click &quot;Sync YouTube Data&quot; or wait for clients to validate tokens.
+                </>
+              )}
               <span className="block mt-1 text-xs text-amber-600">
                 {totalCount} channel(s) without valid token
               </span>
