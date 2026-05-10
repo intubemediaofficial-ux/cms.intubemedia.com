@@ -21,9 +21,10 @@ import {
   Unlink,
   FileText,
   Shield,
-  ClipboardCheck,
   Music,
   ShieldCheck,
+  Globe,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -56,15 +57,7 @@ const clientNavItems: NavItem[] = [
       { href: "/reports/summary-channel", label: "Summary Channel", icon: FileText },
     ],
   },
-  {
-    href: "/onboarding-review",
-    label: "Onboarding Review",
-    icon: ClipboardCheck,
-    children: [
-      { href: "/onboarding-review/channel-revenue", label: "Channel Revenue", icon: FileText },
-      { href: "/onboarding-review/summary-channel", label: "Summary Channel", icon: FileText },
-    ],
-  },
+  { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/music-distribution", label: "Music Distribution", icon: Music },
   { href: "/claim-release", label: "Claim Release", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -73,7 +66,8 @@ const clientNavItems: NavItem[] = [
 const adminNavItems: NavItem[] = [
   { href: "/admin-dashboard", label: "Admin Dashboard", icon: Shield },
   { href: "/admin-clients", label: "User Management", icon: Users },
-  { href: "/dashboard", label: "CMS Dashboard", icon: LayoutDashboard },
+  { href: "/admin-networks", label: "Network Management", icon: Globe },
+  { href: "/dashboard", label: "Network Dashboard", icon: LayoutDashboard },
   {
     href: "/channels",
     label: "Channels",
@@ -94,15 +88,7 @@ const adminNavItems: NavItem[] = [
       { href: "/reports/summary-channel", label: "Summary Channel", icon: FileText },
     ],
   },
-  {
-    href: "/onboarding-review",
-    label: "Onboarding Review",
-    icon: ClipboardCheck,
-    children: [
-      { href: "/onboarding-review/channel-revenue", label: "Channel Revenue", icon: FileText },
-      { href: "/onboarding-review/summary-channel", label: "Summary Channel", icon: FileText },
-    ],
-  },
+  { href: "/admin-payments", label: "Payments", icon: CreditCard },
   { href: "/admin-distribution", label: "Music Distribution", icon: Music },
   { href: "/admin-claims", label: "Claim Release", icon: ShieldCheck },
   { href: "/admin-settings", label: "Settings", icon: Settings },

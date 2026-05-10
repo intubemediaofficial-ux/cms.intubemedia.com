@@ -7,6 +7,12 @@ export const dynamic = "force-dynamic";
 
 const USERS_KEY = "bainsla_users";
 
+export interface NetworkAssignment {
+  networkId: string;
+  networkName: string;
+  revenueSharePercent: number;
+}
+
 export interface StoredUser {
   id: string;
   name: string;
@@ -18,6 +24,7 @@ export interface StoredUser {
   joinedDate: string;
   category: string;
   role: "client";
+  networks?: NetworkAssignment[];
 }
 
 function hashPassword(password: string): string {
@@ -73,7 +80,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { name, email, password, phone, channels, category } = body;
+    const { name, email, password, phone, channels, category, networks } = body;
 
     if (!name || !email || !password) {
       return Response.json(
@@ -108,6 +115,7 @@ export async function POST(request: Request) {
       }),
       category: category || "Music",
       role: "client",
+      networks: networks || [],
     };
 
     users.push(newUser);
@@ -137,7 +145,7 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const { id, name, email, password, phone, channels, category, status } = body;
+    const { id, name, email, password, phone, channels, category, status, networks } = body;
 
     if (!id) {
       return Response.json({ error: "User ID is required" }, { status: 400 });
@@ -156,6 +164,7 @@ export async function PUT(request: Request) {
     if (channels) users[idx].channels = channels;
     if (category) users[idx].category = category;
     if (status) users[idx].status = status;
+    if (networks !== undefined) users[idx].networks = networks;
 
     const saved = await saveUsers(users);
     if (!saved) {
