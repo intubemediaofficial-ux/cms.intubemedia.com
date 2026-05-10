@@ -23,6 +23,7 @@ import {
   DollarSign,
   BarChart3,
   TrendingUp,
+  ArrowRightLeft,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -52,6 +53,13 @@ interface NetworkAssignment {
   revenueSharePercent: number;
 }
 
+interface ChannelNetworkAssignment {
+  channelId: string;
+  networkId: string;
+  networkName: string;
+  revenueSharePercent: number;
+}
+
 interface NetworkOption {
   id: string;
   name: string;
@@ -68,6 +76,7 @@ interface Client {
   joinedDate: string;
   category: string;
   networks?: NetworkAssignment[];
+  channelNetworks?: ChannelNetworkAssignment[];
 }
 
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
@@ -96,7 +105,15 @@ export default function AdminClientsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formNetworks, setFormNetworks] = useState<NetworkAssignment[]>([]);
+  const [formChannelNetworks, setFormChannelNetworks] = useState<ChannelNetworkAssignment[]>([]);
   const [availableNetworks, setAvailableNetworks] = useState<NetworkOption[]>([]);
+
+  // Channel transfer
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferChannelId, setTransferChannelId] = useState("");
+  const [transferFromUserId, setTransferFromUserId] = useState("");
+  const [transferToUserId, setTransferToUserId] = useState("");
+  const [transferring, setTransferring] = useState(false);
 
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -157,6 +174,7 @@ export default function AdminClientsPage() {
     setFormCategory("Music");
     setFormChannels("");
     setFormNetworks([]);
+    setFormChannelNetworks([]);
     setFormError(null);
     setEditingClient(null);
   };
@@ -175,6 +193,7 @@ export default function AdminClientsPage() {
     setFormCategory(client.category);
     setFormChannels(client.channels.join(", "));
     setFormNetworks(client.networks || []);
+    setFormChannelNetworks(client.channelNetworks || []);
     setFormError(null);
     setShowModal(true);
   };
@@ -219,6 +238,7 @@ export default function AdminClientsPage() {
           category: formCategory,
           channels: channelIds,
           networks: formNetworks,
+          channelNetworks: formChannelNetworks,
         };
         if (formPassword.trim()) {
           body.password = formPassword.trim();
@@ -246,6 +266,7 @@ export default function AdminClientsPage() {
             category: formCategory,
             channels: channelIds,
             networks: formNetworks,
+            channelNetworks: formChannelNetworks,
           }),
         });
         const data = await res.json();
@@ -263,6 +284,34 @@ export default function AdminClientsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleTransferChannel = async () => {
+    if (!transferFromUserId || !transferToUserId || !transferChannelId) return;
+    setTransferring(true);
+    try {
+      const res = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "transfer_channel",
+          fromUserId: transferFromUserId,
+          toUserId: transferToUserId,
+          channelId: transferChannelId,
+        }),
+      });
+      if (res.ok) {
+        setShowTransferModal(false);
+        setTransferChannelId("");
+        setTransferFromUserId("");
+        setTransferToUserId("");
+        fetchClients();
+        if (viewingClient) {
+          setViewingClient(null);
+        }
+      }
+    } catch { /* silent */ }
+    finally { setTransferring(false); }
   };
 
   const handleUpdatePassword = async () => {
@@ -873,6 +922,71 @@ export default function AdminClientsPage() {
                   </div>
                 )}
               </div>
+              {/* Per-Channel Network Assignment */}
+              {formChannels.trim() && availableNetworks.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Per-Channel Network & Revenue Share
+                  </label>
+                  <p className="text-xs text-muted mb-2">Assign each channel to a specific network with custom revenue share %</p>
+                  <div className="space-y-2">
+                    {formChannels.split(",").map((ch) => ch.trim()).filter((ch) => ch.length > 0).map((chId) => {
+                      const assigned = formChannelNetworks.find((cn) => cn.channelId === chId);
+                      return (
+                        <div key={chId} className="flex items-center gap-2 p-2 border border-border rounded-lg bg-slate-50">
+                          <span className="text-xs font-mono text-foreground flex-shrink-0 truncate max-w-[120px]" title={chId}>{chId}</span>
+                          <select
+                            value={assigned?.networkId || ""}
+                            onChange={(e) => {
+                              const netId = e.target.value;
+                              if (!netId) {
+                                setFormChannelNetworks(formChannelNetworks.filter((cn) => cn.channelId !== chId));
+                              } else {
+                                const net = availableNetworks.find((n) => n.id === netId);
+                                if (net) {
+                                  const existing = formChannelNetworks.find((cn) => cn.channelId === chId);
+                                  if (existing) {
+                                    setFormChannelNetworks(formChannelNetworks.map((cn) =>
+                                      cn.channelId === chId ? { ...cn, networkId: net.id, networkName: net.name } : cn
+                                    ));
+                                  } else {
+                                    setFormChannelNetworks([...formChannelNetworks, {
+                                      channelId: chId, networkId: net.id, networkName: net.name,
+                                      revenueSharePercent: net.revenueSharePercent,
+                                    }]);
+                                  }
+                                }
+                              }
+                            }}
+                            className="flex-1 px-2 py-1 border border-border rounded text-xs"
+                          >
+                            <option value="">No network</option>
+                            {availableNetworks.map((n) => (
+                              <option key={n.id} value={n.id}>{n.name}</option>
+                            ))}
+                          </select>
+                          {assigned && (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                value={assigned.revenueSharePercent}
+                                onChange={(e) => {
+                                  setFormChannelNetworks(formChannelNetworks.map((cn) =>
+                                    cn.channelId === chId ? { ...cn, revenueSharePercent: Number(e.target.value) || 0 } : cn
+                                  ));
+                                }}
+                                min="0" max="100"
+                                className="w-14 px-1 py-1 border border-border rounded text-xs text-center"
+                              />
+                              <span className="text-xs text-muted">%</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {formError && (
                 <p className="text-sm text-red-500">{formError}</p>
               )}
@@ -1054,6 +1168,7 @@ export default function AdminClientsPage() {
                         <th className="text-left px-4 py-2.5 font-semibold text-foreground">Views</th>
                         <th className="text-left px-4 py-2.5 font-semibold text-foreground">Videos</th>
                         <th className="text-left px-4 py-2.5 font-semibold text-foreground">Token</th>
+                        <th className="text-center px-4 py-2.5 font-semibold text-foreground">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1096,6 +1211,21 @@ export default function AdminClientsPage() {
                               )}
                               {ch.tokenStatus}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => {
+                                setTransferChannelId(ch.id);
+                                setTransferFromUserId(viewingClient!.id);
+                                setTransferToUserId("");
+                                setShowTransferModal(true);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-medium hover:bg-blue-100"
+                              title="Transfer to another client"
+                            >
+                              <ArrowRightLeft className="w-3 h-3" />
+                              Transfer
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -1201,6 +1331,59 @@ export default function AdminClientsPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Channel Transfer Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <ArrowRightLeft className="w-5 h-5 text-blue-500" />
+                Transfer Channel
+              </h2>
+              <button onClick={() => setShowTransferModal(false)} className="p-1 hover:bg-slate-100 rounded-lg">
+                <X className="w-5 h-5 text-muted" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <p className="text-xs text-muted">Channel ID</p>
+                <p className="font-mono text-sm text-foreground break-all">{transferChannelId}</p>
+              </div>
+              <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                <p className="text-xs text-orange-600">From Client</p>
+                <p className="font-medium text-foreground">{clients.find((c) => c.id === transferFromUserId)?.name || "-"}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">Transfer To</label>
+                <select
+                  value={transferToUserId}
+                  onChange={(e) => setTransferToUserId(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-border rounded-lg text-sm"
+                >
+                  <option value="">Select Client</option>
+                  {clients.filter((c) => c.id !== transferFromUserId).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-border">
+              <button onClick={() => setShowTransferModal(false)} className="px-4 py-2 text-sm font-medium text-muted hover:text-foreground border border-border rounded-lg">
+                Cancel
+              </button>
+              <button
+                onClick={handleTransferChannel}
+                disabled={transferring || !transferToUserId}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
+              >
+                {transferring ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRightLeft className="w-4 h-4" />}
+                Transfer
+              </button>
+            </div>
           </div>
         </div>
       )}

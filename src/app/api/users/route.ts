@@ -13,6 +13,13 @@ export interface NetworkAssignment {
   revenueSharePercent: number;
 }
 
+export interface ChannelNetworkAssignment {
+  channelId: string;
+  networkId: string;
+  networkName: string;
+  revenueSharePercent: number;
+}
+
 export interface StoredUser {
   id: string;
   name: string;
@@ -25,6 +32,7 @@ export interface StoredUser {
   category: string;
   role: "client";
   networks?: NetworkAssignment[];
+  channelNetworks?: ChannelNetworkAssignment[];
 }
 
 function hashPassword(password: string): string {
@@ -80,7 +88,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { name, email, password, phone, channels, category, networks } = body;
+    const { name, email, password, phone, channels, category, networks, channelNetworks } = body;
 
     if (!name || !email || !password) {
       return Response.json(
@@ -116,6 +124,7 @@ export async function POST(request: Request) {
       category: category || "Music",
       role: "client",
       networks: networks || [],
+      channelNetworks: channelNetworks || [],
     };
 
     users.push(newUser);
@@ -145,7 +154,31 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const { id, name, email, password, phone, channels, category, status, networks } = body;
+    const { id, name, email, password, phone, channels, category, status, networks, channelNetworks } = body;
+
+    // Channel transfer between users
+    if (body.type === "transfer_channel") {
+      const { fromUserId, toUserId, channelId } = body;
+      if (!fromUserId || !toUserId || !channelId) {
+        return Response.json({ error: "fromUserId, toUserId, channelId required" }, { status: 400 });
+      }
+      const users = await getUsers();
+      const fromIdx = users.findIndex((u) => u.id === fromUserId);
+      const toIdx = users.findIndex((u) => u.id === toUserId);
+      if (fromIdx === -1 || toIdx === -1) {
+        return Response.json({ error: "User not found" }, { status: 404 });
+      }
+      users[fromIdx].channels = users[fromIdx].channels.filter((c) => c !== channelId);
+      if (users[fromIdx].channelNetworks) {
+        users[fromIdx].channelNetworks = users[fromIdx].channelNetworks!.filter((cn) => cn.channelId !== channelId);
+      }
+      if (!users[toIdx].channels.includes(channelId)) {
+        users[toIdx].channels.push(channelId);
+      }
+      const saved = await saveUsers(users);
+      if (!saved) return Response.json({ error: "Failed to transfer" }, { status: 500 });
+      return Response.json({ data: { success: true, fromUser: users[fromIdx].name, toUser: users[toIdx].name, channelId } });
+    }
 
     if (!id) {
       return Response.json({ error: "User ID is required" }, { status: 400 });
@@ -165,6 +198,7 @@ export async function PUT(request: Request) {
     if (category) users[idx].category = category;
     if (status) users[idx].status = status;
     if (networks !== undefined) users[idx].networks = networks;
+    if (channelNetworks !== undefined) users[idx].channelNetworks = channelNetworks;
 
     const saved = await saveUsers(users);
     if (!saved) {

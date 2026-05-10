@@ -18,6 +18,9 @@ import {
   ArrowDownCircle,
   Wallet,
   Bell,
+  Download,
+  Zap,
+  FileText,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -96,6 +99,15 @@ export default function AdminPaymentsPage() {
   // Withdraw action
   const [withdrawAction, setWithdrawAction] = useState<{ id: string; action: string; note: string } | null>(null);
   const [processingWithdraw, setProcessingWithdraw] = useState(false);
+
+  // Bulk payment
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkMonth, setBulkMonth] = useState("");
+  const [bulkFromDate, setBulkFromDate] = useState("");
+  const [bulkToDate, setBulkToDate] = useState("");
+  const [bulkTdsPercent, setBulkTdsPercent] = useState("0");
+  const [bulkAmounts, setBulkAmounts] = useState<Record<string, string>>({});
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -244,6 +256,71 @@ export default function AdminPaymentsPage() {
     finally { setProcessingWithdraw(false); }
   };
 
+  const handleBulkCreate = async () => {
+    if (!bulkFromDate || !bulkToDate) return;
+    setBulkSaving(true);
+    try {
+      const items = users
+        .filter((u) => bulkAmounts[u.id] && Number(bulkAmounts[u.id]) > 0)
+        .map((u) => {
+          const net = u.networks?.[0];
+          return {
+            userId: u.id,
+            userName: u.name,
+            userEmail: u.email,
+            networkId: net?.networkId || "",
+            networkName: net?.networkName || "",
+            revenueSharePercent: net?.revenueSharePercent || 0,
+            month: bulkMonth,
+            fromDate: bulkFromDate,
+            toDate: bulkToDate,
+            totalAmount: Number(bulkAmounts[u.id]) || 0,
+            tdsPercent: Number(bulkTdsPercent) || 0,
+          };
+        });
+
+      if (items.length === 0) { setBulkSaving(false); return; }
+
+      await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "bulk", items }),
+      });
+      setShowBulkModal(false);
+      setBulkAmounts({});
+      setBulkMonth("");
+      setBulkFromDate("");
+      setBulkToDate("");
+      setBulkTdsPercent("0");
+      fetchData();
+    } catch { /* silent */ }
+    finally { setBulkSaving(false); }
+  };
+
+  const exportCSV = () => {
+    const headers = ["Client", "Email", "Period", "Network", "Total", "Network Share", "TDS", "Net Payable", "Paid", "Pending", "Status"];
+    const rows = filtered.map((p) => [
+      p.userName, p.userEmail,
+      `${p.fromDate} - ${p.toDate}`,
+      p.networkName || "-",
+      p.totalAmount.toFixed(2),
+      `${p.networkRevenue.toFixed(2)} (${p.revenueSharePercent}%)`,
+      `${p.tdsAmount.toFixed(2)} (${p.tdsPercent}%)`,
+      p.netTotal.toFixed(2),
+      p.paidAmount.toFixed(2),
+      (p.netTotal - p.paidAmount).toFixed(2),
+      p.status,
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `payments-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const getStatusBadge = (s: string) => {
     switch (s) {
       case "paid":
@@ -293,13 +370,29 @@ export default function AdminPaymentsPage() {
           <h1 className="text-2xl font-bold text-foreground">Payment Management</h1>
           <p className="text-sm text-muted mt-1">Manage payments, TDS, and withdraw requests.</p>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowModal(true); }}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Create Payment
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-2 px-3 py-2 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
+          <button
+            onClick={() => setShowBulkModal(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors"
+          >
+            <Zap className="w-4 h-4" />
+            Bulk Create
+          </button>
+          <button
+            onClick={() => { resetForm(); setShowModal(true); }}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Create Payment
+          </button>
+        </div>
       </div>
 
       {/* Summary */}
@@ -753,6 +846,79 @@ export default function AdminPaymentsPage() {
               >
                 {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Create Payment Modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-border sticky top-0 bg-white">
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <Zap className="w-5 h-5 text-amber-500" />
+                Bulk Create Payments
+              </h2>
+              <button onClick={() => setShowBulkModal(false)} className="p-1 hover:bg-slate-100 rounded-lg">
+                <X className="w-5 h-5 text-muted" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Month Label</label>
+                  <input type="text" value={bulkMonth} onChange={(e) => setBulkMonth(e.target.value)} placeholder="e.g. January 2026" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">From Date *</label>
+                  <input type="date" value={bulkFromDate} onChange={(e) => setBulkFromDate(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">To Date *</label>
+                  <input type="date" value={bulkToDate} onChange={(e) => setBulkToDate(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">TDS % (applied to all)</label>
+                <input type="number" value={bulkTdsPercent} onChange={(e) => setBulkTdsPercent(e.target.value)} min="0" max="100" className="w-32 px-3 py-2 border border-border rounded-lg text-sm" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-2">Client Amounts</h4>
+                <p className="text-xs text-muted mb-3">Enter total revenue amount for each client. Leave empty to skip.</p>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {users.map((u) => (
+                    <div key={u.id} className="flex items-center gap-3 p-2 border border-border rounded-lg">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-foreground">{u.name}</p>
+                        <p className="text-xs text-muted">{u.email} {u.networks?.[0] ? `• ${u.networks[0].networkName} (${u.networks[0].revenueSharePercent}%)` : ""}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm text-muted">$</span>
+                        <input
+                          type="number"
+                          value={bulkAmounts[u.id] || ""}
+                          onChange={(e) => setBulkAmounts({ ...bulkAmounts, [u.id]: e.target.value })}
+                          placeholder="0"
+                          min="0"
+                          className="w-28 px-2 py-1.5 border border-border rounded text-sm"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-5 border-t border-border sticky bottom-0 bg-white">
+              <button onClick={() => setShowBulkModal(false)} className="px-4 py-2 text-sm text-muted hover:bg-slate-100 rounded-lg">Cancel</button>
+              <button
+                onClick={handleBulkCreate}
+                disabled={bulkSaving || !bulkFromDate || !bulkToDate}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-50"
+              >
+                {bulkSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Create Payments ({Object.values(bulkAmounts).filter((v) => Number(v) > 0).length} clients)
               </button>
             </div>
           </div>
