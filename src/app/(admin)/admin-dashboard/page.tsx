@@ -25,6 +25,9 @@ import {
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { formatNumber, formatCurrency } from "@/lib/utils";
+import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
+import DateRangeFilter, { computeRange } from "@/components/dashboard/DateRangeFilter";
+import type { DateRange } from "@/components/dashboard/DateRangeFilter";
 
 interface ClientUser {
   id: string;
@@ -49,6 +52,58 @@ interface ChannelInfo {
   clientEmail: string;
 }
 
+interface AnalyticsResponse {
+  columnHeaders?: Array<{ name?: string | null }>;
+  rows?: Array<Array<string | number>>;
+}
+
+interface ChannelItem {
+  id?: string | null;
+  snippet?: {
+    title?: string | null;
+    thumbnails?: { default?: { url?: string | null } | null } | null;
+  };
+  statistics?: {
+    viewCount?: string | null;
+    subscriberCount?: string | null;
+    videoCount?: string | null;
+  };
+}
+
+interface PerChannelAnalytics {
+  performance: AnalyticsResponse | null;
+  prevPerformance: AnalyticsResponse | null;
+  revenue: AnalyticsResponse | null;
+  prevRevenue: AnalyticsResponse | null;
+  dailyRevenue: AnalyticsResponse | null;
+  revenueViews: AnalyticsResponse | null;
+}
+
+interface DashboardFullData {
+  channels?: ChannelItem[];
+  currentRevenue?: AnalyticsResponse | null;
+  prevRevenue?: AnalyticsResponse | null;
+  currentPerformance?: AnalyticsResponse | null;
+  prevPerformance?: AnalyticsResponse | null;
+  dailyRevenue?: AnalyticsResponse | null;
+  perChannelAnalytics?: Record<string, PerChannelAnalytics>;
+  tokenizedChannels?: string[];
+}
+
+function sumMetric(data: AnalyticsResponse | undefined | null, metricName: string): number {
+  if (!data?.rows?.length || !data.columnHeaders) return 0;
+  const headers = data.columnHeaders.map((h) => h.name || "");
+  const idx = headers.indexOf(metricName);
+  if (idx === -1) return 0;
+  return data.rows.reduce((sum, row) => sum + (Number(row[idx]) || 0), 0);
+}
+
+function pctChange(current: number, previous: number): number | null {
+  if (previous === 0 && current === 0) return 0;
+  if (previous === 0) return 100;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
 export default function AdminDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -59,6 +114,8 @@ export default function AdminDashboardPage() {
   const [sortBy, setSortBy] = useState<"channels" | "name" | "status">("channels");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState("28d");
+  const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -86,6 +143,69 @@ export default function AdminDashboardPage() {
       fetchClients();
     }
   }, [status, session, fetchClients]);
+
+  // Collect all channel IDs from all clients for YouTube data fetching
+  const allChannelIds = useMemo(() => {
+    return clients.reduce<string[]>((acc, c) => [...acc, ...c.channels], []);
+  }, [clients]);
+
+  const ytApiParams = useMemo(() => ({
+    startDate: dateRange.startDate,
+    endDate: dateRange.endDate,
+    prevStartDate: dateRange.prevStartDate,
+    prevEndDate: dateRange.prevEndDate,
+    ...(allChannelIds.length > 0 ? { channelIds: allChannelIds.join(",") } : {}),
+  }), [dateRange, allChannelIds]);
+
+  const { data: dashData, loading: ytLoading } = useYouTubeData<DashboardFullData>(
+    "dashboardFull",
+    ytApiParams,
+    {}
+  );
+
+  // Aggregate YouTube analytics data
+  const ytStats = useMemo(() => {
+    const perChannelAnalytics = dashData?.perChannelAnalytics || {};
+    const perChannelEntries = Object.values(perChannelAnalytics);
+
+    let curEstRevenue = sumMetric(dashData?.currentRevenue, "estimatedRevenue");
+    let curAdRevenue = sumMetric(dashData?.currentRevenue, "estimatedAdRevenue");
+    let curGrossRevenue = sumMetric(dashData?.currentRevenue, "grossRevenue");
+    let prevEstRevenue = sumMetric(dashData?.prevRevenue, "estimatedRevenue");
+
+    let curViews = sumMetric(dashData?.currentPerformance, "views");
+    let prevViews = sumMetric(dashData?.prevPerformance, "views");
+    let curSubs = sumMetric(dashData?.currentPerformance, "subscribersGained") - sumMetric(dashData?.currentPerformance, "subscribersLost");
+    let prevSubs = sumMetric(dashData?.prevPerformance, "subscribersGained") - sumMetric(dashData?.prevPerformance, "subscribersLost");
+
+    for (const pca of perChannelEntries) {
+      curEstRevenue += sumMetric(pca.revenue, "estimatedRevenue");
+      curAdRevenue += sumMetric(pca.revenue, "estimatedAdRevenue");
+      curGrossRevenue += sumMetric(pca.revenue, "grossRevenue");
+      prevEstRevenue += sumMetric(pca.prevRevenue, "estimatedRevenue");
+      curViews += sumMetric(pca.performance, "views");
+      prevViews += sumMetric(pca.prevPerformance, "views");
+      curSubs += sumMetric(pca.performance, "subscribersGained") - sumMetric(pca.performance, "subscribersLost");
+      prevSubs += sumMetric(pca.prevPerformance, "subscribersGained") - sumMetric(pca.prevPerformance, "subscribersLost");
+    }
+
+    const curCPM = curViews > 0 ? (curEstRevenue / curViews) * 1000 : 0;
+    const prevCPM = prevViews > 0 ? (prevEstRevenue / prevViews) * 1000 : 0;
+    const curRPM = curViews > 0 ? (curEstRevenue / curViews) * 1000 : 0;
+    const prevRPM = prevViews > 0 ? (prevEstRevenue / prevViews) * 1000 : 0;
+
+    const totalSubscribers = (dashData?.channels || []).reduce((sum, ch) => sum + Number(ch?.statistics?.subscriberCount || 0), 0);
+    const totalViewsAll = (dashData?.channels || []).reduce((sum, ch) => sum + Number(ch?.statistics?.viewCount || 0), 0);
+
+    return {
+      curEstRevenue, prevEstRevenue,
+      curViews, prevViews,
+      curSubs, prevSubs,
+      curCPM, prevCPM,
+      curRPM, prevRPM,
+      totalSubscribers, totalViewsAll,
+    };
+  }, [dashData]);
 
   const stats = useMemo(() => {
     const totalClients = clients.length;
@@ -297,6 +417,117 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* YouTube Analytics — Real-time Revenue, Views, Subscribers, CPM, RPM */}
+      <div className="bg-white rounded-xl border border-border p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-5 h-5 text-green-500" />
+            <h2 className="text-lg font-semibold text-foreground">YouTube Analytics (All Clients)</h2>
+          </div>
+          <DateRangeFilter
+            value={datePreset}
+            onChange={(p, range) => {
+              setDatePreset(p);
+              setDateRange(range);
+            }}
+          />
+        </div>
+        {ytLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+            <span className="ml-2 text-sm text-muted">Loading analytics...</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+              <p className="text-xs text-green-600 font-medium">Revenue</p>
+              <p className="text-xl font-bold text-green-900">{formatCurrency(ytStats.curEstRevenue)}</p>
+              {pctChange(ytStats.curEstRevenue, ytStats.prevEstRevenue) !== null && (
+                <div className={`flex items-center gap-1 text-xs mt-1 ${
+                  (pctChange(ytStats.curEstRevenue, ytStats.prevEstRevenue) || 0) >= 0 ? "text-green-600" : "text-red-600"
+                }`}>
+                  {(pctChange(ytStats.curEstRevenue, ytStats.prevEstRevenue) || 0) >= 0 ? (
+                    <TrendingUp className="w-3 h-3" />
+                  ) : (
+                    <TrendingDown className="w-3 h-3" />
+                  )}
+                  {Math.abs(pctChange(ytStats.curEstRevenue, ytStats.prevEstRevenue) || 0).toFixed(1)}%
+                </div>
+              )}
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <p className="text-xs text-blue-600 font-medium">Views</p>
+              <p className="text-xl font-bold text-blue-900">{formatNumber(ytStats.curViews)}</p>
+              {pctChange(ytStats.curViews, ytStats.prevViews) !== null && (
+                <div className={`flex items-center gap-1 text-xs mt-1 ${
+                  (pctChange(ytStats.curViews, ytStats.prevViews) || 0) >= 0 ? "text-green-600" : "text-red-600"
+                }`}>
+                  {(pctChange(ytStats.curViews, ytStats.prevViews) || 0) >= 0 ? (
+                    <TrendingUp className="w-3 h-3" />
+                  ) : (
+                    <TrendingDown className="w-3 h-3" />
+                  )}
+                  {Math.abs(pctChange(ytStats.curViews, ytStats.prevViews) || 0).toFixed(1)}%
+                </div>
+              )}
+            </div>
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+              <p className="text-xs text-purple-600 font-medium">Subscribers (net)</p>
+              <p className="text-xl font-bold text-purple-900">{ytStats.curSubs >= 0 ? "+" : ""}{formatNumber(ytStats.curSubs)}</p>
+              {pctChange(ytStats.curSubs, ytStats.prevSubs) !== null && (
+                <div className={`flex items-center gap-1 text-xs mt-1 ${
+                  (pctChange(ytStats.curSubs, ytStats.prevSubs) || 0) >= 0 ? "text-green-600" : "text-red-600"
+                }`}>
+                  {(pctChange(ytStats.curSubs, ytStats.prevSubs) || 0) >= 0 ? (
+                    <TrendingUp className="w-3 h-3" />
+                  ) : (
+                    <TrendingDown className="w-3 h-3" />
+                  )}
+                  {Math.abs(pctChange(ytStats.curSubs, ytStats.prevSubs) || 0).toFixed(1)}%
+                </div>
+              )}
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <p className="text-xs text-amber-600 font-medium">CPM</p>
+              <p className="text-xl font-bold text-amber-900">{formatCurrency(ytStats.curCPM)}</p>
+              {pctChange(ytStats.curCPM, ytStats.prevCPM) !== null && (
+                <div className={`flex items-center gap-1 text-xs mt-1 ${
+                  (pctChange(ytStats.curCPM, ytStats.prevCPM) || 0) >= 0 ? "text-green-600" : "text-red-600"
+                }`}>
+                  {(pctChange(ytStats.curCPM, ytStats.prevCPM) || 0) >= 0 ? (
+                    <TrendingUp className="w-3 h-3" />
+                  ) : (
+                    <TrendingDown className="w-3 h-3" />
+                  )}
+                  {Math.abs(pctChange(ytStats.curCPM, ytStats.prevCPM) || 0).toFixed(1)}%
+                </div>
+              )}
+            </div>
+            <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-4">
+              <p className="text-xs text-cyan-600 font-medium">RPM</p>
+              <p className="text-xl font-bold text-cyan-900">{formatCurrency(ytStats.curRPM)}</p>
+              {pctChange(ytStats.curRPM, ytStats.prevRPM) !== null && (
+                <div className={`flex items-center gap-1 text-xs mt-1 ${
+                  (pctChange(ytStats.curRPM, ytStats.prevRPM) || 0) >= 0 ? "text-green-600" : "text-red-600"
+                }`}>
+                  {(pctChange(ytStats.curRPM, ytStats.prevRPM) || 0) >= 0 ? (
+                    <TrendingUp className="w-3 h-3" />
+                  ) : (
+                    <TrendingDown className="w-3 h-3" />
+                  )}
+                  {Math.abs(pctChange(ytStats.curRPM, ytStats.prevRPM) || 0).toFixed(1)}%
+                </div>
+              )}
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <p className="text-xs text-slate-600 font-medium">Total Subscribers</p>
+              <p className="text-xl font-bold text-slate-900">{formatNumber(ytStats.totalSubscribers)}</p>
+              <p className="text-xs text-muted mt-1">All channels</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Top Clients + Category Breakdown */}
