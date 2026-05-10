@@ -3,6 +3,7 @@ import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { kv } from "@vercel/kv";
 import crypto from "crypto";
+import { setChannelToken, getChannelToken } from "@/lib/channel-tokens";
 
 declare module "next-auth" {
   interface Session {
@@ -54,6 +55,7 @@ interface StoredUser {
   name: string;
   email: string;
   password: string;
+  channels: string[];
   status: "active" | "inactive";
   role: "client";
 }
@@ -111,6 +113,39 @@ async function refreshAccessToken(token: import("next-auth/jwt").JWT) {
     };
   } catch (error) {
     return { ...token, error: "RefreshAccessTokenError" };
+  }
+}
+
+async function autoSaveClientToken(
+  email: string,
+  accessToken: string,
+  refreshToken: string,
+  tokenExpiry: number
+) {
+  try {
+    const users = await kv.get<StoredUser[]>("bainsla_users");
+    if (!users) return;
+    const user = users.find(
+      (u) => u.email.toLowerCase() === email.toLowerCase() && u.status === "active"
+    );
+    if (!user || user.channels.length === 0) return;
+
+    for (const channelId of user.channels) {
+      const existing = await getChannelToken(channelId);
+      if (existing && existing.accessToken === accessToken) continue;
+      await setChannelToken(channelId, {
+        channelId,
+        channelTitle: user.name,
+        accessToken,
+        refreshToken,
+        tokenExpiry,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      console.log(`[Auth] Auto-saved token for channel ${channelId} (user: ${email})`);
+    }
+  } catch (error) {
+    console.error("[Auth] Failed to auto-save client tokens:", error);
   }
 }
 
@@ -187,6 +222,16 @@ export const authOptions: NextAuthOptions = {
           token.accessTokenExpires = account.expires_at
             ? account.expires_at * 1000
             : Date.now() + 3600 * 1000;
+
+          // Auto-save client's OAuth token for their channels so admin can access data
+          const userEmail = (user?.email || token.email || "").toLowerCase();
+          if (userEmail && account.access_token && account.refresh_token) {
+            const expiry = account.expires_at
+              ? account.expires_at * 1000
+              : Date.now() + 3600 * 1000;
+            autoSaveClientToken(userEmail, account.access_token, account.refresh_token, expiry)
+              .catch(() => {});
+          }
         }
         if (user) {
           token.email = user.email;
@@ -205,7 +250,20 @@ export const authOptions: NextAuthOptions = {
       }
 
       if (token.refreshToken) {
-        return refreshAccessToken(token);
+        const refreshed = await refreshAccessToken(token);
+        // Update stored channel tokens with refreshed access token
+        if (refreshed.accessToken && !refreshed.error) {
+          const refreshEmail = (refreshed.email as string || "").toLowerCase();
+          if (refreshEmail && !ADMIN_EMAILS.includes(refreshEmail)) {
+            autoSaveClientToken(
+              refreshEmail,
+              refreshed.accessToken as string,
+              refreshed.refreshToken as string,
+              refreshed.accessTokenExpires as number
+            ).catch(() => {});
+          }
+        }
+        return refreshed;
       }
 
       return token;
