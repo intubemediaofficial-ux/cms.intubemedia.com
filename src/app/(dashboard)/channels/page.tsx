@@ -74,7 +74,7 @@ const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 const CATEGORIES = ["Music", "Entertainment", "Education", "Comedy", "Gaming", "News", "Sports"];
 const CHANNEL_TYPES = ["Original", "Refurbished", "Licensed"];
 const TOKEN_STATUSES = ["Valid", "Invalid", "Expired", "N/A"];
-const CMS_OPTIONS = ["Bainsla Music", "WMG - MUSIC", "Sony Music", "T-Series", "Other"];
+const NETWORK_OPTIONS = ["Bainsla Music", "WMG - MUSIC", "Sony Music", "T-Series", "Other"];
 
 type TabType = "channels" | "requests" | "bulk" | "transferred";
 
@@ -613,10 +613,10 @@ export default function ChannelsPage() {
   const pageChannels = filteredChannels.slice((currentPage - 1) * perPage, currentPage * perPage);
 
   const handleExportCSV = () => {
-    const headers = ["Channel", "Channel ID", "Subscribers", "Videos", "Views", "Channel Type", "Token Status", "CMS", "Category", "Linked Date", "Delinked Date"];
+    const headers = ["Channel", "Channel ID", "Subscribers", "Videos", "Views", "Token Status", "Network", "Category", "Linked Date", "Delinked Date"];
     const rows = filteredChannels.map((c) => [
       c.name, c.id, String(c.subscribers), String(c.videos), String(c.views),
-      c.channelType, c.tokenStatus, c.cms, c.category, c.addedDate, c.delinkedDate,
+      c.tokenStatus, c.cms, c.category, c.addedDate, c.delinkedDate,
     ]);
     downloadCSV(headers, rows, `channels-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`);
   };
@@ -734,14 +734,6 @@ export default function ChannelsPage() {
                 />
               </div>
               <select
-                value={channelTypeFilter}
-                onChange={(e) => { setChannelTypeFilter(e.target.value); setCurrentPage(1); }}
-                className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                <option value="">All Channel Types</option>
-                {CHANNEL_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select
                 value={tokenStatusFilter}
                 onChange={(e) => { setTokenStatusFilter(e.target.value); setCurrentPage(1); }}
                 className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -754,8 +746,8 @@ export default function ChannelsPage() {
                 onChange={(e) => { setCmsFilter(e.target.value); setCurrentPage(1); }}
                 className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
-                <option value="">All CMS</option>
-                {CMS_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                <option value="">All Networks</option>
+                {NETWORK_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
               <select
                 value={categoryFilter}
@@ -844,13 +836,10 @@ export default function ChannelsPage() {
                       VIEWS {renderSortIcon("views")}
                     </th>
                     <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
-                      CHANNEL TYPE {renderSortIcon("channelType")}
-                    </th>
-                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
                       TOKEN STATUS {renderSortIcon("tokenStatus")}
                     </th>
                     <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
-                      CMS {renderSortIcon("cms")}
+                      NETWORK {renderSortIcon("cms")}
                     </th>
                     <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
                       CATEGORY {renderSortIcon("category")}
@@ -908,7 +897,6 @@ export default function ChannelsPage() {
                       <td className="px-4 py-3 text-foreground">{formatNumber(channel.subscribers)}</td>
                       <td className="px-4 py-3 text-foreground">{channel.videos.toLocaleString()}</td>
                       <td className="px-4 py-3 text-foreground">{formatNumber(channel.views)}</td>
-                      <td className="px-4 py-3 text-foreground">{channel.channelType}</td>
                       <td className="px-4 py-3">
                         <button
                           onClick={() => channel.tokenStatus === "Valid" ? handleViewChannelDetail(channel.id) : undefined}
@@ -1170,8 +1158,8 @@ export default function ChannelsPage() {
               onChange={(e) => setBulkCms(e.target.value)}
               className="border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
-              <option value="">Select CMS</option>
-              {CMS_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+              <option value="">Select Network</option>
+              {NETWORK_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
@@ -1270,15 +1258,15 @@ export default function ChannelsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
-                    CMS
+                    Network
                   </label>
                   <select
                     value={cmsInput}
                     onChange={(e) => setCmsInput(e.target.value)}
                     className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   >
-                    <option value="">Select CMS</option>
-                    {CMS_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                    <option value="">Select Network</option>
+                    {NETWORK_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -1430,7 +1418,7 @@ export default function ChannelsPage() {
               Channel ID: <span className="font-mono text-gray-900">{showDeleteConfirm}</span>
             </p>
             <p className="text-sm text-gray-500 mb-6">
-              This will permanently remove this channel from your CMS. This action cannot be undone.
+              This will permanently remove this channel from your Network. This action cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
               <button

@@ -46,6 +46,18 @@ interface ClientRevenueData {
   rpm: number;
 }
 
+interface NetworkAssignment {
+  networkId: string;
+  networkName: string;
+  revenueSharePercent: number;
+}
+
+interface NetworkOption {
+  id: string;
+  name: string;
+  revenueSharePercent: number;
+}
+
 interface Client {
   id: string;
   name: string;
@@ -55,6 +67,7 @@ interface Client {
   status: "active" | "inactive";
   joinedDate: string;
   category: string;
+  networks?: NetworkAssignment[];
 }
 
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
@@ -82,6 +95,8 @@ export default function AdminClientsPage() {
   const [formChannels, setFormChannels] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formNetworks, setFormNetworks] = useState<NetworkAssignment[]>([]);
+  const [availableNetworks, setAvailableNetworks] = useState<NetworkOption[]>([]);
 
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -115,11 +130,24 @@ export default function AdminClientsPage() {
     }
   }, []);
 
+  const fetchNetworks = useCallback(async () => {
+    try {
+      const res = await fetch("/api/networks");
+      if (res.ok) {
+        const json = await res.json();
+        setAvailableNetworks(json.data || []);
+      }
+    } catch {
+      // silent
+    }
+  }, []);
+
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role === "admin") {
       fetchClients();
+      fetchNetworks();
     }
-  }, [status, session, fetchClients]);
+  }, [status, session, fetchClients, fetchNetworks]);
 
   const resetForm = () => {
     setFormName("");
@@ -128,6 +156,7 @@ export default function AdminClientsPage() {
     setFormPhone("");
     setFormCategory("Music");
     setFormChannels("");
+    setFormNetworks([]);
     setFormError(null);
     setEditingClient(null);
   };
@@ -145,6 +174,7 @@ export default function AdminClientsPage() {
     setFormPhone(client.phone);
     setFormCategory(client.category);
     setFormChannels(client.channels.join(", "));
+    setFormNetworks(client.networks || []);
     setFormError(null);
     setShowModal(true);
   };
@@ -188,6 +218,7 @@ export default function AdminClientsPage() {
           phone: formPhone.trim(),
           category: formCategory,
           channels: channelIds,
+          networks: formNetworks,
         };
         if (formPassword.trim()) {
           body.password = formPassword.trim();
@@ -214,6 +245,7 @@ export default function AdminClientsPage() {
             phone: formPhone.trim(),
             category: formCategory,
             channels: channelIds,
+            networks: formNetworks,
           }),
         });
         const data = await res.json();
@@ -785,6 +817,61 @@ export default function AdminClientsPage() {
                 <p className="text-xs text-muted mt-1">
                   Enter YouTube channel IDs separated by commas
                 </p>
+              </div>
+              {/* Network Assignment */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Assign Networks
+                </label>
+                {availableNetworks.length === 0 ? (
+                  <p className="text-xs text-muted">No networks created yet. Go to Network Management to create one.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {availableNetworks.map((net) => {
+                      const assigned = formNetworks.find((fn) => fn.networkId === net.id);
+                      return (
+                        <div key={net.id} className="flex items-center gap-3 p-2 border border-border rounded-lg">
+                          <input
+                            type="checkbox"
+                            checked={!!assigned}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormNetworks([...formNetworks, {
+                                  networkId: net.id,
+                                  networkName: net.name,
+                                  revenueSharePercent: net.revenueSharePercent,
+                                }]);
+                              } else {
+                                setFormNetworks(formNetworks.filter((fn) => fn.networkId !== net.id));
+                              }
+                            }}
+                            className="w-4 h-4 text-primary rounded"
+                          />
+                          <span className="text-sm font-medium text-foreground flex-1">{net.name}</span>
+                          {assigned && (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                value={assigned.revenueSharePercent}
+                                onChange={(e) => {
+                                  setFormNetworks(formNetworks.map((fn) =>
+                                    fn.networkId === net.id
+                                      ? { ...fn, revenueSharePercent: Number(e.target.value) || 0 }
+                                      : fn
+                                  ));
+                                }}
+                                min="0"
+                                max="100"
+                                className="w-16 px-2 py-1 border border-border rounded text-sm text-center"
+                              />
+                              <span className="text-xs text-muted">% rev share</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               {formError && (
                 <p className="text-sm text-red-500">{formError}</p>

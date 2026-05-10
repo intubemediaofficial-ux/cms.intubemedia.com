@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Search,
-  Filter,
   Play,
   ThumbsUp,
   MessageSquare,
@@ -12,6 +11,14 @@ import {
   Loader2,
   WifiOff,
   AlertCircle,
+  Edit2,
+  Trash2,
+  Globe,
+  Lock,
+  EyeOff,
+  X,
+  MoreHorizontal,
+  Image,
 } from "lucide-react";
 import { signIn, useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
@@ -27,6 +34,8 @@ interface VideoItem {
   id?: string | null;
   snippet?: {
     title?: string | null;
+    description?: string | null;
+    channelId?: string | null;
     publishedAt?: string | null;
     thumbnails?: {
       medium?: { url?: string | null } | null;
@@ -81,6 +90,21 @@ export default function VideosPage() {
   const [error, setError] = useState<string | null>(null);
   const [isReal, setIsReal] = useState(false);
 
+  // Edit modal
+  const [editVideo, setEditVideo] = useState<VideoItem | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editPrivacy, setEditPrivacy] = useState("public");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+
+  // Delete confirm
+  const [deleteVideo, setDeleteVideo] = useState<VideoItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Action menu
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
   useEffect(() => {
     setActiveChannelIds(getActiveChannelIds());
   }, []);
@@ -132,13 +156,109 @@ export default function VideosPage() {
 
   const isLoading = loading;
 
+  const openEdit = (video: VideoItem) => {
+    setEditVideo(video);
+    setEditTitle(video.snippet?.title || "");
+    setEditDesc(video.snippet?.description || "");
+    setEditPrivacy(video.status?.privacyStatus || "public");
+    setEditError("");
+    setOpenMenuId(null);
+  };
+
+  const handleEditSave = async () => {
+    if (!editVideo?.id || !editVideo.snippet?.channelId) return;
+    setEditSaving(true);
+    setEditError("");
+
+    try {
+      const res = await fetch("/api/youtube/video", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoId: editVideo.id,
+          channelId: editVideo.snippet.channelId,
+          title: editTitle,
+          description: editDesc,
+          privacyStatus: editPrivacy,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEditError(data.error || "Failed to update video");
+        return;
+      }
+      setEditVideo(null);
+      fetchVideos();
+    } catch {
+      setEditError("Network error");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handlePrivacyChange = async (video: VideoItem, newPrivacy: string) => {
+    if (!video.id || !video.snippet?.channelId) return;
+    setOpenMenuId(null);
+    try {
+      await fetch("/api/youtube/video", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoId: video.id,
+          channelId: video.snippet.channelId,
+          privacyStatus: newPrivacy,
+        }),
+      });
+      fetchVideos();
+    } catch {
+      // silent
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteVideo?.id || !deleteVideo.snippet?.channelId) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/youtube/video?videoId=${deleteVideo.id}&channelId=${deleteVideo.snippet.channelId}`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        setVideos(videos.filter((v) => v.id !== deleteVideo.id));
+      }
+      setDeleteVideo(null);
+    } catch {
+      // silent
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const getPrivacyIcon = (privacy: string) => {
+    switch (privacy) {
+      case "public": return <Globe className="w-3.5 h-3.5" />;
+      case "private": return <Lock className="w-3.5 h-3.5" />;
+      case "unlisted": return <EyeOff className="w-3.5 h-3.5" />;
+      default: return <Globe className="w-3.5 h-3.5" />;
+    }
+  };
+
+  const getPrivacyColor = (privacy: string) => {
+    switch (privacy) {
+      case "public": return "bg-green-100 text-green-700";
+      case "private": return "bg-red-100 text-red-700";
+      case "unlisted": return "bg-yellow-100 text-yellow-700";
+      default: return "bg-green-100 text-green-700";
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Videos</h1>
           <p className="text-sm text-muted mt-1">
-            Your YouTube videos and their performance.
+            Manage your YouTube videos — edit, delete, change privacy, and more.
           </p>
         </div>
       </div>
@@ -165,7 +285,7 @@ export default function VideosPage() {
             <AlertCircle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-foreground mb-1">No Channels Added</h3>
             <p className="text-sm text-muted mb-4">
-              Videos sirf added channels ki dikhti hain. Pehle Channels section mein channels add karo.
+              Add channels first to see their videos here.
             </p>
             <a
               href="/channels"
@@ -228,10 +348,6 @@ export default function VideosPage() {
                 <option value="private">Private</option>
                 <option value="unlisted">Unlisted</option>
               </select>
-              <button className="flex items-center gap-2 border border-border px-3 py-2 rounded-lg text-sm text-muted hover:bg-slate-50 transition-colors">
-                <Filter className="w-4 h-4" />
-                Filters
-              </button>
               <button className="flex items-center gap-2 border border-border px-3 py-2 rounded-lg text-sm text-muted hover:bg-slate-50 transition-colors">
                 <Download className="w-4 h-4" />
                 Export
@@ -306,15 +422,8 @@ export default function VideosPage() {
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              privacy === "public"
-                                ? "bg-green-100 text-green-700"
-                                : privacy === "private"
-                                ? "bg-red-100 text-red-700"
-                                : "bg-yellow-100 text-yellow-700"
-                            }`}
-                          >
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${getPrivacyColor(privacy)}`}>
+                            {getPrivacyIcon(privacy)}
                             {privacy}
                           </span>
                         </td>
@@ -342,14 +451,65 @@ export default function VideosPage() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <a
-                            href={`https://www.youtube.com/watch?v=${video.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors inline-flex"
-                          >
-                            <Play className="w-4 h-4 text-muted" />
-                          </a>
+                          <div className="relative inline-block">
+                            <button
+                              onClick={() => setOpenMenuId(openMenuId === video.id ? null : (video.id || null))}
+                              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                              <MoreHorizontal className="w-4 h-4 text-muted" />
+                            </button>
+                            {openMenuId === video.id && (
+                              <div className="absolute right-0 top-8 bg-white border border-border rounded-lg shadow-lg z-20 w-48 py-1">
+                                <button
+                                  onClick={() => openEdit(video)}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-slate-50"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" /> Edit Title / Description
+                                </button>
+                                <button
+                                  onClick={() => { window.open(`https://studio.youtube.com/video/${video.id}/edit`, "_blank"); setOpenMenuId(null); }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-slate-50"
+                                >
+                                  <Image className="w-3.5 h-3.5" /> Change Thumbnail
+                                </button>
+                                <div className="border-t border-border my-1" />
+                                <button
+                                  onClick={() => handlePrivacyChange(video, "public")}
+                                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${privacy === "public" ? "text-green-600 font-medium" : "text-foreground"}`}
+                                >
+                                  <Globe className="w-3.5 h-3.5" /> Public
+                                </button>
+                                <button
+                                  onClick={() => handlePrivacyChange(video, "private")}
+                                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${privacy === "private" ? "text-red-600 font-medium" : "text-foreground"}`}
+                                >
+                                  <Lock className="w-3.5 h-3.5" /> Private
+                                </button>
+                                <button
+                                  onClick={() => handlePrivacyChange(video, "unlisted")}
+                                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${privacy === "unlisted" ? "text-yellow-600 font-medium" : "text-foreground"}`}
+                                >
+                                  <EyeOff className="w-3.5 h-3.5" /> Unlisted
+                                </button>
+                                <div className="border-t border-border my-1" />
+                                <a
+                                  href={`https://www.youtube.com/watch?v=${video.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={() => setOpenMenuId(null)}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-slate-50"
+                                >
+                                  <Play className="w-3.5 h-3.5" /> Watch on YouTube
+                                </a>
+                                <button
+                                  onClick={() => { setDeleteVideo(video); setOpenMenuId(null); }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" /> Delete Video
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -363,6 +523,108 @@ export default function VideosPage() {
             <p className="text-sm text-muted">
               Showing {filteredVideos.length} of {videos.length} videos
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Video Modal */}
+      {editVideo && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-lg shadow-xl">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">Edit Video</h2>
+              <button onClick={() => setEditVideo(null)} className="p-1 hover:bg-slate-100 rounded-lg">
+                <X className="w-5 h-5 text-muted" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {editError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{editError}</div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Title</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Description</label>
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Privacy Status</label>
+                <select
+                  value={editPrivacy}
+                  onChange={(e) => setEditPrivacy(e.target.value)}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                  <option value="unlisted">Unlisted</option>
+                </select>
+              </div>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+                To change the thumbnail, click &quot;Change Thumbnail&quot; in the actions menu — it will open YouTube Studio where you can upload a new thumbnail.
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-5 border-t border-border">
+              <button
+                onClick={() => setEditVideo(null)}
+                className="px-4 py-2 text-sm text-muted hover:bg-slate-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditSave}
+                disabled={editSaving}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark disabled:opacity-50"
+              >
+                {editSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteVideo && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-sm shadow-xl p-5">
+            <h3 className="text-lg font-semibold text-foreground mb-2">Delete Video?</h3>
+            <p className="text-sm text-muted mb-1">
+              Are you sure you want to permanently delete this video?
+            </p>
+            <p className="text-sm font-medium text-foreground mb-4 truncate">
+              &quot;{deleteVideo.snippet?.title}&quot;
+            </p>
+            <p className="text-xs text-red-500 mb-4">
+              This action cannot be undone. The video will be permanently removed from YouTube.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteVideo(null)}
+                className="px-4 py-2 text-sm text-muted hover:bg-slate-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
