@@ -467,14 +467,51 @@ export default function AdminClientsPage() {
         const rpm = cpm;
         setClientRevenue({ totalRevenue, totalViews: totalAnalyticsViews, totalSubscribers: totalSubs, cpm, rpm });
 
-        // Fetch channel info for each channel
+        // Build cached channel lookup from cachedRevenue
+        const cachedChannelMap: Record<string, { title: string; thumbnail: string; subscribers: number; views: number; videoCount: number; revenue: number }> = {};
+        if (cachedRevenue) {
+          try {
+            const cachedRes2 = await fetch(`/api/client-data?action=getCachedData&userId=${encodeURIComponent(client.email)}`);
+            if (cachedRes2.ok) {
+              const cachedJson2 = await cachedRes2.json();
+              for (const ch of (cachedJson2.data?.channels || [])) {
+                cachedChannelMap[ch.channelId] = {
+                  title: ch.channelTitle || ch.channelId,
+                  thumbnail: ch.thumbnail || "",
+                  subscribers: ch.subscribers || 0,
+                  views: ch.views || 0,
+                  videoCount: ch.videoCount || 0,
+                  revenue: ch.estimatedRevenue || 0,
+                };
+              }
+            }
+          } catch { /* silent */ }
+        }
+
+        // Fetch channel info — use cached data first, then YouTube API fallback
         for (const chId of channelIds) {
+          const tokenInfo = tokenStatuses[chId] as { status?: string } | undefined;
+          const cachedCh = cachedChannelMap[chId];
+
+          if (cachedCh) {
+            channelDetails.push({
+              id: chId,
+              name: cachedCh.title,
+              subscribers: cachedCh.subscribers,
+              views: cachedCh.views,
+              videos: cachedCh.videoCount,
+              thumbnail: cachedCh.thumbnail,
+              tokenStatus: tokenInfo?.status === "valid" ? "Valid" : "Invalid",
+              revenue: cachedCh.revenue,
+            });
+            continue;
+          }
+
           try {
             const chRes = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(chId)}&storedChannelIds=${encodeURIComponent(channelIds.join(","))}`);
             const chJson = await chRes.json();
             if (chRes.ok && chJson.data?.length) {
               const ch = chJson.data[0];
-              const tokenInfo = tokenStatuses[chId] as { status?: string } | undefined;
               channelDetails.push({
                 id: chId,
                 name: ch.snippet?.title || chId,
@@ -485,7 +522,6 @@ export default function AdminClientsPage() {
                 tokenStatus: tokenInfo?.status === "valid" ? "Valid" : "Invalid",
               });
             } else {
-              const tokenInfo = tokenStatuses[chId] as { status?: string } | undefined;
               channelDetails.push({
                 id: chId, name: chId, subscribers: 0, views: 0, videos: 0, thumbnail: "",
                 tokenStatus: tokenInfo?.status === "valid" ? "Valid" : "Invalid",
