@@ -1,0 +1,97 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import {
+  cacheClientData,
+  getCachedClientData,
+  getAllCachedClientData,
+  saveBankDetails,
+  getBankDetails,
+  saveAgreements,
+  getAgreements,
+} from "@/lib/client-data-cache";
+import type { CachedClientData, BankDetails, Agreement } from "@/lib/client-data-cache";
+
+export const dynamic = "force-dynamic";
+
+const ADMIN_EMAILS = [
+  "vijendrachoudhary95@gmail.com",
+  "ajeetgurjarofficial@gmail.com",
+  "bainslamusicofficial@gmail.com",
+];
+
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const url = new URL(request.url);
+  const action = url.searchParams.get("action");
+  const userId = url.searchParams.get("userId");
+  const isAdmin = ADMIN_EMAILS.includes(session.user?.email?.toLowerCase() || "");
+
+  switch (action) {
+    case "getAllCachedData": {
+      if (!isAdmin) return Response.json({ error: "Admin only" }, { status: 403 });
+      const data = await getAllCachedClientData();
+      return Response.json({ data });
+    }
+    case "getCachedData": {
+      if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
+      const data = await getCachedClientData(userId);
+      return Response.json({ data });
+    }
+    case "getBankDetails": {
+      if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
+      if (!isAdmin && session.user?.email?.toLowerCase() !== userId.toLowerCase()) {
+        return Response.json({ error: "Unauthorized" }, { status: 403 });
+      }
+      const data = await getBankDetails(userId);
+      return Response.json({ data });
+    }
+    case "getAgreements": {
+      if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
+      if (!isAdmin && session.user?.email?.toLowerCase() !== userId.toLowerCase()) {
+        return Response.json({ error: "Unauthorized" }, { status: 403 });
+      }
+      const data = await getAgreements(userId);
+      return Response.json({ data });
+    }
+    default:
+      return Response.json({ error: "Invalid action" }, { status: 400 });
+  }
+}
+
+export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await request.json();
+  const { action } = body;
+  const isAdmin = ADMIN_EMAILS.includes(session.user?.email?.toLowerCase() || "");
+
+  switch (action) {
+    case "cacheData": {
+      const { userId, data } = body as { userId: string; data: CachedClientData };
+      if (!userId || !data) return Response.json({ error: "userId and data required" }, { status: 400 });
+      await cacheClientData(userId, { ...data, lastUpdated: new Date().toISOString() });
+      return Response.json({ success: true });
+    }
+    case "saveBankDetails": {
+      const { userId, bankDetails } = body as { userId: string; bankDetails: BankDetails };
+      if (!userId || !bankDetails) return Response.json({ error: "userId and bankDetails required" }, { status: 400 });
+      if (!isAdmin && session.user?.email?.toLowerCase() !== userId.toLowerCase()) {
+        return Response.json({ error: "Unauthorized" }, { status: 403 });
+      }
+      await saveBankDetails(userId, bankDetails);
+      return Response.json({ success: true });
+    }
+    case "saveAgreements": {
+      if (!isAdmin) return Response.json({ error: "Admin only" }, { status: 403 });
+      const { userId, agreements } = body as { userId: string; agreements: Agreement[] };
+      if (!userId || !agreements) return Response.json({ error: "userId and agreements required" }, { status: 400 });
+      await saveAgreements(userId, agreements);
+      return Response.json({ success: true });
+    }
+    default:
+      return Response.json({ error: "Invalid action" }, { status: 400 });
+  }
+}

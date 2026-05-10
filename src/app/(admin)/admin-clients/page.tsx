@@ -24,6 +24,9 @@ import {
   BarChart3,
   TrendingUp,
   ArrowRightLeft,
+  Landmark,
+  FileText,
+  Upload,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -125,6 +128,35 @@ export default function AdminClientsPage() {
   const [clientChannels, setClientChannels] = useState<ChannelDetail[]>([]);
   const [clientChannelsLoading, setClientChannelsLoading] = useState(false);
   const [clientRevenue, setClientRevenue] = useState<ClientRevenueData | null>(null);
+  const [clientDetailTab, setClientDetailTab] = useState<"channels" | "bank" | "agreements">("channels");
+
+  // Bank details for viewed client
+  interface BankDetails {
+    accountHolderName: string;
+    bankName: string;
+    accountNumber: string;
+    ifscCode: string;
+    branchName: string;
+    upiId: string;
+    panNumber: string;
+  }
+  const [clientBankDetails, setClientBankDetails] = useState<BankDetails | null>(null);
+  const [bankLoading, setBankLoading] = useState(false);
+
+  // Agreements for viewed client
+  interface Agreement {
+    id: string;
+    fileName: string;
+    fileUrl: string;
+    uploadedAt: string;
+    uploadedBy: string;
+    notes: string;
+  }
+  const [clientAgreements, setClientAgreements] = useState<Agreement[]>([]);
+  const [agreementLoading, setAgreementLoading] = useState(false);
+  const [newAgreementName, setNewAgreementName] = useState("");
+  const [newAgreementUrl, setNewAgreementUrl] = useState("");
+  const [newAgreementNotes, setNewAgreementNotes] = useState("");
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -347,6 +379,29 @@ export default function AdminClientsPage() {
     setClientChannels([]);
     setClientRevenue(null);
     setClientChannelsLoading(true);
+    setClientDetailTab("channels");
+    setClientBankDetails(null);
+    setClientAgreements([]);
+
+    // Fetch bank details and agreements in background
+    setBankLoading(true);
+    setAgreementLoading(true);
+    fetch(`/api/client-data?action=getBankDetails&userId=${encodeURIComponent(client.email)}`)
+      .then(r => r.json()).then(j => { if (j.data) setClientBankDetails(j.data); })
+      .catch(() => {}).finally(() => setBankLoading(false));
+    fetch(`/api/client-data?action=getAgreements&userId=${encodeURIComponent(client.email)}`)
+      .then(r => r.json()).then(j => { if (j.data) setClientAgreements(j.data); })
+      .catch(() => {}).finally(() => setAgreementLoading(false));
+
+    // Also fetch cached data as fallback for revenue
+    let cachedRevenue: { totalRevenue: number; totalViews: number; totalSubscribers: number } | null = null;
+    try {
+      const cachedRes = await fetch(`/api/client-data?action=getCachedData&userId=${encodeURIComponent(client.email)}`);
+      if (cachedRes.ok) {
+        const cachedJson = await cachedRes.json();
+        if (cachedJson.data) cachedRevenue = cachedJson.data;
+      }
+    } catch { /* silent */ }
 
     try {
       const channelDetails: ChannelDetail[] = [];
@@ -402,6 +457,11 @@ export default function AdminClientsPage() {
             }
           }
         }
+
+        // Use cached data as fallback
+        if (totalRevenue === 0 && cachedRevenue?.totalRevenue) totalRevenue = cachedRevenue.totalRevenue;
+        if (totalSubs === 0 && cachedRevenue?.totalSubscribers) totalSubs = cachedRevenue.totalSubscribers;
+        if (totalAnalyticsViews === 0 && cachedRevenue?.totalViews) totalAnalyticsViews = cachedRevenue.totalViews;
 
         const cpm = totalAnalyticsViews > 0 ? (totalRevenue / totalAnalyticsViews) * 1000 : 0;
         const rpm = cpm;
@@ -1143,7 +1203,31 @@ export default function AdminClientsPage() {
                 </div>
               )}
 
-              {/* Channels Table */}
+              {/* Tabs: Channels / Bank Details / Agreements */}
+              <div className="flex gap-1 mb-4 border-b border-border">
+                {[
+                  { id: "channels" as const, label: `Channels (${viewingClient.channels.length})`, icon: Radio },
+                  { id: "bank" as const, label: "Bank Details", icon: Landmark },
+                  { id: "agreements" as const, label: "Agreements", icon: FileText },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setClientDetailTab(tab.id)}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                      clientDetailTab === tab.id
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted hover:text-foreground"
+                    }`}
+                  >
+                    <tab.icon className="w-3.5 h-3.5" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Channels Tab */}
+              {clientDetailTab === "channels" && (
+              <>
               <h3 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Radio className="w-4 h-4 text-purple-500" />
                 Channels ({viewingClient.channels.length})
@@ -1250,6 +1334,178 @@ export default function AdminClientsPage() {
                       </tr>
                     </tfoot>
                   </table>
+                </div>
+              )}
+              </>
+              )}
+
+              {/* Bank Details Tab */}
+              {clientDetailTab === "bank" && (
+                <div className="space-y-4">
+                  <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                    <Landmark className="w-4 h-4 text-blue-500" />
+                    Bank Details
+                  </h3>
+                  {bankLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    </div>
+                  ) : clientBankDetails ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      {[
+                        { label: "Account Holder", value: clientBankDetails.accountHolderName },
+                        { label: "Bank Name", value: clientBankDetails.bankName },
+                        { label: "Account Number", value: clientBankDetails.accountNumber },
+                        { label: "IFSC Code", value: clientBankDetails.ifscCode },
+                        { label: "Branch", value: clientBankDetails.branchName },
+                        { label: "UPI ID", value: clientBankDetails.upiId },
+                        { label: "PAN Number", value: clientBankDetails.panNumber },
+                      ].map((item) => (
+                        <div key={item.label} className="bg-slate-50 rounded-lg p-3">
+                          <p className="text-xs text-muted mb-0.5">{item.label}</p>
+                          <p className="text-sm font-medium text-foreground">{item.value || "Not provided"}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Landmark className="w-10 h-10 text-muted mx-auto mb-2" />
+                      <p className="text-sm text-muted">Client has not added bank details yet.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Agreements Tab */}
+              {clientDetailTab === "agreements" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-purple-500" />
+                      Agreements
+                    </h3>
+                  </div>
+
+                  {/* Add Agreement Form */}
+                  <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+                    <p className="text-sm font-medium text-foreground">Upload New Agreement</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        value={newAgreementName}
+                        onChange={(e) => setNewAgreementName(e.target.value)}
+                        placeholder="Document name (e.g. Service Agreement)"
+                        className="px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <input
+                        type="url"
+                        value={newAgreementUrl}
+                        onChange={(e) => setNewAgreementUrl(e.target.value)}
+                        placeholder="Document URL (Google Drive, Dropbox, etc.)"
+                        className="px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={newAgreementNotes}
+                      onChange={(e) => setNewAgreementNotes(e.target.value)}
+                      placeholder="Notes (optional)"
+                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!newAgreementName || !newAgreementUrl || !viewingClient) return;
+                        const newAg: Agreement = {
+                          id: Date.now().toString(),
+                          fileName: newAgreementName,
+                          fileUrl: newAgreementUrl,
+                          uploadedAt: new Date().toISOString(),
+                          uploadedBy: session?.user?.email || "admin",
+                          notes: newAgreementNotes,
+                        };
+                        const updated = [...clientAgreements, newAg];
+                        try {
+                          await fetch("/api/client-data", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "saveAgreements",
+                              userId: viewingClient.email,
+                              agreements: updated,
+                            }),
+                          });
+                          setClientAgreements(updated);
+                          setNewAgreementName("");
+                          setNewAgreementUrl("");
+                          setNewAgreementNotes("");
+                        } catch { /* silent */ }
+                      }}
+                      disabled={!newAgreementName || !newAgreementUrl}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Add Agreement
+                    </button>
+                  </div>
+
+                  {/* Existing Agreements */}
+                  {agreementLoading ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    </div>
+                  ) : clientAgreements.length === 0 ? (
+                    <div className="text-center py-6">
+                      <FileText className="w-10 h-10 text-muted mx-auto mb-2" />
+                      <p className="text-sm text-muted">No agreements uploaded yet.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {clientAgreements.map((ag) => (
+                        <div key={ag.id} className="flex items-center justify-between p-3 border border-border rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-6 h-6 text-blue-500" />
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{ag.fileName}</p>
+                              <p className="text-xs text-muted">
+                                {new Date(ag.uploadedAt).toLocaleDateString("en-IN")}
+                                {ag.notes && ` — ${ag.notes}`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={ag.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-medium text-accent hover:underline"
+                            >
+                              View
+                            </a>
+                            <button
+                              onClick={async () => {
+                                const updated = clientAgreements.filter((a) => a.id !== ag.id);
+                                try {
+                                  await fetch("/api/client-data", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      action: "saveAgreements",
+                                      userId: viewingClient!.email,
+                                      agreements: updated,
+                                    }),
+                                  });
+                                  setClientAgreements(updated);
+                                } catch { /* silent */ }
+                              }}
+                              className="text-xs font-medium text-red-500 hover:underline"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

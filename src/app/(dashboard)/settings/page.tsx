@@ -1,17 +1,108 @@
 "use client";
 
-import { useState } from "react";
-import { Save, Key, Bell, Globe, Shield, Database } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Save, Key, Bell, Globe, Shield, Landmark, FileText, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { useSession } from "next-auth/react";
+
+interface BankDetails {
+  accountHolderName: string;
+  bankName: string;
+  accountNumber: string;
+  ifscCode: string;
+  branchName: string;
+  upiId: string;
+  panNumber: string;
+}
+
+interface Agreement {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  notes: string;
+}
+
+const emptyBankDetails: BankDetails = {
+  accountHolderName: "",
+  bankName: "",
+  accountNumber: "",
+  ifscCode: "",
+  branchName: "",
+  upiId: "",
+  panNumber: "",
+};
 
 export default function SettingsPage() {
-  const [activeSection, setActiveSection] = useState("general");
+  const { data: session } = useSession();
+  const [activeSection, setActiveSection] = useState("bank");
+  const [bankDetails, setBankDetails] = useState<BankDetails>(emptyBankDetails);
+  const [agreements, setAgreements] = useState<Agreement[]>([]);
+  const [bankLoading, setBankLoading] = useState(true);
+  const [bankSaving, setBankSaving] = useState(false);
+  const [bankSaved, setBankSaved] = useState(false);
+  const [bankError, setBankError] = useState("");
+
+  const userId = session?.user?.email || "";
+
+  const fetchBankDetails = useCallback(async () => {
+    if (!userId) return;
+    try {
+      setBankLoading(true);
+      const res = await fetch(`/api/client-data?action=getBankDetails&userId=${encodeURIComponent(userId)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) setBankDetails(json.data);
+      }
+    } catch { /* silent */ }
+    finally { setBankLoading(false); }
+  }, [userId]);
+
+  const fetchAgreements = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/client-data?action=getAgreements&userId=${encodeURIComponent(userId)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) setAgreements(json.data);
+      }
+    } catch { /* silent */ }
+  }, [userId]);
+
+  useEffect(() => {
+    fetchBankDetails();
+    fetchAgreements();
+  }, [fetchBankDetails, fetchAgreements]);
+
+  const saveBankDetails = async () => {
+    setBankSaving(true);
+    setBankError("");
+    setBankSaved(false);
+    try {
+      const res = await fetch("/api/client-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveBankDetails", userId, bankDetails }),
+      });
+      if (res.ok) {
+        setBankSaved(true);
+        setTimeout(() => setBankSaved(false), 3000);
+      } else {
+        setBankError("Failed to save bank details");
+      }
+    } catch {
+      setBankError("Network error");
+    } finally {
+      setBankSaving(false);
+    }
+  };
 
   const sections = [
+    { id: "bank", label: "Bank Details", icon: Landmark },
+    { id: "agreements", label: "Agreements", icon: FileText },
     { id: "general", label: "General", icon: Globe },
-    { id: "api", label: "API Keys", icon: Key },
-    { id: "notifications", label: "Notifications", icon: Bell },
     { id: "security", label: "Security", icon: Shield },
-    { id: "data", label: "Data & Storage", icon: Database },
+    { id: "notifications", label: "Notifications", icon: Bell },
   ];
 
   return (
@@ -19,7 +110,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Settings</h1>
         <p className="text-sm text-muted mt-1">
-          Manage your account settings and preferences.
+          Manage your account settings, bank details, and agreements.
         </p>
       </div>
 
@@ -44,219 +135,189 @@ export default function SettingsPage() {
         </div>
 
         <div className="flex-1">
+          {activeSection === "bank" && (
+            <div className="bg-white rounded-xl border border-border p-6">
+              <h3 className="font-semibold text-foreground mb-6 flex items-center gap-2">
+                <Landmark className="w-5 h-5 text-blue-600" />
+                Bank Account Details
+              </h3>
+              {bankLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">Account Holder Name</label>
+                      <input
+                        type="text"
+                        value={bankDetails.accountHolderName}
+                        onChange={(e) => setBankDetails({ ...bankDetails, accountHolderName: e.target.value })}
+                        placeholder="Enter account holder name"
+                        className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">Bank Name</label>
+                      <input
+                        type="text"
+                        value={bankDetails.bankName}
+                        onChange={(e) => setBankDetails({ ...bankDetails, bankName: e.target.value })}
+                        placeholder="Enter bank name"
+                        className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">Account Number</label>
+                      <input
+                        type="text"
+                        value={bankDetails.accountNumber}
+                        onChange={(e) => setBankDetails({ ...bankDetails, accountNumber: e.target.value })}
+                        placeholder="Enter account number"
+                        className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">IFSC Code</label>
+                      <input
+                        type="text"
+                        value={bankDetails.ifscCode}
+                        onChange={(e) => setBankDetails({ ...bankDetails, ifscCode: e.target.value.toUpperCase() })}
+                        placeholder="Enter IFSC code"
+                        className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">Branch Name</label>
+                      <input
+                        type="text"
+                        value={bankDetails.branchName}
+                        onChange={(e) => setBankDetails({ ...bankDetails, branchName: e.target.value })}
+                        placeholder="Enter branch name"
+                        className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">UPI ID</label>
+                      <input
+                        type="text"
+                        value={bankDetails.upiId}
+                        onChange={(e) => setBankDetails({ ...bankDetails, upiId: e.target.value })}
+                        placeholder="Enter UPI ID (e.g. name@upi)"
+                        className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">PAN Number</label>
+                      <input
+                        type="text"
+                        value={bankDetails.panNumber}
+                        onChange={(e) => setBankDetails({ ...bankDetails, panNumber: e.target.value.toUpperCase() })}
+                        placeholder="Enter PAN number"
+                        className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      />
+                    </div>
+                  </div>
+
+                  {bankError && (
+                    <div className="flex items-center gap-2 text-red-600 text-sm">
+                      <AlertCircle className="w-4 h-4" />
+                      {bankError}
+                    </div>
+                  )}
+                  {bankSaved && (
+                    <div className="flex items-center gap-2 text-green-600 text-sm">
+                      <CheckCircle className="w-4 h-4" />
+                      Bank details saved successfully!
+                    </div>
+                  )}
+
+                  <button
+                    onClick={saveBankDetails}
+                    disabled={bankSaving}
+                    className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    {bankSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Save Bank Details
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeSection === "agreements" && (
+            <div className="bg-white rounded-xl border border-border p-6">
+              <h3 className="font-semibold text-foreground mb-6 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-purple-600" />
+                Agreements & Licenses
+              </h3>
+              {agreements.length === 0 ? (
+                <div className="text-center py-10">
+                  <FileText className="w-12 h-12 text-muted mx-auto mb-3" />
+                  <p className="text-sm text-muted">No agreements uploaded yet.</p>
+                  <p className="text-xs text-muted mt-1">Your admin will upload agreements here.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {agreements.map((ag) => (
+                    <div key={ag.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-8 h-8 text-blue-500" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{ag.fileName}</p>
+                          <p className="text-xs text-muted">Uploaded {new Date(ag.uploadedAt).toLocaleDateString("en-IN")}</p>
+                          {ag.notes && <p className="text-xs text-muted mt-0.5">{ag.notes}</p>}
+                        </div>
+                      </div>
+                      <a
+                        href={ag.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-accent hover:underline"
+                      >
+                        View
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeSection === "general" && (
             <div className="bg-white rounded-xl border border-border p-6">
-              <h3 className="font-semibold text-foreground mb-6">
-                General Settings
-              </h3>
+              <h3 className="font-semibold text-foreground mb-6">General Settings</h3>
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Company Name
-                  </label>
-                  <input
-                    type="text"
-                    defaultValue="Bainsla Music"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                  />
+                  <label className="block text-sm font-medium text-foreground mb-1.5">Name</label>
+                  <input type="text" defaultValue={session?.user?.name || ""} className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Contact Email
-                  </label>
-                  <input
-                    type="email"
-                    defaultValue="contact@bainslamusic.com"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                  />
+                  <label className="block text-sm font-medium text-foreground mb-1.5">Email</label>
+                  <input type="email" defaultValue={session?.user?.email || ""} disabled className="w-full px-4 py-2.5 border border-border rounded-lg text-sm bg-slate-50 text-muted" />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Timezone
-                  </label>
-                  <select className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
-                    <option>Asia/Kolkata (IST)</option>
-                    <option>America/New_York (EST)</option>
-                    <option>Europe/London (GMT)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Default Currency
-                  </label>
-                  <select className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
-                    <option>INR - Indian Rupee</option>
-                    <option>USD - US Dollar</option>
-                    <option>EUR - Euro</option>
-                  </select>
-                </div>
-                <button className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors">
-                  <Save className="w-4 h-4" />
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeSection === "api" && (
-            <div className="bg-white rounded-xl border border-border p-6">
-              <h3 className="font-semibold text-foreground mb-6">
-                API Configuration
-              </h3>
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Google Client ID
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter your Google Client ID"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-muted-light"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Google Client Secret
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="Enter your Google Client Secret"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-muted-light"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    YouTube API Key
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="Enter your YouTube API Key"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-muted-light"
-                  />
-                </div>
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm text-amber-800">
-                    <strong>Note:</strong> Get your API credentials from{" "}
-                    <a
-                      href="https://console.cloud.google.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-accent underline"
-                    >
-                      Google Cloud Console
-                    </a>
-                    . Enable YouTube Data API v3, YouTube Analytics API, and
-                    YouTube Reporting API.
-                  </p>
-                </div>
-                <button className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors">
-                  <Save className="w-4 h-4" />
-                  Save API Keys
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeSection === "notifications" && (
-            <div className="bg-white rounded-xl border border-border p-6">
-              <h3 className="font-semibold text-foreground mb-6">
-                Notification Preferences
-              </h3>
-              <div className="space-y-4">
-                {[
-                  {
-                    label: "Email notifications for new subscribers",
-                    desc: "Get notified when you reach subscriber milestones",
-                  },
-                  {
-                    label: "Revenue reports",
-                    desc: "Daily/weekly revenue summary emails",
-                  },
-                  {
-                    label: "Video performance alerts",
-                    desc: "Get notified when a video crosses view milestones",
-                  },
-                  {
-                    label: "Content ID claims",
-                    desc: "Notifications for new Content ID claims",
-                  },
-                  {
-                    label: "Comment moderation",
-                    desc: "Alerts for flagged or spam comments",
-                  },
-                ].map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between py-3 border-b border-border/50 last:border-0"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {item.label}
-                      </p>
-                      <p className="text-xs text-muted mt-0.5">{item.desc}</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        defaultChecked={index < 3}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
-                    </label>
-                  </div>
-                ))}
               </div>
             </div>
           )}
 
           {activeSection === "security" && (
             <div className="bg-white rounded-xl border border-border p-6">
-              <h3 className="font-semibold text-foreground mb-6">
-                Security Settings
-              </h3>
+              <h3 className="font-semibold text-foreground mb-6">Security Settings</h3>
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Current Password
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="Enter current password"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-muted-light"
-                  />
+                  <label className="block text-sm font-medium text-foreground mb-1.5">Current Password</label>
+                  <input type="password" placeholder="Enter current password" className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-muted-light" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    New Password
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="Enter new password"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-muted-light"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Confirm New Password
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="Confirm new password"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-muted-light"
-                  />
-                </div>
-                <div className="flex items-center justify-between py-3 border-t border-border">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Two-Factor Authentication
-                    </p>
-                    <p className="text-xs text-muted mt-0.5">
-                      Add extra security to your account
-                    </p>
-                  </div>
-                  <button className="text-sm font-medium text-accent border border-accent/30 hover:bg-accent/5 px-4 py-2 rounded-lg transition-colors">
-                    Enable 2FA
-                  </button>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">New Password</label>
+                  <input type="password" placeholder="Enter new password" className="w-full px-4 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-muted-light" />
                 </div>
                 <button className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors">
                   <Save className="w-4 h-4" />
@@ -266,52 +327,26 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {activeSection === "data" && (
+          {activeSection === "notifications" && (
             <div className="bg-white rounded-xl border border-border p-6">
-              <h3 className="font-semibold text-foreground mb-6">
-                Data & Storage
-              </h3>
-              <div className="space-y-5">
-                <div className="p-4 border border-border rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-medium text-foreground">
-                      Cache Storage
-                    </p>
-                    <span className="text-sm text-muted">245 MB / 1 GB</span>
+              <h3 className="font-semibold text-foreground mb-6">Notification Preferences</h3>
+              <div className="space-y-4">
+                {[
+                  { label: "Revenue reports", desc: "Daily/weekly revenue summary" },
+                  { label: "Payment updates", desc: "When payment status changes" },
+                  { label: "Content ID claims", desc: "New copyright claim notifications" },
+                ].map((item, index) => (
+                  <div key={index} className="flex items-center justify-between py-3 border-b border-border/50 last:border-0">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{item.label}</p>
+                      <p className="text-xs text-muted mt-0.5">{item.desc}</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" defaultChecked className="sr-only peer" />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
+                    </label>
                   </div>
-                  <div className="w-full bg-slate-100 rounded-full h-2">
-                    <div
-                      className="bg-primary rounded-full h-2"
-                      style={{ width: "24.5%" }}
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between py-3 border-b border-border/50">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Auto-sync data from YouTube
-                    </p>
-                    <p className="text-xs text-muted mt-0.5">
-                      Automatically fetch new data every 6 hours
-                    </p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      defaultChecked
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
-                  </label>
-                </div>
-                <div className="flex gap-3">
-                  <button className="text-sm font-medium text-foreground border border-border hover:bg-slate-50 px-4 py-2.5 rounded-lg transition-colors">
-                    Clear Cache
-                  </button>
-                  <button className="text-sm font-medium text-danger border border-danger/30 hover:bg-danger/5 px-4 py-2.5 rounded-lg transition-colors">
-                    Delete All Data
-                  </button>
-                </div>
+                ))}
               </div>
             </div>
           )}
