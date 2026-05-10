@@ -148,6 +148,7 @@ export default function AdminDashboardPage() {
     lastUpdated: string;
   }
   const [cachedClientData, setCachedClientData] = useState<CachedClientData[]>([]);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -170,14 +171,27 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
-  // Fetch cached client data from KV
+  // Trigger server-side sync of all client YouTube data, then fetch cached data
   const fetchCachedData = useCallback(async () => {
     try {
+      // Trigger background sync — fetches YouTube data for all clients using stored tokens
+      fetch("/api/sync-client-data").catch(() => {});
+      // Also immediately load existing cached data
       const res = await fetch("/api/client-data?action=getAllCachedData");
       if (res.ok) {
         const json = await res.json();
         setCachedClientData(json.data || []);
       }
+      // After sync completes, refresh cached data (delayed)
+      setTimeout(async () => {
+        try {
+          const res2 = await fetch("/api/client-data?action=getAllCachedData");
+          if (res2.ok) {
+            const json2 = await res2.json();
+            if (json2.data?.length) setCachedClientData(json2.data);
+          }
+        } catch { /* silent */ }
+      }, 15000);
     } catch { /* silent */ }
   }, []);
 
@@ -400,14 +414,54 @@ export default function AdminDashboardPage() {
           <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
           <p className="text-sm text-muted mt-1">Overview of all clients, channels, and system metrics.</p>
         </div>
-        <button
-          onClick={fetchClients}
-          className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg hover:bg-slate-50 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              setSyncing(true);
+              try {
+                await fetch("/api/sync-client-data");
+                const res = await fetch("/api/client-data?action=getAllCachedData");
+                if (res.ok) {
+                  const json = await res.json();
+                  if (json.data?.length) setCachedClientData(json.data);
+                }
+              } catch { /* silent */ }
+              finally { setSyncing(false); }
+            }}
+            disabled={syncing}
+            className="flex items-center gap-2 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing..." : "Sync YouTube Data"}
+          </button>
+          <button
+            onClick={fetchClients}
+            className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Cached Data Info */}
+      {cachedClientData.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+          <p className="text-sm text-blue-700">
+            Cached data from <strong>{cachedClientData.length}</strong> client(s) — 
+            Last synced: {(() => {
+              const latest = cachedClientData.reduce((a, b) => 
+                new Date(a.lastUpdated) > new Date(b.lastUpdated) ? a : b
+              );
+              return new Date(latest.lastUpdated).toLocaleString("en-IN");
+            })()}
+          </p>
+          <p className="text-xs text-blue-500">
+            Revenue: ${cachedClientData.reduce((s, c) => s + (c.totalRevenue || 0), 0).toFixed(2)} | 
+            Subs: {cachedClientData.reduce((s, c) => s + (c.totalSubscribers || 0), 0).toLocaleString()}
+          </p>
+        </div>
+      )}
 
       {/* Stats Cards Row 1 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
