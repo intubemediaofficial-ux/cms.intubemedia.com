@@ -202,10 +202,15 @@ export default function AdminDashboardPage() {
     }
   }, [status, session, fetchClients, fetchCachedData]);
 
-  // Collect all channel IDs from all clients for YouTube data fetching
+  // Collect all channel IDs from clients + cached data (to handle test IDs in KV)
   const allChannelIds = useMemo(() => {
-    return clients.reduce<string[]>((acc, c) => [...acc, ...c.channels], []);
-  }, [clients]);
+    const kvIds = clients.reduce<string[]>((acc, c) => [...acc, ...c.channels], []);
+    const cachedIds = cachedClientData.flatMap((cd) => cd.channels.map((ch) => ch.channelId));
+    const allSet = new Set([...kvIds, ...cachedIds]);
+    // Prefer real IDs over test IDs
+    const realIds = Array.from(allSet).filter((id) => !id.startsWith("UCtest") && id !== "test");
+    return realIds.length > 0 ? realIds : Array.from(allSet);
+  }, [clients, cachedClientData]);
 
   // Fetch token statuses for all channels
   useEffect(() => {

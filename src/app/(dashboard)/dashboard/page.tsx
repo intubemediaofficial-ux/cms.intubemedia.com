@@ -170,6 +170,18 @@ export default function DashboardPage() {
     setActiveChannelIds(getActiveChannelIds());
   }, []);
 
+  // Sync localStorage channels to KV on dashboard load (so admin sees real channel IDs)
+  useEffect(() => {
+    if (!isAuthenticated || isAdminSession) return;
+    const ids = getActiveChannelIds();
+    if (ids.length === 0) return;
+    fetch("/api/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channels: ids }),
+    }).catch(() => {});
+  }, [isAuthenticated, isAdminSession]);
+
   const apiParams = useMemo(() => ({
     startDate: dateRange.startDate,
     endDate: dateRange.endDate,

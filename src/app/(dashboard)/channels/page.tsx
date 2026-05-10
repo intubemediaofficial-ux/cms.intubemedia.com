@@ -91,6 +91,13 @@ function getStoredChannels(): StoredChannel[] {
 function saveStoredChannels(channels: StoredChannel[]) {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
+  // Sync channel IDs to KV (so admin can see them)
+  const channelIds = channels.filter((c) => c.status === "active").map((c) => c.id);
+  fetch("/api/users", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ channels: channelIds }),
+  }).catch(() => { /* silent - best effort sync */ });
 }
 
 function getChannelRequests(): ChannelRequest[] {
@@ -224,6 +231,19 @@ export default function ChannelsPage() {
     const interval = setInterval(fetchTokenStatuses, 30000);
     return () => clearInterval(interval);
   }, [isAuthenticated, fetchTokenStatuses]);
+
+  // Sync localStorage channels to KV on page load (so admin sees real channel IDs)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const activeChannelIds = storedChannels.filter((c) => c.status === "active").map((c) => c.id);
+    if (activeChannelIds.length === 0) return;
+    fetch("/api/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channels: activeChannelIds }),
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   const [inviteError, setInviteError] = useState("");
 

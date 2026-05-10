@@ -145,7 +145,8 @@ export default function AdminChannelsPage() {
       const newMap: Record<string, YouTubeChannel> = {};
       const revMap: Record<string, number> = {};
 
-      // First try to get cached data for all channels
+      // First try to get cached data for all channels (includes channels synced from client)
+      const cachedClientChannelIds: string[] = [];
       try {
         const cachedRes = await fetch("/api/client-data?action=getAllCachedData");
         if (cachedRes.ok) {
@@ -153,20 +154,22 @@ export default function AdminChannelsPage() {
           const cachedData = cachedJson.data || [];
           for (const cd of cachedData) {
             for (const ch of (cd.channels || [])) {
-              if (allIds.includes(ch.channelId)) {
-                newMap[ch.channelId] = {
-                  id: ch.channelId,
-                  snippet: {
-                    title: ch.channelTitle,
-                    thumbnails: { default: { url: ch.thumbnail }, medium: { url: ch.thumbnail } },
-                  },
-                  statistics: {
-                    subscriberCount: String(ch.subscribers || 0),
-                    videoCount: String(ch.videoCount || 0),
-                    viewCount: String(ch.views || 0),
-                  },
-                };
-                revMap[ch.channelId] = ch.estimatedRevenue || 0;
+              // Include ALL cached channels — they may not yet be synced to KV user record
+              newMap[ch.channelId] = {
+                id: ch.channelId,
+                snippet: {
+                  title: ch.channelTitle,
+                  thumbnails: { default: { url: ch.thumbnail }, medium: { url: ch.thumbnail } },
+                },
+                statistics: {
+                  subscriberCount: String(ch.subscribers || 0),
+                  videoCount: String(ch.videoCount || 0),
+                  viewCount: String(ch.views || 0),
+                },
+              };
+              revMap[ch.channelId] = ch.estimatedRevenue || 0;
+              if (!allIds.includes(ch.channelId)) {
+                cachedClientChannelIds.push(ch.channelId);
               }
             }
           }
@@ -197,8 +200,14 @@ export default function AdminChannelsPage() {
 
   const allChannelRows: ChannelRow[] = useMemo(() => {
     const rows: ChannelRow[] = [];
+    const seenIds = new Set<string>();
     for (const client of clients) {
       for (const chId of client.channels) {
+        // Skip test/placeholder channel IDs if we have real cached data
+        if ((chId.startsWith("UCtest") || chId === "test") && Object.keys(channelDataMap).some((k) => !k.startsWith("UCtest") && k !== "test")) {
+          continue;
+        }
+        seenIds.add(chId);
         const data = channelDataMap[chId];
         rows.push({
           channelId: chId,
@@ -213,6 +222,23 @@ export default function AdminChannelsPage() {
           tokenStatus: tokenStatuses[chId] || "none",
         });
       }
+    }
+    // Also include cached channels that aren't yet in any client's KV channel list
+    for (const [chId, data] of Object.entries(channelDataMap)) {
+      if (seenIds.has(chId)) continue;
+      if (chId.startsWith("UCtest") || chId === "test") continue;
+      rows.push({
+        channelId: chId,
+        name: data?.snippet?.title || chId,
+        thumbnail: data?.snippet?.thumbnails?.medium?.url || data?.snippet?.thumbnails?.default?.url || "",
+        subscribers: Number(data?.statistics?.subscriberCount || 0),
+        videos: Number(data?.statistics?.videoCount || 0),
+        views: Number(data?.statistics?.viewCount || 0),
+        revenue: channelRevenueMap[chId] || 0,
+        clientName: "(from cache)",
+        category: "-",
+        tokenStatus: tokenStatuses[chId] || "none",
+      });
     }
     return rows;
   }, [clients, channelDataMap, channelRevenueMap, tokenStatuses]);
@@ -360,7 +386,7 @@ export default function AdminChannelsPage() {
             </thead>
             <tbody>
               {pageChannels.map((channel) => (
-                <tr key={`${channel.clientName}-${channel.channelId}`} className="border-b border-border hover:bg-slate-50 cursor-pointer" onClick={() => setSelectedChannel(channel)}>
+                <tr key={`${channel.clientName}-${channel.channelId}`} className="border-b border-border hover:bg-slate-50 cursor-pointer" onClick={() => window.open(`https://www.youtube.com/channel/${channel.channelId}`, '_blank')}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 shrink-0">
@@ -399,15 +425,25 @@ export default function AdminChannelsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <a
-                      href={`https://www.youtube.com/channel/${channel.channelId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors inline-flex"
-                      title="View on YouTube"
-                    >
-                      <ExternalLink className="w-4 h-4 text-red-500" />
-                    </a>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedChannel(channel); }}
+                        className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Channel Details"
+                      >
+                        <Eye className="w-4 h-4 text-blue-500" />
+                      </button>
+                      <a
+                        href={`https://www.youtube.com/channel/${channel.channelId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 hover:bg-red-50 rounded-lg transition-colors inline-flex"
+                        title="View on YouTube"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink className="w-4 h-4 text-red-500" />
+                      </a>
+                    </div>
                   </td>
                 </tr>
               ))}
