@@ -188,17 +188,19 @@ export async function PUT(request: Request) {
     }
 
     if (isOwner && distributions[idx].status === "pending") {
-      const allowedFields = [
-        "songTitle", "songFileLink", "posterLink", "singerName",
-        "artistName", "writerName", "composerName", "lyricistName",
-        "genre", "language", "releaseDate", "description",
-      ] as const;
-
-      for (const field of allowedFields) {
-        if (updateFields[field] !== undefined) {
-          (distributions[idx] as Record<string, unknown>)[field] = updateFields[field];
-        }
-      }
+      const item = distributions[idx];
+      if (updateFields.songTitle !== undefined) item.songTitle = updateFields.songTitle;
+      if (updateFields.songFileLink !== undefined) item.songFileLink = updateFields.songFileLink;
+      if (updateFields.posterLink !== undefined) item.posterLink = updateFields.posterLink;
+      if (updateFields.singerName !== undefined) item.singerName = updateFields.singerName;
+      if (updateFields.artistName !== undefined) item.artistName = updateFields.artistName;
+      if (updateFields.writerName !== undefined) item.writerName = updateFields.writerName;
+      if (updateFields.composerName !== undefined) item.composerName = updateFields.composerName;
+      if (updateFields.lyricistName !== undefined) item.lyricistName = updateFields.lyricistName;
+      if (updateFields.genre !== undefined) item.genre = updateFields.genre;
+      if (updateFields.language !== undefined) item.language = updateFields.language;
+      if (updateFields.releaseDate !== undefined) item.releaseDate = updateFields.releaseDate;
+      if (updateFields.description !== undefined) item.description = updateFields.description;
     }
 
     distributions[idx].updatedAt = new Date().toISOString();

@@ -170,15 +170,12 @@ export async function PUT(request: Request) {
     }
 
     if (isOwner && claims[idx].status === "pending") {
-      const allowedFields = [
-        "songTitle", "videoLink", "originalUPC", "claimType", "description",
-      ] as const;
-
-      for (const field of allowedFields) {
-        if (updateFields[field] !== undefined) {
-          (claims[idx] as Record<string, unknown>)[field] = updateFields[field];
-        }
-      }
+      const item = claims[idx];
+      if (updateFields.songTitle !== undefined) item.songTitle = updateFields.songTitle;
+      if (updateFields.videoLink !== undefined) item.videoLink = updateFields.videoLink;
+      if (updateFields.originalUPC !== undefined) item.originalUPC = updateFields.originalUPC;
+      if (updateFields.claimType !== undefined) item.claimType = updateFields.claimType;
+      if (updateFields.description !== undefined) item.description = updateFields.description;
     }
 
     claims[idx].updatedAt = new Date().toISOString();
