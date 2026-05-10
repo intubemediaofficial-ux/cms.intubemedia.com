@@ -116,6 +116,7 @@ export default function AdminDashboardPage() {
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
+  const [tokenStatuses, setTokenStatuses] = useState<Record<string, { status: string; channelTitle?: string; updatedAt?: string }>>({});
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -148,6 +149,21 @@ export default function AdminDashboardPage() {
   const allChannelIds = useMemo(() => {
     return clients.reduce<string[]>((acc, c) => [...acc, ...c.channels], []);
   }, [clients]);
+
+  // Fetch token statuses for all channels
+  useEffect(() => {
+    if (allChannelIds.length === 0) return;
+    const fetchTokenStatuses = async () => {
+      try {
+        const res = await fetch(`/api/channel-tokens?action=bulkTokenStatus&channelIds=${allChannelIds.join(",")}`);
+        if (res.ok) {
+          const json = await res.json();
+          setTokenStatuses(json.data?.statuses || {});
+        }
+      } catch { /* silent */ }
+    };
+    fetchTokenStatuses();
+  }, [allChannelIds]);
 
   const ytApiParams = useMemo(() => ({
     startDate: dateRange.startDate,
@@ -435,21 +451,35 @@ export default function AdminDashboardPage() {
           />
         </div>
         {/* Token status info */}
-        {!ytLoading && (dashData?.tokenizedChannels?.length || 0) === 0 && allChannelIds.length > 0 && (
-          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-            <strong>No channel tokens found.</strong> Analytics data requires valid OAuth tokens for each channel.
-            Clients need to validate their channel tokens via the OAuth invite link in Channels page, or admin needs to login with Google.
-            <span className="block mt-1 text-xs text-amber-600">
-              Channels without tokens: {allChannelIds.length} | With tokens: {dashData?.tokenizedChannels?.length || 0}
-            </span>
-          </div>
-        )}
-        {!ytLoading && (dashData?.tokenizedChannels?.length || 0) > 0 && (dashData?.tokenizedChannels?.length || 0) < allChannelIds.length && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-            Showing analytics for <strong>{dashData?.tokenizedChannels?.length || 0}</strong> of <strong>{allChannelIds.length}</strong> channels with valid tokens.
-            Remaining channels need token validation.
-          </div>
-        )}
+        {(() => {
+          const validCount = Object.values(tokenStatuses).filter((s) => s.status === "valid").length;
+          const totalCount = allChannelIds.length;
+          const invalidChannels = allChannelIds.filter((id) => !tokenStatuses[id] || tokenStatuses[id].status !== "valid");
+          if (totalCount === 0) return null;
+          if (validCount === 0) return (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+              <strong>No channel tokens found.</strong> Revenue & analytics data requires valid OAuth tokens.
+              Clients need to login with Google or validate their channel token via OAuth invite link.
+              <span className="block mt-1 text-xs text-amber-600">
+                {totalCount} channel(s) without valid token
+              </span>
+            </div>
+          );
+          if (validCount < totalCount) return (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+              Analytics for <strong>{validCount}</strong> of <strong>{totalCount}</strong> channels.
+              {invalidChannels.length > 0 && (
+                <span className="block mt-1 text-xs text-blue-600">
+                  Token pending: {invalidChannels.map((id) => {
+                    const client = clients.find((c) => c.channels.includes(id));
+                    return client ? `${id} (${client.name})` : id;
+                  }).join(", ")}
+                </span>
+              )}
+            </div>
+          );
+          return null;
+        })()}
         {ytLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-5 h-5 animate-spin text-primary" />
@@ -766,15 +796,24 @@ export default function AdminDashboardPage() {
                             Channel IDs assigned to {client.name}
                           </p>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                            {client.channels.map((chId) => (
-                              <div
-                                key={chId}
-                                className="flex items-center gap-2 p-2 bg-white rounded-lg border border-border"
-                              >
-                                <Radio className="w-4 h-4 text-purple-500 shrink-0" />
-                                <span className="text-sm font-mono text-foreground truncate">{chId}</span>
-                              </div>
-                            ))}
+                            {client.channels.map((chId) => {
+                              const ts = tokenStatuses[chId];
+                              const isValid = ts?.status === "valid";
+                              return (
+                                <div
+                                  key={chId}
+                                  className="flex items-center gap-2 p-2 bg-white rounded-lg border border-border"
+                                >
+                                  <Radio className="w-4 h-4 text-purple-500 shrink-0" />
+                                  <span className="text-sm font-mono text-foreground truncate flex-1">{chId}</span>
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${
+                                    isValid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                                  }`}>
+                                    {isValid ? "Token Valid" : "No Token"}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       </td>
