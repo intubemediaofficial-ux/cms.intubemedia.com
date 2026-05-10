@@ -8,6 +8,31 @@ export const dynamic = "force-dynamic";
 const PAYMENTS_KEY = "bainsla_payments";
 const WITHDRAW_KEY = "bainsla_withdrawals";
 const TDS_KEY = "bainsla_tds_settings";
+const NOTIFICATIONS_KEY = "bainsla_notifications";
+
+interface Notification {
+  id: string;
+  userId: string;
+  userEmail: string;
+  type: string;
+  title: string;
+  message: string;
+  read: boolean;
+  createdDate: string;
+}
+
+async function createNotification(userId: string, userEmail: string, type: string, title: string, message: string) {
+  try {
+    const all: Notification[] = (await kv.get<Notification[]>(NOTIFICATIONS_KEY)) || [];
+    all.unshift({
+      id: crypto.randomUUID(),
+      userId, userEmail, type, title, message,
+      read: false,
+      createdDate: new Date().toISOString(),
+    });
+    await kv.set(NOTIFICATIONS_KEY, all.slice(0, 500));
+  } catch { /* silent */ }
+}
 
 export interface Payment {
   id: string;
@@ -201,6 +226,51 @@ export async function POST(request: Request) {
       return Response.json({ data: { userId, tdsPercent: Number(tdsPercent) || 0 } });
     }
 
+    // Admin: bulk create payments
+    if (type === "bulk" && admin) {
+      const { items } = body;
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return Response.json({ error: "Items array required" }, { status: 400 });
+      }
+      const payments = await getPayments();
+      const created: Payment[] = [];
+      for (const item of items) {
+        const tds = Number(item.tdsPercent) || 0;
+        const total = Number(item.totalAmount) || 0;
+        const revShare = Number(item.revenueSharePercent) || 0;
+        const networkRev = total * (revShare / 100);
+        const tdsAmt = (total - networkRev) * (tds / 100);
+        const netTotal = total - networkRev - tdsAmt;
+        const p: Payment = {
+          id: crypto.randomUUID(),
+          userId: item.userId || "",
+          userName: item.userName || "",
+          userEmail: item.userEmail || "",
+          networkId: item.networkId || "",
+          networkName: item.networkName || "",
+          revenueSharePercent: revShare,
+          month: item.month || "",
+          fromDate: item.fromDate || "",
+          toDate: item.toDate || "",
+          totalAmount: total,
+          tdsPercent: tds,
+          tdsAmount: Math.round(tdsAmt * 100) / 100,
+          networkRevenue: Math.round(networkRev * 100) / 100,
+          netTotal: Math.round(netTotal * 100) / 100,
+          paidAmount: 0,
+          status: "pending",
+          createdDate: new Date().toISOString(),
+          paidDate: "",
+          notes: item.notes || "",
+        };
+        payments.push(p);
+        created.push(p);
+        await createNotification(p.userId, p.userEmail, "payment_created", "New Payment", `A payment of $${p.netTotal.toFixed(2)} for ${p.month || p.fromDate + " - " + p.toDate} has been created.`);
+      }
+      await savePayments(payments);
+      return Response.json({ data: created }, { status: 201 });
+    }
+
     // Admin: create payment record
     if (!admin) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -250,6 +320,7 @@ export async function POST(request: Request) {
     const payments = await getPayments();
     payments.push(payment);
     await savePayments(payments);
+    await createNotification(payment.userId, payment.userEmail, "payment_created", "New Payment", `A payment of $${payment.netTotal.toFixed(2)} for ${payment.month || payment.fromDate + " - " + payment.toDate} has been created.`);
     return Response.json({ data: payment }, { status: 201 });
   } catch (error) {
     console.error("[Payments] Error:", error);
@@ -282,6 +353,15 @@ export async function PUT(request: Request) {
         withdrawals[idx].processedDate = new Date().toISOString();
       }
       await saveWithdrawals(withdrawals);
+
+      // Send notification to client
+      const w = withdrawals[idx];
+      if (newStatus === "paid") {
+        await createNotification(w.userId, w.userEmail, "withdraw_approved", "Withdrawal Paid", `Your withdrawal request of $${w.amount.toFixed(2)} has been paid.`);
+      } else if (newStatus === "rejected") {
+        await createNotification(w.userId, w.userEmail, "withdraw_rejected", "Withdrawal Rejected", `Your withdrawal request of $${w.amount.toFixed(2)} was rejected.${adminNote ? " Reason: " + adminNote : ""}`);
+      }
+
       return Response.json({ data: withdrawals[idx] });
     }
 
@@ -311,6 +391,12 @@ export async function PUT(request: Request) {
     if (status === "paid") {
       payments[idx].paidDate = new Date().toISOString();
       payments[idx].paidAmount = payments[idx].netTotal;
+      // Notify client
+      await createNotification(
+        payments[idx].userId, payments[idx].userEmail,
+        "payment_paid", "Payment Received",
+        `Your payment of $${payments[idx].netTotal.toFixed(2)} for ${payments[idx].month || payments[idx].fromDate + " - " + payments[idx].toDate} has been paid.`
+      );
     }
 
     await savePayments(payments);
