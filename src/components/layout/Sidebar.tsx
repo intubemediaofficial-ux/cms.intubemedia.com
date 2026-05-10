@@ -69,11 +69,11 @@ const adminNavItems: NavItem[] = [
   { href: "/admin-networks", label: "Network Management", icon: Globe },
   { href: "/dashboard", label: "Network Dashboard", icon: LayoutDashboard },
   {
-    href: "/channels",
+    href: "/admin-channels",
     label: "Channels",
     icon: Radio,
     children: [
-      { href: "/channels", label: "Active Channels", icon: LinkIcon },
+      { href: "/admin-channels", label: "Active Channels", icon: LinkIcon },
       { href: "/delinked-channels", label: "Delinked Channels", icon: Unlink },
     ],
   },
@@ -96,7 +96,7 @@ const adminNavItems: NavItem[] = [
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({ "/channels": true });
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({ "/channels": true, "/admin-channels": true });
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "admin";

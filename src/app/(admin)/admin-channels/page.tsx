@@ -85,6 +85,7 @@ export default function AdminChannelsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [clientFilter, setClientFilter] = useState("");
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, string>>({});
+  const [selectedChannel, setSelectedChannel] = useState<ChannelRow | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -359,7 +360,7 @@ export default function AdminChannelsPage() {
             </thead>
             <tbody>
               {pageChannels.map((channel) => (
-                <tr key={`${channel.clientName}-${channel.channelId}`} className="border-b border-border hover:bg-slate-50">
+                <tr key={`${channel.clientName}-${channel.channelId}`} className="border-b border-border hover:bg-slate-50 cursor-pointer" onClick={() => setSelectedChannel(channel)}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 shrink-0">
@@ -412,7 +413,7 @@ export default function AdminChannelsPage() {
               ))}
               {pageChannels.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={9} className="px-4 py-12 text-center text-muted">
                     {loadingChannels
                       ? "Loading..."
                       : "No channels found. Add clients with channel IDs first."}
@@ -448,6 +449,85 @@ export default function AdminChannelsPage() {
           </div>
         )}
       </div>
+
+      {/* Channel Detail Modal */}
+      {selectedChannel && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedChannel(null)}>
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-foreground">Channel Details</h2>
+                <button onClick={() => setSelectedChannel(null)} className="p-1 hover:bg-slate-100 rounded-lg">
+                  <RotateCcw className="w-5 h-5 text-muted" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-200 shrink-0">
+                  {selectedChannel.thumbnail ? (
+                    <img src={selectedChannel.thumbnail} alt={selectedChannel.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-full h-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-xl">
+                      {selectedChannel.name[0]}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">{selectedChannel.name}</h3>
+                  <p className="text-sm text-muted">{selectedChannel.channelId}</p>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mt-1 ${
+                    selectedChannel.tokenStatus === "valid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                  }`}>
+                    Token: {selectedChannel.tokenStatus === "valid" ? "Valid" : "Not Validated"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-600 font-medium">Subscribers</p>
+                  <p className="text-lg font-bold text-blue-900">{formatNumber(selectedChannel.subscribers)}</p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-xs text-green-600 font-medium">Revenue (28d)</p>
+                  <p className="text-lg font-bold text-green-900">${selectedChannel.revenue.toFixed(2)}</p>
+                </div>
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <p className="text-xs text-purple-600 font-medium">Total Views</p>
+                  <p className="text-lg font-bold text-purple-900">{formatNumber(selectedChannel.views)}</p>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs text-amber-600 font-medium">Videos</p>
+                  <p className="text-lg font-bold text-amber-900">{selectedChannel.videos.toLocaleString()}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted">Client</span>
+                  <span className="font-medium text-foreground">{selectedChannel.clientName}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted">Category</span>
+                  <span className="font-medium text-foreground">{selectedChannel.category}</span>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <a
+                  href={`https://www.youtube.com/channel/${selectedChannel.channelId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  View on YouTube
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
