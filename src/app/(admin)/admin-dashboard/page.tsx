@@ -88,6 +88,13 @@ interface DashboardFullData {
   dailyRevenue?: AnalyticsResponse | null;
   perChannelAnalytics?: Record<string, PerChannelAnalytics>;
   tokenizedChannels?: string[];
+  _debug?: {
+    totalChannelIds: number;
+    tokenizedCount: number;
+    channelTokenErrors: Record<string, string>;
+    perChannelErrors: Record<string, string>;
+    hasAdminToken: boolean;
+  };
 }
 
 function sumMetric(data: AnalyticsResponse | undefined | null, metricName: string): number {
@@ -463,6 +470,16 @@ export default function AdminDashboardPage() {
               <span className="block mt-1 text-xs text-amber-600">
                 {totalCount} channel(s) without valid token
               </span>
+              {dashData?._debug && Object.keys(dashData._debug.channelTokenErrors).length > 0 && (
+                <details className="mt-2 text-xs">
+                  <summary className="cursor-pointer font-medium">Token Details</summary>
+                  <ul className="mt-1 space-y-0.5">
+                    {Object.entries(dashData._debug.channelTokenErrors).map(([id, err]) => (
+                      <li key={id}><code>{id}</code>: {err}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </div>
           );
           if (validCount < totalCount) return (

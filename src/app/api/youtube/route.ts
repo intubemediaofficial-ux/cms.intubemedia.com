@@ -3,7 +3,9 @@ import { authOptions } from "@/lib/auth";
 import {
   getChannelStats,
   getChannelStatsById,
+  getChannelStatsByIdPublic,
   getChannelVideos,
+  getChannelVideosPublic,
   getAnalyticsData,
   getTrafficSources,
   getCountryData,
@@ -13,7 +15,7 @@ import {
   getTopVideos,
   lookupChannel,
 } from "@/lib/youtube";
-import { getValidAccessToken, getTokenStatus } from "@/lib/channel-tokens";
+import { getValidAccessToken, getTokenStatus, getAnyValidAccessToken } from "@/lib/channel-tokens";
 
 export const dynamic = "force-dynamic";
 
@@ -78,11 +80,16 @@ export async function GET(request: Request) {
           const channelSpecificToken = await getValidAccessToken(channelId);
           if (channelSpecificToken) videoToken = channelSpecificToken;
         }
-        if (!videoToken) {
-          return Response.json({ error: "No token available for this channel. Please validate the channel token first." }, { status: 401 });
+        if (videoToken) {
+          const videos = await getChannelVideos(videoToken, channelId);
+          return Response.json({ data: videos });
         }
-        const videos = await getChannelVideos(videoToken, channelId);
-        return Response.json({ data: videos });
+        // Fallback: use API key for public video data
+        const publicVideos = await getChannelVideosPublic(channelId);
+        if (publicVideos.length > 0) {
+          return Response.json({ data: publicVideos });
+        }
+        return Response.json({ error: "No token available for this channel. Please validate the channel token first." }, { status: 401 });
       }
       case "analytics": {
         const data = await getAnalyticsData(
@@ -147,12 +154,17 @@ export async function GET(request: Request) {
         // Try OAuth token first
         let lookupToken = session.accessToken;
         if (!lookupToken) {
-          // Try per-channel tokens
-          const { getValidAccessToken: getToken } = await import("@/lib/channel-tokens");
+          // Try per-channel token for the queried channel itself
+          const t = await getValidAccessToken(query);
+          if (t) lookupToken = t;
+        }
+        if (!lookupToken) {
+          // Try per-channel tokens from explicit list or all known channels
           const storedIds = url.searchParams.get("storedChannelIds")?.split(",").filter(Boolean) || [];
-          for (const sid of storedIds) {
-            const t = await getToken(sid);
-            if (t) { lookupToken = t; break; }
+          const allKnownIds = url.searchParams.get("allChannelIds")?.split(",").filter(Boolean) || [];
+          const idsToTry = [...storedIds, ...allKnownIds];
+          if (idsToTry.length > 0) {
+            lookupToken = await getAnyValidAccessToken(idsToTry) || undefined;
           }
         }
         if (!lookupToken) {
@@ -249,6 +261,9 @@ export async function GET(request: Request) {
           channelsPromise = getChannelStatsById(channelLookupToken, channelIds);
         } else if (channelLookupToken) {
           channelsPromise = getChannelStats(channelLookupToken);
+        } else if (channelIds.length > 0) {
+          // Fallback: use API key for public channel data
+          channelsPromise = getChannelStatsByIdPublic(channelIds);
         } else {
           channelsPromise = Promise.resolve([]);
         }
@@ -272,13 +287,21 @@ export async function GET(request: Request) {
 
         // Collect per-channel tokens for channels that have valid OAuth tokens
         const channelTokenMap: Record<string, string> = {};
+        const channelTokenErrors: Record<string, string> = {};
         for (const cid of channelIds) {
           const tokenStatus = await getTokenStatus(cid);
           if (tokenStatus === "valid" || tokenStatus === "expired") {
             const token = await getValidAccessToken(cid);
-            if (token) channelTokenMap[cid] = token;
+            if (token) {
+              channelTokenMap[cid] = token;
+            } else {
+              channelTokenErrors[cid] = `Token status=${tokenStatus} but getValidAccessToken returned null`;
+            }
+          } else {
+            channelTokenErrors[cid] = `Token status=${tokenStatus}`;
           }
         }
+        console.log(`[dashboardFull] channelIds=${channelIds.length}, tokenized=${Object.keys(channelTokenMap).length}, errors=${JSON.stringify(channelTokenErrors)}`);
         const tokenizedChannelIds = Object.keys(channelTokenMap);
         const hasAnyToken = hasOwnChannel || tokenizedChannelIds.length > 0;
 
@@ -331,14 +354,15 @@ export async function GET(request: Request) {
           revenueViews: Record<string, unknown> | null;
         }> = {};
 
+        const perChannelErrors: Record<string, string> = {};
         for (const [cid, token] of Object.entries(channelTokenMap)) {
           // Skip if this is the admin's own channel (already fetched above)
           if (myChannelIds.includes(cid)) continue;
           try {
             const [perf, prevPerf, rev, prevRev, daily, revViews] = await Promise.all([
-              getAnalyticsData(token, startDate, endDate, performanceMetrics, "").catch(() => null),
+              getAnalyticsData(token, startDate, endDate, performanceMetrics, "").catch((e) => { console.error(`[dashboardFull] ${cid} perf error:`, e?.message || e); return null; }),
               getAnalyticsData(token, prevStartDate, prevEndDate, performanceMetrics, "").catch(() => null),
-              getRevenueData(token, startDate, endDate).catch(() => null),
+              getRevenueData(token, startDate, endDate).catch((e) => { console.error(`[dashboardFull] ${cid} rev error:`, e?.message || e); return null; }),
               getRevenueData(token, prevStartDate, prevEndDate).catch(() => null),
               getAnalyticsData(token, startDate, endDate, "estimatedRevenue", "day").catch(() => null),
               getAnalyticsData(token, startDate, endDate, "estimatedRevenue,views", "").catch(() => null),
@@ -351,8 +375,11 @@ export async function GET(request: Request) {
               dailyRevenue: daily as Record<string, unknown> | null,
               revenueViews: revViews as Record<string, unknown> | null,
             };
-          } catch {
-            // Token might be invalid, skip
+            console.log(`[dashboardFull] ${cid}: perf=${!!perf}, rev=${!!rev}, revViews=${!!revViews}`);
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            console.error(`[dashboardFull] ${cid} analytics failed:`, errMsg);
+            perChannelErrors[cid] = errMsg;
           }
         }
 
@@ -419,6 +446,13 @@ export async function GET(request: Request) {
             lastDayDate,
             perChannelAnalytics,
             tokenizedChannels: tokenizedChannelIds,
+            _debug: {
+              totalChannelIds: channelIds.length,
+              tokenizedCount: tokenizedChannelIds.length,
+              channelTokenErrors,
+              perChannelErrors,
+              hasAdminToken,
+            },
           },
         });
       }

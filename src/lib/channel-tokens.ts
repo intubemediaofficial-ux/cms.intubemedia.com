@@ -126,6 +126,14 @@ export async function getValidAccessToken(channelId: string): Promise<string | n
   return token.accessToken;
 }
 
+export async function getAnyValidAccessToken(channelIds: string[]): Promise<string | null> {
+  for (const cid of channelIds) {
+    const t = await getValidAccessToken(cid);
+    if (t) return t;
+  }
+  return null;
+}
+
 export function isKVConfigured(): boolean {
   return isKVAvailable();
 }

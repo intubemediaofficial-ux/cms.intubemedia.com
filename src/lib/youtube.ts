@@ -9,6 +9,74 @@ function getAuthClient(accessToken: string) {
   return auth;
 }
 
+function getApiKeyYouTube() {
+  const apiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) return null;
+  return google.youtube({ version: "v3", auth: apiKey });
+}
+
+export async function getChannelStatsByIdPublic(channelIds: string[]) {
+  if (channelIds.length === 0) return [];
+  const youtube = getApiKeyYouTube();
+  if (!youtube) return [];
+  const allItems: Array<Record<string, unknown>> = [];
+  for (let i = 0; i < channelIds.length; i += 50) {
+    const batch = channelIds.slice(i, i + 50);
+    const response = await youtube.channels.list({
+      part: ["snippet", "statistics", "contentDetails", "brandingSettings"],
+      id: batch,
+    });
+    if (response.data.items) {
+      allItems.push(...response.data.items.map((item) => ({ ...item })));
+    }
+  }
+  return allItems;
+}
+
+export async function getChannelVideosPublic(channelId: string, maxResults = 50) {
+  const youtube = getApiKeyYouTube();
+  if (!youtube) return [];
+  const channelRes = await youtube.channels.list({
+    part: ["contentDetails"],
+    id: [channelId],
+  });
+  const uploadsPlaylistId = channelRes.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  if (!uploadsPlaylistId) return [];
+
+  const allVideoIds: string[] = [];
+  let nextPageToken: string | undefined;
+  while (allVideoIds.length < maxResults) {
+    const remaining = maxResults - allVideoIds.length;
+    const playlistRes = await youtube.playlistItems.list({
+      part: ["contentDetails"],
+      playlistId: uploadsPlaylistId,
+      maxResults: Math.min(remaining, 50),
+      pageToken: nextPageToken,
+    });
+    const ids = playlistRes.data.items
+      ?.map((item) => item.contentDetails?.videoId)
+      .filter((id): id is string => !!id) || [];
+    allVideoIds.push(...ids);
+    nextPageToken = playlistRes.data.nextPageToken ?? undefined;
+    if (!nextPageToken) break;
+  }
+  if (allVideoIds.length === 0) return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allItems: any[] = [];
+  for (let i = 0; i < allVideoIds.length; i += 50) {
+    const batch = allVideoIds.slice(i, i + 50);
+    const videoResponse = await youtube.videos.list({
+      part: ["snippet", "statistics", "contentDetails", "status"],
+      id: batch,
+    });
+    if (videoResponse.data.items) {
+      allItems.push(...videoResponse.data.items);
+    }
+  }
+  return allItems;
+}
+
 export async function getChannelStats(accessToken: string) {
   const auth = getAuthClient(accessToken);
   const youtube = google.youtube({ version: "v3", auth });
