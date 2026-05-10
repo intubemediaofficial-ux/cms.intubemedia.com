@@ -125,6 +125,30 @@ export default function AdminDashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, { status: string; channelTitle?: string; updatedAt?: string }>>({});
 
+  // Cached client data from KV (auto-saved when clients load their dashboards)
+  interface CachedChannelData {
+    channelId: string;
+    channelTitle: string;
+    thumbnail: string;
+    subscribers: number;
+    views: number;
+    videoCount: number;
+    estimatedRevenue: number;
+    rpm: number;
+    cpm: number;
+    lastUpdated: string;
+  }
+  interface CachedClientData {
+    userId: string;
+    email: string;
+    channels: CachedChannelData[];
+    totalRevenue: number;
+    totalViews: number;
+    totalSubscribers: number;
+    lastUpdated: string;
+  }
+  const [cachedClientData, setCachedClientData] = useState<CachedClientData[]>([]);
+
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
       router.push("/dashboard");
@@ -146,11 +170,23 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
+  // Fetch cached client data from KV
+  const fetchCachedData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/client-data?action=getAllCachedData");
+      if (res.ok) {
+        const json = await res.json();
+        setCachedClientData(json.data || []);
+      }
+    } catch { /* silent */ }
+  }, []);
+
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role === "admin") {
       fetchClients();
+      fetchCachedData();
     }
-  }, [status, session, fetchClients]);
+  }, [status, session, fetchClients, fetchCachedData]);
 
   // Collect all channel IDs from all clients for YouTube data fetching
   const allChannelIds = useMemo(() => {
@@ -186,7 +222,31 @@ export default function AdminDashboardPage() {
     {}
   );
 
-  // Aggregate YouTube analytics data
+  // Aggregate cached client data totals
+  const cachedTotals = useMemo(() => {
+    let totalRevenue = 0;
+    let totalViews = 0;
+    let totalSubscribers = 0;
+    for (const cd of cachedClientData) {
+      totalRevenue += cd.totalRevenue || 0;
+      totalViews += cd.totalViews || 0;
+      totalSubscribers += cd.totalSubscribers || 0;
+    }
+    return { totalRevenue, totalViews, totalSubscribers };
+  }, [cachedClientData]);
+
+  // Build cached channel map for quick lookup
+  const cachedChannelMap = useMemo(() => {
+    const map: Record<string, CachedChannelData> = {};
+    for (const cd of cachedClientData) {
+      for (const ch of cd.channels) {
+        map[ch.channelId] = ch;
+      }
+    }
+    return map;
+  }, [cachedClientData]);
+
+  // Aggregate YouTube analytics data (with cached data fallback)
   const ytStats = useMemo(() => {
     const perChannelAnalytics = dashData?.perChannelAnalytics || {};
     const perChannelEntries = Object.values(perChannelAnalytics);
@@ -212,13 +272,21 @@ export default function AdminDashboardPage() {
       prevSubs += sumMetric(pca.prevPerformance, "subscribersGained") - sumMetric(pca.prevPerformance, "subscribersLost");
     }
 
+    // Use cached data as fallback when YouTube API returns 0
+    const useCachedRevenue = curEstRevenue === 0 && cachedTotals.totalRevenue > 0;
+    if (useCachedRevenue) curEstRevenue = cachedTotals.totalRevenue;
+
     const curCPM = curViews > 0 ? (curEstRevenue / curViews) * 1000 : 0;
     const prevCPM = prevViews > 0 ? (prevEstRevenue / prevViews) * 1000 : 0;
     const curRPM = curViews > 0 ? (curEstRevenue / curViews) * 1000 : 0;
     const prevRPM = prevViews > 0 ? (prevEstRevenue / prevViews) * 1000 : 0;
 
-    const totalSubscribers = (dashData?.channels || []).reduce((sum, ch) => sum + Number(ch?.statistics?.subscriberCount || 0), 0);
-    const totalViewsAll = (dashData?.channels || []).reduce((sum, ch) => sum + Number(ch?.statistics?.viewCount || 0), 0);
+    let totalSubscribers = (dashData?.channels || []).reduce((sum, ch) => sum + Number(ch?.statistics?.subscriberCount || 0), 0);
+    let totalViewsAll = (dashData?.channels || []).reduce((sum, ch) => sum + Number(ch?.statistics?.viewCount || 0), 0);
+
+    // Use cached totals as fallback
+    if (totalSubscribers === 0 && cachedTotals.totalSubscribers > 0) totalSubscribers = cachedTotals.totalSubscribers;
+    if (totalViewsAll === 0 && cachedTotals.totalViews > 0) totalViewsAll = cachedTotals.totalViews;
 
     return {
       curEstRevenue, prevEstRevenue,
@@ -227,8 +295,9 @@ export default function AdminDashboardPage() {
       curCPM, prevCPM,
       curRPM, prevRPM,
       totalSubscribers, totalViewsAll,
+      usedCachedData: useCachedRevenue || (totalSubscribers > 0 && cachedTotals.totalSubscribers > 0),
     };
-  }, [dashData]);
+  }, [dashData, cachedTotals]);
 
   const stats = useMemo(() => {
     const totalClients = clients.length;
@@ -816,18 +885,36 @@ export default function AdminDashboardPage() {
                             {client.channels.map((chId) => {
                               const ts = tokenStatuses[chId];
                               const isValid = ts?.status === "valid";
+                              const cached = cachedChannelMap[chId];
                               return (
                                 <div
                                   key={chId}
-                                  className="flex items-center gap-2 p-2 bg-white rounded-lg border border-border"
+                                  className="flex flex-col gap-1 p-2 bg-white rounded-lg border border-border"
                                 >
-                                  <Radio className="w-4 h-4 text-purple-500 shrink-0" />
-                                  <span className="text-sm font-mono text-foreground truncate flex-1">{chId}</span>
-                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${
-                                    isValid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                                  }`}>
-                                    {isValid ? "Token Valid" : "No Token"}
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    {cached?.thumbnail ? (
+                                      <img src={cached.thumbnail} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                                    ) : (
+                                      <Radio className="w-4 h-4 text-purple-500 shrink-0" />
+                                    )}
+                                    <span className="text-sm font-medium text-foreground truncate flex-1">
+                                      {cached?.channelTitle || chId}
+                                    </span>
+                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${
+                                      isValid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                                    }`}>
+                                      {isValid ? "Token Valid" : "No Token"}
+                                    </span>
+                                  </div>
+                                  {cached && (
+                                    <div className="flex gap-3 text-[10px] text-muted pl-6">
+                                      <span>{cached.subscribers.toLocaleString()} subs</span>
+                                      <span>{cached.views.toLocaleString()} views</span>
+                                      {cached.estimatedRevenue > 0 && (
+                                        <span className="text-green-600">${cached.estimatedRevenue.toFixed(2)}</span>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}

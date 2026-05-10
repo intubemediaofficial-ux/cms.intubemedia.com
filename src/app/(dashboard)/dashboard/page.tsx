@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Eye,
   Users,
@@ -362,6 +362,49 @@ export default function DashboardPage() {
     setDatePreset(preset);
     setDateRange(range);
   };
+
+  // Auto-cache client YouTube data to KV for admin access
+  const cacheData = useCallback(async () => {
+    if (!session?.user?.email || isAdminSession || !isReal || channels.length === 0) return;
+    try {
+      const cachedChannels = channels.map((ch) => {
+        const revInfo = channelRevenueMap[ch.id || ""];
+        return {
+          channelId: ch.id || "",
+          channelTitle: ch.snippet?.title || "",
+          thumbnail: ch.snippet?.thumbnails?.default?.url || "",
+          subscribers: Number(ch.statistics?.subscriberCount || 0),
+          views: Number(ch.statistics?.viewCount || 0),
+          videoCount: Number(ch.statistics?.videoCount || 0),
+          estimatedRevenue: revInfo?.revenue || 0,
+          rpm: revInfo?.rpm || 0,
+          cpm: 0,
+          lastUpdated: new Date().toISOString(),
+        };
+      });
+      await fetch("/api/client-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "cacheData",
+          userId: session.user.email,
+          data: {
+            userId: session.user.email,
+            email: session.user.email,
+            channels: cachedChannels,
+            totalRevenue: curEstRevenue,
+            totalViews,
+            totalSubscribers,
+            lastUpdated: new Date().toISOString(),
+          },
+        }),
+      });
+    } catch { /* silent */ }
+  }, [session?.user?.email, isAdminSession, isReal, channels, channelRevenueMap, curEstRevenue, totalViews, totalSubscribers]);
+
+  useEffect(() => {
+    cacheData();
+  }, [cacheData]);
 
   return (
     <div className="space-y-5">
