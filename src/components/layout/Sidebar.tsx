@@ -15,13 +15,15 @@ import {
   ChevronRight,
   ChevronDown,
   Music2,
-  DollarSign,
+
   Users,
   LinkIcon,
   Unlink,
   FileText,
   Shield,
   ClipboardCheck,
+  Music,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +65,8 @@ const clientNavItems: NavItem[] = [
       { href: "/onboarding-review/summary-channel", label: "Summary Channel", icon: FileText },
     ],
   },
+  { href: "/music-distribution", label: "Music Distribution", icon: Music },
+  { href: "/claim-release", label: "Claim Release", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -99,6 +103,8 @@ const adminNavItems: NavItem[] = [
       { href: "/onboarding-review/summary-channel", label: "Summary Channel", icon: FileText },
     ],
   },
+  { href: "/admin-distribution", label: "Music Distribution", icon: Music },
+  { href: "/admin-claims", label: "Claim Release", icon: ShieldCheck },
   { href: "/admin-settings", label: "Settings", icon: Settings },
 ];
 

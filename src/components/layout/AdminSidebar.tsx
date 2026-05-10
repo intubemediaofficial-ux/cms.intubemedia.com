@@ -16,6 +16,8 @@ import {
   Music2,
   Shield,
   FileText,
+  Music,
+  ShieldCheck,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 
@@ -45,6 +47,8 @@ const navItems: NavItem[] = [
       { href: "/admin-reports", label: "Revenue Reports", icon: FileText },
     ],
   },
+  { href: "/admin-distribution", label: "Music Distribution", icon: Music },
+  { href: "/admin-claims", label: "Claim Release", icon: ShieldCheck },
   { href: "/admin-settings", label: "Settings", icon: Settings },
 ];
 
