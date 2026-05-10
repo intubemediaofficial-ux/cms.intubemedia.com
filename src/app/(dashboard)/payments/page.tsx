@@ -207,7 +207,7 @@ export default function PaymentsPage() {
   const totalTds = myPayments.reduce((s, p) => s + p.tdsAmount, 0);
   const totalNetPayable = myPayments.reduce((s, p) => s + p.netTotal, 0);
   const totalPaid = myPayments.filter((p) => p.status === "paid").reduce((s, p) => s + p.paidAmount, 0);
-  const pendingBalance = totalNetPayable - totalPaid;
+  const pendingBalance = totalNetPayable > 0 ? totalNetPayable - totalPaid : afterPartnerShare - totalTds;
 
   // Per-channel breakdown
   const channelBreakdown = channels.map((ch) => {
@@ -289,15 +289,18 @@ export default function PaymentsPage() {
           <h1 className="text-2xl font-bold text-foreground">Payments</h1>
           <p className="text-sm text-muted mt-1">Your revenue breakdown and payment history.</p>
         </div>
-        {pendingBalance > 0 && (
-          <button
-            onClick={() => { setShowWithdraw(true); setWithdrawError(""); setWithdrawAmount(""); }}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-          >
-            <ArrowDownCircle className="w-4 h-4" />
-            Withdraw Payment
-          </button>
-        )}
+        <button
+          onClick={() => { setShowWithdraw(true); setWithdrawError(""); setWithdrawAmount(""); }}
+          disabled={pendingBalance <= 0}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            pendingBalance > 0
+              ? "bg-green-600 text-white hover:bg-green-700"
+              : "bg-gray-200 text-gray-500 cursor-not-allowed"
+          }`}
+        >
+          <ArrowDownCircle className="w-4 h-4" />
+          Withdraw Payment
+        </button>
       </div>
 
       {/* Top 3 Cards: Total Payment, Partner Share, TDS */}
@@ -350,15 +353,18 @@ export default function PaymentsPage() {
               {totalPaid > 0 ? `${formatCurrency(totalPaid)} already paid` : "After partner share deduction"}
             </p>
           </div>
-          {pendingBalance > 0 && (
-            <button
-              onClick={() => { setShowWithdraw(true); setWithdrawError(""); setWithdrawAmount(""); }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
-            >
-              <ArrowDownCircle className="w-4 h-4" />
-              Withdraw
-            </button>
-          )}
+          <button
+            onClick={() => { setShowWithdraw(true); setWithdrawError(""); setWithdrawAmount(""); }}
+            disabled={pendingBalance <= 0}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium ${
+              pendingBalance > 0
+                ? "bg-green-600 text-white hover:bg-green-700"
+                : "bg-gray-200 text-gray-500 cursor-not-allowed"
+            }`}
+          >
+            <ArrowDownCircle className="w-4 h-4" />
+            Withdraw
+          </button>
         </div>
       </div>
 

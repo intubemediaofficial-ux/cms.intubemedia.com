@@ -65,12 +65,13 @@ type ChannelRow = {
   views: number;
   clientName: string;
   category: string;
+  tokenStatus?: string;
 };
 
 export default function AdminChannelsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const isAuthenticated = status === "authenticated" && !!session?.accessToken;
+  const isAuthenticated = status === "authenticated" && (!!session?.accessToken || session?.user?.role === "admin");
 
   const [clients, setClients] = useState<Client[]>([]);
   const [channelDataMap, setChannelDataMap] = useState<Record<string, YouTubeChannel>>({});
@@ -79,6 +80,7 @@ export default function AdminChannelsPage() {
   const [perPage, setPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [clientFilter, setClientFilter] = useState("");
+  const [tokenStatuses, setTokenStatuses] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -87,8 +89,46 @@ export default function AdminChannelsPage() {
   }, [status, session, router]);
 
   useEffect(() => {
-    setClients(getClients());
-  }, []);
+    // Fetch clients from API (KV) for admin, fallback to localStorage
+    const fetchClients = async () => {
+      try {
+        const res = await fetch("/api/users");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data?.length) {
+            setClients(json.data);
+            return;
+          }
+        }
+      } catch { /* fallback below */ }
+      setClients(getClients());
+    };
+    if (status === "authenticated" && session?.user?.role === "admin") {
+      fetchClients();
+    } else {
+      setClients(getClients());
+    }
+  }, [status, session]);
+
+  // Fetch token statuses for all channels
+  useEffect(() => {
+    const allIds = clients.flatMap((c) => c.channels);
+    if (allIds.length === 0 || !isAuthenticated) return;
+    const fetchStatuses = async () => {
+      try {
+        const res = await fetch(`/api/channel-tokens?action=bulkTokenStatus&channelIds=${allIds.join(",")}`);
+        if (res.ok) {
+          const json = await res.json();
+          const statuses: Record<string, string> = {};
+          for (const [id, val] of Object.entries(json.data?.statuses || {})) {
+            statuses[id] = (val as { status: string }).status;
+          }
+          setTokenStatuses(statuses);
+        }
+      } catch { /* silent */ }
+    };
+    fetchStatuses();
+  }, [clients, isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -96,10 +136,11 @@ export default function AdminChannelsPage() {
     if (allIds.length === 0) return;
 
     setLoadingChannels(true);
+    const allChannelIds = clients.flatMap((c) => c.channels);
     const fetchAll = async () => {
       for (const id of allIds) {
         try {
-          const res = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}`);
+          const res = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}&allChannelIds=${allChannelIds.join(",")}`);
           const json = await res.json();
           if (res.ok && json.data?.length) {
             setChannelDataMap((prev) => ({ ...prev, [id]: json.data[0] }));
@@ -127,11 +168,12 @@ export default function AdminChannelsPage() {
           views: Number(data?.statistics?.viewCount || 0),
           clientName: client.name,
           category: client.category,
+          tokenStatus: tokenStatuses[chId] || "none",
         });
       }
     }
     return rows;
-  }, [clients, channelDataMap]);
+  }, [clients, channelDataMap, tokenStatuses]);
 
   const filteredChannels = useMemo(() => {
     let result = allChannelRows;
@@ -242,6 +284,7 @@ export default function AdminChannelsPage() {
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Views</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Client</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Category</th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground">Token</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Actions</th>
               </tr>
             </thead>
@@ -278,6 +321,13 @@ export default function AdminChannelsPage() {
                   </td>
                   <td className="px-4 py-3 text-foreground">{channel.category}</td>
                   <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                      channel.tokenStatus === "valid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                    }`}>
+                      {channel.tokenStatus === "valid" ? "Valid" : "Not Validated"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
                     <a
                       href={`https://www.youtube.com/channel/${channel.channelId}`}
                       target="_blank"
@@ -292,7 +342,7 @@ export default function AdminChannelsPage() {
               ))}
               {pageChannels.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={8} className="px-4 py-12 text-center text-muted">
                     {loadingChannels
                       ? "Loading..."
                       : "No channels found. Add clients with channel IDs first."}
