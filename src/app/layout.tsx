@@ -14,8 +14,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bainsla Music - YouTube CMS",
-  description: "Modern YouTube Channel Management System by Bainsla Music",
+  title: "Bainsla Music - Rajasthan's No.1 Music Production Company",
+  description:
+    "Bainsla Music is a distinguished music production company rooted in Rajasthan, India. YouTube CMS/MCN, Music Distribution, Channel Promotion & Management.",
+  keywords:
+    "Bainsla Music, Rajasthani Music, Rasiya Songs, YouTube CMS, Music Distribution, Channel Management, Jaipur",
+  openGraph: {
+    title: "Bainsla Music - Rajasthan's No.1 Music Production Company",
+    description:
+      "Music Production, YouTube CMS/MCN, Audio Video Distribution & Channel Management. 9+ Years, 500+ Videos, 50+ Artists.",
+    type: "website",
+    url: "https://bainslamusic.com",
+  },
   icons: {
     icon: "/favicon.ico",
   },
