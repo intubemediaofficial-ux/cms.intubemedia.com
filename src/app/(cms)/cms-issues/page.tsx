@@ -58,14 +58,14 @@ function getPriorityBadge(priority: Issue["priority"]) {
   switch (priority) {
     case "high": return <span className="px-2 py-0.5 text-xs font-medium bg-red-50 text-red-600 rounded-full">High</span>;
     case "medium": return <span className="px-2 py-0.5 text-xs font-medium bg-yellow-50 text-yellow-600 rounded-full">Medium</span>;
-    case "low": return <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">Low</span>;
+    case "low": return <span className="px-2 py-0.5 text-xs font-medium bg-[#f2f2f2] text-[#606060] rounded-full">Low</span>;
   }
 }
 
 function getStatusBadge(status: Issue["status"]) {
   switch (status) {
     case "open": return <span className="flex items-center gap-1 text-xs text-orange-600"><Clock className="w-3 h-3" /> Open</span>;
-    case "in_review": return <span className="flex items-center gap-1 text-xs text-blue-600"><RefreshCw className="w-3 h-3" /> In review</span>;
+    case "in_review": return <span className="flex items-center gap-1 text-xs text-[#065FD4]"><RefreshCw className="w-3 h-3" /> In review</span>;
     case "resolved": return <span className="flex items-center gap-1 text-xs text-green-600"><CheckCircle className="w-3 h-3" /> Resolved</span>;
   }
 }
@@ -90,10 +90,10 @@ export default function CmsIssuesPage() {
   const totalIssues = issueTypeCounts.reduce((sum, i) => sum + i.count, 0);
 
   return (
-    <div className="max-w-[1400px] mx-auto">
+    <div className="">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-normal text-gray-800">Issues</h1>
-        <span className="text-sm text-gray-500">{totalIssues} issues requiring action</span>
+        <h1 className="text-[20px] font-normal text-[#282828]">Issues</h1>
+        <span className="text-sm text-[#606060]">{totalIssues} issues requiring action</span>
       </div>
 
       {/* Issue type summary cards */}
@@ -103,20 +103,20 @@ export default function CmsIssuesPage() {
             key={item.type}
             onClick={() => setActiveType(activeType === item.type ? "all" : item.type)}
             className={`bg-white rounded-lg border p-3 text-left transition-all ${
-              activeType === item.type ? "border-blue-400 ring-1 ring-blue-200" : "border-gray-200 hover:border-gray-300"
+              activeType === item.type ? "border-blue-400 ring-1 ring-blue-200" : "border-[#e5e5e5] hover:border-gray-300"
             }`}
           >
-            <p className={`text-xl font-semibold ${item.count > 0 ? "text-gray-800" : "text-gray-300"}`}>{item.count}</p>
-            <p className="text-xs text-gray-500 mt-1 leading-tight">{item.label}</p>
+            <p className={`text-xl font-semibold ${item.count > 0 ? "text-[#282828]" : "text-[#909090]"}`}>{item.count}</p>
+            <p className="text-xs text-[#606060] mt-1 leading-tight">{item.label}</p>
           </button>
         ))}
       </div>
 
       {/* Toolbar */}
-      <div className="bg-white rounded-lg border border-gray-200 mb-4">
+      <div className="bg-white rounded-lg border border-[#e5e5e5] mb-4">
         <div className="flex items-center gap-3 p-3">
-          <div className="flex items-center bg-gray-100 rounded-lg flex-1 max-w-md">
-            <Search className="w-4 h-4 text-gray-400 ml-3" />
+          <div className="flex items-center bg-[#f2f2f2] rounded-lg flex-1 max-w-md">
+            <Search className="w-4 h-4 text-[#909090] ml-3" />
             <input
               type="text"
               placeholder="Search issues..."
@@ -128,7 +128,7 @@ export default function CmsIssuesPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-600"
+            className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-[#606060]"
           >
             <option value="all">All statuses</option>
             <option value="open">Open</option>
@@ -138,7 +138,7 @@ export default function CmsIssuesPage() {
           {activeType !== "all" && (
             <button
               onClick={() => setActiveType("all")}
-              className="text-sm text-blue-600 hover:text-blue-700"
+              className="text-sm text-[#065FD4] hover:text-[#065FD4]"
             >
               Clear filter
             </button>
@@ -147,44 +147,44 @@ export default function CmsIssuesPage() {
       </div>
 
       {/* Issues list */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg border border-[#e5e5e5] overflow-hidden">
         {filteredIssues.length === 0 ? (
           <div className="p-12 text-center">
             <CheckCircle className="w-12 h-12 text-green-200 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">No issues found</p>
+            <p className="text-sm text-[#606060]">No issues found</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
             {filteredIssues.map((issue) => (
-              <div key={issue.id} className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer">
+              <div key={issue.id} className="px-6 py-4 hover:bg-[#f9f9f9] transition-colors cursor-pointer">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <AlertTriangle className={`w-4 h-4 ${issue.priority === "high" ? "text-red-500" : issue.priority === "medium" ? "text-yellow-500" : "text-gray-400"}`} />
-                      <h3 className="text-sm font-medium text-gray-800">{issue.title}</h3>
+                      <AlertTriangle className={`w-4 h-4 ${issue.priority === "high" ? "text-red-500" : issue.priority === "medium" ? "text-yellow-500" : "text-[#909090]"}`} />
+                      <h3 className="text-sm font-medium text-[#282828]">{issue.title}</h3>
                     </div>
-                    <p className="text-xs text-gray-500 ml-6 mb-2">{issue.description}</p>
+                    <p className="text-xs text-[#606060] ml-6 mb-2">{issue.description}</p>
                     <div className="flex items-center gap-3 ml-6">
-                      <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{getTypeLabel(issue.type)}</span>
+                      <span className="text-xs text-[#909090] bg-[#f2f2f2] px-2 py-0.5 rounded">{getTypeLabel(issue.type)}</span>
                       {getPriorityBadge(issue.priority)}
                       {getStatusBadge(issue.status)}
-                      <span className="text-xs text-gray-400">Asset: {issue.asset}</span>
-                      <span className="text-xs text-gray-400">{issue.createdDate}</span>
+                      <span className="text-xs text-[#909090]">Asset: {issue.asset}</span>
+                      <span className="text-xs text-[#909090]">{issue.createdDate}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 ml-4">
                     {issue.status === "open" && (
                       <>
-                        <button className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                        <button className="px-3 py-1 text-xs font-medium text-white bg-[#065FD4] rounded-lg hover:bg-[#0548a6]">
                           Review
                         </button>
-                        <button className="px-3 py-1 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        <button className="px-3 py-1 text-xs font-medium text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">
                           Release
                         </button>
                       </>
                     )}
-                    <button className="p-1 hover:bg-gray-100 rounded">
-                      <MoreVertical className="w-4 h-4 text-gray-400" />
+                    <button className="p-1 hover:bg-[#f2f2f2] rounded">
+                      <MoreVertical className="w-4 h-4 text-[#909090]" />
                     </button>
                   </div>
                 </div>

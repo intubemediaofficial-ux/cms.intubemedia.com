@@ -42,8 +42,8 @@ function getStatusBadge(status: ClaimStatus) {
     potential: "bg-yellow-50 text-yellow-700",
     disputed: "bg-red-50 text-red-700",
     appealed: "bg-orange-50 text-orange-700",
-    inactive: "bg-gray-100 text-gray-500",
-    pending: "bg-blue-50 text-blue-700",
+    inactive: "bg-[#f2f2f2] text-[#606060]",
+    pending: "bg-[#def1ff] text-[#065FD4]",
     takedown: "bg-red-100 text-red-800",
   };
   return <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${styles[status]}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>;
@@ -67,13 +67,13 @@ export default function CmsClaimedVideosPage() {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto">
+    <div className="">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-normal text-gray-800">Claimed videos</h1>
+        <h1 className="text-[20px] font-normal text-[#282828]">Claimed videos</h1>
       </div>
 
       {/* Source tabs */}
-      <div className="flex items-center gap-6 border-b border-gray-200 mb-4">
+      <div className="flex items-center gap-6 border-b border-[#e5e5e5] mb-4">
         {[
           { value: "all", label: "All sources" },
           { value: "partner", label: "Partner provided videos" },
@@ -82,7 +82,7 @@ export default function CmsClaimedVideosPage() {
           <button
             key={tab.value}
             onClick={() => setSourceFilter(tab.value)}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${sourceFilter === tab.value ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${sourceFilter === tab.value ? "border-[#282828] text-[#065FD4]" : "border-transparent text-[#606060] hover:text-[#282828]"}`}
           >
             {tab.label}
           </button>
@@ -90,13 +90,13 @@ export default function CmsClaimedVideosPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="bg-white rounded-lg border border-gray-200 mb-4">
+      <div className="bg-white rounded-lg border border-[#e5e5e5] mb-4">
         <div className="flex items-center gap-3 p-3">
-          <div className="flex items-center bg-gray-100 rounded-lg flex-1 max-w-md">
-            <Search className="w-4 h-4 text-gray-400 ml-3" />
+          <div className="flex items-center bg-[#f2f2f2] rounded-lg flex-1 max-w-md">
+            <Search className="w-4 h-4 text-[#909090] ml-3" />
             <input type="text" placeholder="Search claimed videos..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-transparent px-3 py-2 text-sm outline-none" />
           </div>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-600">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-[#606060]">
             <option value="all">Claim status</option>
             <option value="active">Active</option>
             <option value="potential">Potential</option>
@@ -106,7 +106,7 @@ export default function CmsClaimedVideosPage() {
             <option value="pending">Pending</option>
             <option value="takedown">Takedown</option>
           </select>
-          <select className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-600">
+          <select className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-[#606060]">
             <option>Claim type</option>
             <option>Audio</option>
             <option>Visual</option>
@@ -115,49 +115,49 @@ export default function CmsClaimedVideosPage() {
           <div className="flex-1" />
           {selectedVideos.size > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">{selectedVideos.size} selected</span>
-              <button className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Release claims</button>
-              <button className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Change policy</button>
+              <span className="text-sm text-[#606060]">{selectedVideos.size} selected</span>
+              <button className="px-3 py-1.5 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">Release claims</button>
+              <button className="px-3 py-1.5 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">Change policy</button>
             </div>
           )}
-          <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">
             <Download className="w-3.5 h-3.5" /> Export
           </button>
         </div>
       </div>
 
       {/* Claimed videos list */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg border border-[#e5e5e5] overflow-hidden">
         <div className="divide-y divide-gray-100">
           {filteredVideos.map((video) => (
-            <div key={video.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+            <div key={video.id} className="px-6 py-4 hover:bg-[#f9f9f9] transition-colors">
               <div className="flex items-start gap-4">
                 <button onClick={() => toggleSelect(video.id)} className="mt-1">
-                  {selectedVideos.has(video.id) ? <CheckSquare className="w-4 h-4 text-blue-600" /> : <Square className="w-4 h-4 text-gray-400" />}
+                  {selectedVideos.has(video.id) ? <CheckSquare className="w-4 h-4 text-[#065FD4]" /> : <Square className="w-4 h-4 text-[#909090]" />}
                 </button>
                 <div className="w-[140px] h-[80px] bg-gray-200 rounded flex items-center justify-center shrink-0">
-                  <Video className="w-6 h-6 text-gray-400" />
+                  <Video className="w-6 h-6 text-[#909090]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-medium text-gray-800 mb-1">{video.title}</h3>
-                  <p className="text-xs text-gray-500 mb-2">{video.channel} • {video.views} views • {video.publishDate}</p>
+                  <h3 className="text-sm font-medium text-[#282828] mb-1">{video.title}</h3>
+                  <p className="text-xs text-[#606060] mb-2">{video.channel} • {video.views} views • {video.publishDate}</p>
                   <div className="space-y-1.5">
                     {video.claims.map((claim, idx) => (
-                      <div key={idx} className="flex items-center gap-3 bg-gray-50 rounded px-3 py-1.5">
-                        <span className="text-xs text-gray-600 font-medium">{claim.asset}</span>
+                      <div key={idx} className="flex items-center gap-3 bg-[#f9f9f9] rounded px-3 py-1.5">
+                        <span className="text-xs text-[#606060] font-medium">{claim.asset}</span>
                         {getStatusBadge(claim.status)}
-                        <span className="text-xs text-gray-500 capitalize">{claim.type}</span>
-                        <span className="text-xs text-gray-400">Policy: {claim.policy}</span>
-                        <span className="text-xs text-gray-400 ml-auto">{claim.createdDate}</span>
+                        <span className="text-xs text-[#606060] capitalize">{claim.type}</span>
+                        <span className="text-xs text-[#909090]">Policy: {claim.policy}</span>
+                        <span className="text-xs text-[#909090] ml-auto">{claim.createdDate}</span>
                       </div>
                     ))}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {video.claims.some(c => c.status === "potential" || c.status === "disputed" || c.status === "appealed") && (
-                    <button className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Review</button>
+                    <button className="px-3 py-1 text-xs font-medium text-white bg-[#065FD4] rounded-lg hover:bg-[#0548a6]">Review</button>
                   )}
-                  <button className="p-1 hover:bg-gray-100 rounded"><MoreVertical className="w-4 h-4 text-gray-400" /></button>
+                  <button className="p-1 hover:bg-[#f2f2f2] rounded"><MoreVertical className="w-4 h-4 text-[#909090]" /></button>
                 </div>
               </div>
             </div>

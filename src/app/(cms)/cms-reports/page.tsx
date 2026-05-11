@@ -42,8 +42,8 @@ function getTypeIcon(type: ReportType) {
 function getStatusBadge(status: Report["status"]) {
   switch (status) {
     case "ready": return <span className="flex items-center gap-1 text-xs text-green-600"><CheckCircle className="w-3 h-3" /> Ready</span>;
-    case "processing": return <span className="flex items-center gap-1 text-xs text-blue-600"><RefreshCw className="w-3 h-3 animate-spin" /> Processing</span>;
-    case "scheduled": return <span className="flex items-center gap-1 text-xs text-gray-500"><Clock className="w-3 h-3" /> Scheduled</span>;
+    case "processing": return <span className="flex items-center gap-1 text-xs text-[#065FD4]"><RefreshCw className="w-3 h-3 animate-spin" /> Processing</span>;
+    case "scheduled": return <span className="flex items-center gap-1 text-xs text-[#606060]"><Clock className="w-3 h-3" /> Scheduled</span>;
   }
 }
 
@@ -58,9 +58,9 @@ export default function CmsReportsPage() {
   });
 
   return (
-    <div className="max-w-[1400px] mx-auto">
+    <div className="">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-normal text-gray-800">Reports</h1>
+        <h1 className="text-[20px] font-normal text-[#282828]">Reports</h1>
       </div>
 
       {/* Report type filters */}
@@ -74,7 +74,7 @@ export default function CmsReportsPage() {
           { value: "claims", label: "Claims" },
           { value: "campaigns", label: "Campaigns" },
         ].map(tab => (
-          <button key={tab.value} onClick={() => setTypeFilter(tab.value)} className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${typeFilter === tab.value ? "bg-blue-50 border-blue-200 text-blue-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+          <button key={tab.value} onClick={() => setTypeFilter(tab.value)} className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${typeFilter === tab.value ? "bg-[#def1ff] border-blue-200 text-[#065FD4]" : "border-[#e5e5e5] text-[#606060] hover:bg-[#f9f9f9]"}`}>
             {tab.label}
           </button>
         ))}
@@ -82,47 +82,47 @@ export default function CmsReportsPage() {
 
       {/* Frequency filter */}
       <div className="flex items-center gap-3 mb-4">
-        <span className="text-sm text-gray-500">Frequency:</span>
+        <span className="text-sm text-[#606060]">Frequency:</span>
         {["all", "weekly", "monthly"].map(f => (
-          <button key={f} onClick={() => setFrequencyFilter(f)} className={`px-3 py-1 text-xs rounded-full border transition-colors capitalize ${frequencyFilter === f ? "bg-gray-800 border-gray-800 text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+          <button key={f} onClick={() => setFrequencyFilter(f)} className={`px-3 py-1 text-xs rounded-full border transition-colors capitalize ${frequencyFilter === f ? "bg-gray-800 border-gray-800 text-white" : "border-[#e5e5e5] text-[#606060] hover:bg-[#f9f9f9]"}`}>
             {f === "all" ? "All" : f}
           </button>
         ))}
       </div>
 
       {/* Reports table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg border border-[#e5e5e5] overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Report</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Type</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Period</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Frequency</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Status</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Size</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Generated</th>
+            <tr className="border-b border-[#e5e5e5] bg-[#f9f9f9]">
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Report</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Type</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Period</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Frequency</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Status</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Size</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Generated</th>
               <th className="w-20 px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {filteredReports.map(report => (
-              <tr key={report.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+              <tr key={report.id} className="border-b border-[#e5e5e5] hover:bg-[#f9f9f9] transition-colors">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     {getTypeIcon(report.type)}
-                    <span className="text-sm font-medium text-gray-800">{report.name}</span>
+                    <span className="text-sm font-medium text-[#282828]">{report.name}</span>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-600 capitalize">{report.type}</td>
-                <td className="px-4 py-3 text-sm text-gray-600">{report.period}</td>
-                <td className="px-4 py-3 text-sm text-gray-500 capitalize">{report.frequency}</td>
+                <td className="px-4 py-3 text-sm text-[#606060] capitalize">{report.type}</td>
+                <td className="px-4 py-3 text-sm text-[#606060]">{report.period}</td>
+                <td className="px-4 py-3 text-sm text-[#606060] capitalize">{report.frequency}</td>
                 <td className="px-4 py-3">{getStatusBadge(report.status)}</td>
-                <td className="px-4 py-3 text-sm text-gray-500">{report.size}</td>
-                <td className="px-4 py-3 text-sm text-gray-500">{report.generatedDate}</td>
+                <td className="px-4 py-3 text-sm text-[#606060]">{report.size}</td>
+                <td className="px-4 py-3 text-sm text-[#606060]">{report.generatedDate}</td>
                 <td className="px-4 py-3">
                   {report.status === "ready" && (
-                    <button className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">
+                    <button className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-[#065FD4] border border-blue-200 rounded-lg hover:bg-[#def1ff]">
                       <Download className="w-3 h-3" /> CSV
                     </button>
                   )}

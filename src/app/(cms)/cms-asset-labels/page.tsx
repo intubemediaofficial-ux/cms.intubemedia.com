@@ -33,12 +33,12 @@ export default function CmsAssetLabelsPage() {
   );
 
   return (
-    <div className="max-w-[1400px] mx-auto">
+    <div className="">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-normal text-gray-800">Asset labels</h1>
+        <h1 className="text-[20px] font-normal text-[#282828]">Asset labels</h1>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-[#065FD4] text-white text-sm font-medium rounded-lg hover:bg-[#0548a6] transition-colors"
         >
           <Plus className="w-4 h-4" />
           Create label
@@ -46,10 +46,10 @@ export default function CmsAssetLabelsPage() {
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-lg border border-gray-200 mb-4">
+      <div className="bg-white rounded-lg border border-[#e5e5e5] mb-4">
         <div className="flex items-center gap-3 p-3">
-          <div className="flex items-center bg-gray-100 rounded-lg flex-1 max-w-md">
-            <Search className="w-4 h-4 text-gray-400 ml-3" />
+          <div className="flex items-center bg-[#f2f2f2] rounded-lg flex-1 max-w-md">
+            <Search className="w-4 h-4 text-[#909090] ml-3" />
             <input
               type="text"
               placeholder="Search labels..."
@@ -64,30 +64,30 @@ export default function CmsAssetLabelsPage() {
       {/* Labels grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredLabels.map((label) => (
-          <div key={label.id} className="bg-white rounded-lg border border-gray-200 p-5 hover:shadow-md transition-shadow group">
+          <div key={label.id} className="bg-white rounded-lg border border-[#e5e5e5] p-5 hover:shadow-md transition-shadow group">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Tags className="w-5 h-5 text-blue-500" />
-                <h3 className="text-sm font-medium text-gray-800">{label.name}</h3>
+                <h3 className="text-sm font-medium text-[#282828]">{label.name}</h3>
               </div>
-              <button className="p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                <MoreVertical className="w-4 h-4 text-gray-400" />
+              <button className="p-1 hover:bg-[#f2f2f2] rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                <MoreVertical className="w-4 h-4 text-[#909090]" />
               </button>
             </div>
-            <p className="text-xs text-gray-500 mb-4">{label.description}</p>
+            <p className="text-xs text-[#606060] mb-4">{label.description}</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-lg font-semibold text-gray-800">{label.assetsCount}</p>
-                <p className="text-xs text-gray-500">Assets</p>
+                <p className="text-lg font-semibold text-[#282828]">{label.assetsCount}</p>
+                <p className="text-xs text-[#606060]">Assets</p>
               </div>
               <div>
-                <p className="text-lg font-semibold text-gray-800">{label.activeClaimsCount}</p>
-                <p className="text-xs text-gray-500">Active claims</p>
+                <p className="text-lg font-semibold text-[#282828]">{label.activeClaimsCount}</p>
+                <p className="text-xs text-[#606060]">Active claims</p>
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-xs text-gray-400">Updated {label.updatedDate}</span>
-              <button className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1">
+            <div className="mt-4 pt-3 border-t border-[#e5e5e5] flex items-center justify-between">
+              <span className="text-xs text-[#909090]">Updated {label.updatedDate}</span>
+              <button className="text-xs text-[#065FD4] hover:text-[#065FD4] flex items-center gap-1">
                 View claims <ChevronRight className="w-3 h-3" />
               </button>
             </div>
@@ -99,10 +99,10 @@ export default function CmsAssetLabelsPage() {
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={() => setShowCreateModal(false)}>
           <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-medium text-gray-800 mb-4">Create new label</h2>
+            <h2 className="text-lg font-medium text-[#282828] mb-4">Create new label</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Label name</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Label name</label>
                 <input
                   type="text"
                   value={newLabelName}
@@ -112,7 +112,7 @@ export default function CmsAssetLabelsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Description</label>
                 <textarea
                   value={newLabelDesc}
                   onChange={(e) => setNewLabelDesc(e.target.value)}
@@ -123,10 +123,10 @@ export default function CmsAssetLabelsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">
                 Cancel
               </button>
-              <button className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+              <button className="px-4 py-2 text-sm text-white bg-[#065FD4] rounded-lg hover:bg-[#0548a6]">
                 Create label
               </button>
             </div>
