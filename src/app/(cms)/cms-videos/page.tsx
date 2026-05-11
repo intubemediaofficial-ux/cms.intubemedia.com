@@ -91,17 +91,17 @@ export default function CmsVideosPage() {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto">
+    <div className="">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-normal text-gray-800">Videos</h1>
+        <h1 className="text-[20px] font-normal text-[#282828]">Videos</h1>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-gray-200 mb-4">
+      <div className="flex items-center gap-6 border-b border-[#e5e5e5] mb-4">
         <button
           onClick={() => { setActiveTab("uploads"); setSelectedVideos(new Set()); }}
           className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "uploads" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
+            activeTab === "uploads" ? "border-[#282828] text-[#065FD4]" : "border-transparent text-[#606060] hover:text-[#282828]"
           }`}
         >
           Uploads
@@ -109,24 +109,24 @@ export default function CmsVideosPage() {
         <button
           onClick={() => { setActiveTab("live"); setSelectedVideos(new Set()); }}
           className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "live" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
+            activeTab === "live" ? "border-[#282828] text-[#065FD4]" : "border-transparent text-[#606060] hover:text-[#282828]"
           }`}
         >
           Live
         </button>
         <button
-          className="pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors"
+          className="pb-3 text-sm font-medium border-b-2 border-transparent text-[#606060] hover:text-[#282828] transition-colors"
         >
           Rights Management
         </button>
       </div>
 
       {/* Toolbar */}
-      <div className="bg-white rounded-lg border border-gray-200 mb-4">
+      <div className="bg-white rounded-lg border border-[#e5e5e5] mb-4">
         <div className="flex items-center gap-3 p-3">
           {/* Search */}
-          <div className="flex items-center bg-gray-100 rounded-lg flex-1 max-w-md">
-            <Search className="w-4 h-4 text-gray-400 ml-3" />
+          <div className="flex items-center bg-[#f2f2f2] rounded-lg flex-1 max-w-md">
+            <Search className="w-4 h-4 text-[#909090] ml-3" />
             <input
               type="text"
               placeholder="Search videos..."
@@ -139,7 +139,7 @@ export default function CmsVideosPage() {
           {/* Filter */}
           <button
             onClick={() => setFilterOpen(!filterOpen)}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9] transition-colors"
           >
             <Filter className="w-4 h-4" />
             Filter
@@ -151,14 +151,14 @@ export default function CmsVideosPage() {
           {/* Bulk actions */}
           {selectedVideos.size > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">{selectedVideos.size} selected</span>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              <span className="text-sm text-[#606060]">{selectedVideos.size} selected</span>
+              <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">
                 <Edit3 className="w-3.5 h-3.5" /> Edit
               </button>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">
                 <Shield className="w-3.5 h-3.5" /> Content ID
               </button>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">
                 <Download className="w-3.5 h-3.5" /> Export
               </button>
               <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50">
@@ -168,7 +168,7 @@ export default function CmsVideosPage() {
           )}
 
           {selectedVideos.size === 0 && (
-            <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+            <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">
               <Download className="w-3.5 h-3.5" /> Export
             </button>
           )}
@@ -176,33 +176,33 @@ export default function CmsVideosPage() {
 
         {/* Filter panel */}
         {filterOpen && (
-          <div className="px-3 pb-3 border-t border-gray-100 pt-3">
+          <div className="px-3 pb-3 border-t border-[#e5e5e5] pt-3">
             <div className="flex flex-wrap gap-3">
-              <select className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-gray-600">
+              <select className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-[#606060]">
                 <option>All channels</option>
                 <option>Bainsla Music</option>
                 <option>Desi Beats</option>
                 <option>Music Hub</option>
               </select>
-              <select className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-gray-600">
+              <select className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-[#606060]">
                 <option>Claim status</option>
                 <option>Active claim</option>
                 <option>Potential</option>
                 <option>Disputed</option>
                 <option>No claim</option>
               </select>
-              <select className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-gray-600">
+              <select className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-[#606060]">
                 <option>Visibility</option>
                 <option>Public</option>
                 <option>Private</option>
                 <option>Unlisted</option>
               </select>
-              <select className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-gray-600">
+              <select className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-[#606060]">
                 <option>Content ID</option>
                 <option>Enabled</option>
                 <option>Disabled</option>
               </select>
-              <select className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-gray-600">
+              <select className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-[#606060]">
                 <option>Monetization</option>
                 <option>Monetized</option>
                 <option>Not monetized</option>
@@ -213,49 +213,49 @@ export default function CmsVideosPage() {
       </div>
 
       {/* Video list table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg border border-[#e5e5e5] overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
+            <tr className="border-b border-[#e5e5e5] bg-[#f9f9f9]">
               <th className="w-10 px-4 py-3">
                 <button onClick={toggleSelectAll}>
                   {selectedVideos.size === filteredVideos.length && filteredVideos.length > 0 ? (
-                    <CheckSquare className="w-4 h-4 text-blue-600" />
+                    <CheckSquare className="w-4 h-4 text-[#065FD4]" />
                   ) : (
-                    <Square className="w-4 h-4 text-gray-400" />
+                    <Square className="w-4 h-4 text-[#909090]" />
                   )}
                 </button>
               </th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Video</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Channel</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Visibility</th>
-              <th className="text-right text-xs font-medium text-gray-500 uppercase px-4 py-3">Views</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Claims</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Content ID</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Date</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Video</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Channel</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Visibility</th>
+              <th className="text-right text-xs font-medium text-[#606060] uppercase px-4 py-3">Views</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Claims</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Content ID</th>
+              <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Date</th>
               <th className="w-10 px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {filteredVideos.map((video) => (
-              <tr key={video.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+              <tr key={video.id} className="border-b border-[#e5e5e5] hover:bg-[#f9f9f9] transition-colors">
                 <td className="px-4 py-3">
                   <button onClick={() => toggleSelect(video.id)}>
                     {selectedVideos.has(video.id) ? (
-                      <CheckSquare className="w-4 h-4 text-blue-600" />
+                      <CheckSquare className="w-4 h-4 text-[#065FD4]" />
                     ) : (
-                      <Square className="w-4 h-4 text-gray-400" />
+                      <Square className="w-4 h-4 text-[#909090]" />
                     )}
                   </button>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="w-[120px] h-[68px] bg-gray-200 rounded flex items-center justify-center shrink-0">
-                      <Video className="w-6 h-6 text-gray-400" />
+                      <Video className="w-6 h-6 text-[#909090]" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-800 line-clamp-2">{video.title}</p>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                      <p className="text-sm font-medium text-[#282828] line-clamp-2">{video.title}</p>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-[#606060]">
                         <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{video.views}</span>
                         <span className="flex items-center gap-1"><ThumbsUp className="w-3 h-3" />{video.likes}</span>
                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{video.duration}</span>
@@ -263,25 +263,25 @@ export default function CmsVideosPage() {
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-600">{video.channel}</td>
+                <td className="px-4 py-3 text-sm text-[#606060]">{video.channel}</td>
                 <td className="px-4 py-3">
                   <span className={`text-xs font-medium capitalize ${
-                    video.visibility === "public" ? "text-green-600" : video.visibility === "private" ? "text-red-600" : "text-gray-500"
+                    video.visibility === "public" ? "text-green-600" : video.visibility === "private" ? "text-red-600" : "text-[#606060]"
                   }`}>
                     {video.visibility}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-600 text-right">{video.views}</td>
+                <td className="px-4 py-3 text-sm text-[#606060] text-right">{video.views}</td>
                 <td className="px-4 py-3">{getClaimBadge(video.claimStatus)}</td>
                 <td className="px-4 py-3">
-                  <span className={`text-xs ${video.contentId ? "text-green-600" : "text-gray-400"}`}>
+                  <span className={`text-xs ${video.contentId ? "text-green-600" : "text-[#909090]"}`}>
                     {video.contentId ? "Enabled" : "Disabled"}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-500">{video.publishDate}</td>
+                <td className="px-4 py-3 text-sm text-[#606060]">{video.publishDate}</td>
                 <td className="px-4 py-3">
-                  <button className="p-1 hover:bg-gray-100 rounded transition-colors">
-                    <MoreVertical className="w-4 h-4 text-gray-400" />
+                  <button className="p-1 hover:bg-[#f2f2f2] rounded transition-colors">
+                    <MoreVertical className="w-4 h-4 text-[#909090]" />
                   </button>
                 </td>
               </tr>

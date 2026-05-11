@@ -30,7 +30,7 @@ const mockPolicies: Policy[] = [
 function getActionBadge(action: PolicyAction) {
   switch (action) {
     case "monetize": return <span className="px-2 py-0.5 text-xs font-medium bg-green-50 text-green-700 rounded-full">Monetize</span>;
-    case "track": return <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">Track</span>;
+    case "track": return <span className="px-2 py-0.5 text-xs font-medium bg-[#def1ff] text-[#065FD4] rounded-full">Track</span>;
     case "block": return <span className="px-2 py-0.5 text-xs font-medium bg-red-50 text-red-700 rounded-full">Block</span>;
   }
 }
@@ -49,12 +49,12 @@ export default function CmsPoliciesPage() {
   });
 
   return (
-    <div className="max-w-[1400px] mx-auto">
+    <div className="">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-normal text-gray-800">Policies</h1>
+        <h1 className="text-[20px] font-normal text-[#282828]">Policies</h1>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-[#065FD4] text-white text-sm font-medium rounded-lg hover:bg-[#0548a6] transition-colors"
         >
           <Plus className="w-4 h-4" />
           Create policy
@@ -62,7 +62,7 @@ export default function CmsPoliciesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-gray-200 mb-4">
+      <div className="flex items-center gap-6 border-b border-[#e5e5e5] mb-4">
         {[
           { value: "all", label: "All policies" },
           { value: "match", label: "Match policies" },
@@ -71,7 +71,7 @@ export default function CmsPoliciesPage() {
           <button
             key={tab.value}
             onClick={() => setTypeFilter(tab.value)}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${typeFilter === tab.value ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${typeFilter === tab.value ? "border-[#282828] text-[#065FD4]" : "border-transparent text-[#606060] hover:text-[#282828]"}`}
           >
             {tab.label}
           </button>
@@ -79,9 +79,9 @@ export default function CmsPoliciesPage() {
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-lg border border-gray-200 mb-4 p-3">
-        <div className="flex items-center bg-gray-100 rounded-lg max-w-md">
-          <Search className="w-4 h-4 text-gray-400 ml-3" />
+      <div className="bg-white rounded-lg border border-[#e5e5e5] mb-4 p-3">
+        <div className="flex items-center bg-[#f2f2f2] rounded-lg max-w-md">
+          <Search className="w-4 h-4 text-[#909090] ml-3" />
           <input type="text" placeholder="Search policies..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-transparent px-3 py-2 text-sm outline-none" />
         </div>
       </div>
@@ -89,12 +89,12 @@ export default function CmsPoliciesPage() {
       {/* Policies list */}
       <div className="space-y-3">
         {filteredPolicies.map((policy) => (
-          <div key={policy.id} className="bg-white rounded-lg border border-gray-200 p-5 hover:shadow-sm transition-shadow">
+          <div key={policy.id} className="bg-white rounded-lg border border-[#e5e5e5] p-5 hover:shadow-sm transition-shadow">
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                  <Shield className="w-5 h-5 text-gray-400" />
-                  <h3 className="text-sm font-medium text-gray-800">{policy.name}</h3>
+                  <Shield className="w-5 h-5 text-[#909090]" />
+                  <h3 className="text-sm font-medium text-[#282828]">{policy.name}</h3>
                   {getActionBadge(policy.action)}
                   <span className={`px-2 py-0.5 text-xs rounded-full ${policy.type === "match" ? "bg-purple-50 text-purple-600" : "bg-orange-50 text-orange-600"}`}>
                     {policy.type === "match" ? "Match policy" : "Upload policy"}
@@ -105,7 +105,7 @@ export default function CmsPoliciesPage() {
                     </span>
                   )}
                 </div>
-                <div className="ml-8 flex items-center gap-4 text-xs text-gray-500">
+                <div className="ml-8 flex items-center gap-4 text-xs text-[#606060]">
                   <span>Conditions: {policy.conditions.join(", ")}</span>
                   <span>•</span>
                   <span>{policy.assetsUsing} assets using this policy</span>
@@ -114,14 +114,14 @@ export default function CmsPoliciesPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button className="p-1.5 hover:bg-gray-100 rounded transition-colors" title="Duplicate">
-                  <Copy className="w-4 h-4 text-gray-400" />
+                <button className="p-1.5 hover:bg-[#f2f2f2] rounded transition-colors" title="Duplicate">
+                  <Copy className="w-4 h-4 text-[#909090]" />
                 </button>
-                <button className="p-1.5 hover:bg-gray-100 rounded transition-colors" title="Edit">
-                  <Edit3 className="w-4 h-4 text-gray-400" />
+                <button className="p-1.5 hover:bg-[#f2f2f2] rounded transition-colors" title="Edit">
+                  <Edit3 className="w-4 h-4 text-[#909090]" />
                 </button>
-                <button className="p-1.5 hover:bg-gray-100 rounded transition-colors" title="Delete">
-                  <Trash2 className="w-4 h-4 text-gray-400" />
+                <button className="p-1.5 hover:bg-[#f2f2f2] rounded transition-colors" title="Delete">
+                  <Trash2 className="w-4 h-4 text-[#909090]" />
                 </button>
               </div>
             </div>
@@ -133,22 +133,22 @@ export default function CmsPoliciesPage() {
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={() => setShowCreateModal(false)}>
           <div className="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-medium text-gray-800 mb-4">Create new policy</h2>
+            <h2 className="text-lg font-medium text-[#282828] mb-4">Create new policy</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Policy name</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Policy name</label>
                 <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Enter policy name" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Policy type</label>
+                  <label className="block text-sm font-medium text-[#282828] mb-1">Policy type</label>
                   <select value={newPolicyType} onChange={(e) => setNewPolicyType(e.target.value as PolicyType)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                     <option value="match">Match policy</option>
                     <option value="upload">Upload policy</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
+                  <label className="block text-sm font-medium text-[#282828] mb-1">Action</label>
                   <select value={newPolicyAction} onChange={(e) => setNewPolicyAction(e.target.value as PolicyAction)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                     <option value="monetize">Monetize</option>
                     <option value="track">Track</option>
@@ -159,7 +159,7 @@ export default function CmsPoliciesPage() {
               {newPolicyType === "match" && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Match type</label>
+                    <label className="block text-sm font-medium text-[#282828] mb-1">Match type</label>
                     <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                       <option>All match types</option>
                       <option>Audio only</option>
@@ -168,23 +168,23 @@ export default function CmsPoliciesPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Minimum match length</label>
+                    <label className="block text-sm font-medium text-[#282828] mb-1">Minimum match length</label>
                     <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g., 30 seconds" />
                   </div>
                 </>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Viewer location</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Viewer location</label>
                 <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g., Worldwide or specific countries" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Schedule (optional)</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Schedule (optional)</label>
                 <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-              <button className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700">Create policy</button>
+              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">Cancel</button>
+              <button className="px-4 py-2 text-sm text-white bg-[#065FD4] rounded-lg hover:bg-[#0548a6]">Create policy</button>
             </div>
           </div>
         </div>

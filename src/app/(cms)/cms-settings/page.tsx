@@ -46,13 +46,13 @@ export default function CmsSettingsPage() {
   const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
 
   return (
-    <div className="max-w-[1400px] mx-auto">
+    <div className="">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-normal text-gray-800">Settings</h1>
+        <h1 className="text-[20px] font-normal text-[#282828]">Settings</h1>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-gray-200 mb-6">
+      <div className="flex items-center gap-6 border-b border-[#e5e5e5] mb-6">
         {([
           { value: "general" as const, label: "General", icon: Settings },
           { value: "permissions" as const, label: "Permissions", icon: Users },
@@ -63,7 +63,7 @@ export default function CmsSettingsPage() {
           <button
             key={tab.value}
             onClick={() => setActiveTab(tab.value)}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === tab.value ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === tab.value ? "border-[#282828] text-[#065FD4]" : "border-transparent text-[#606060] hover:text-[#282828]"}`}
           >
             <tab.icon className="w-4 h-4" /> {tab.label}
           </button>
@@ -73,25 +73,25 @@ export default function CmsSettingsPage() {
       {/* General Tab */}
       {activeTab === "general" && (
         <div className="space-y-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-sm font-medium text-gray-800 mb-4">Account Information</h3>
+          <div className="bg-white rounded-lg border border-[#e5e5e5] p-6">
+            <h3 className="text-sm font-medium text-[#282828] mb-4">Account Information</h3>
             <div className="space-y-4 max-w-lg">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Content Manager name</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Content Manager name</label>
                 <input type="text" defaultValue="Bainsla Music001" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contact email</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Contact email</label>
                 <input type="email" defaultValue="admin@bainslamusic.com" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-sm font-medium text-gray-800 mb-4">User Preferences</h3>
+          <div className="bg-white rounded-lg border border-[#e5e5e5] p-6">
+            <h3 className="text-sm font-medium text-[#282828] mb-4">User Preferences</h3>
             <div className="space-y-4 max-w-lg">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Currency</label>
                 <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                   <option>USD - US Dollar</option>
                   <option>INR - Indian Rupee</option>
@@ -101,7 +101,7 @@ export default function CmsSettingsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Language</label>
                 <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                   <option>English</option>
                   <option>Hindi</option>
@@ -110,7 +110,7 @@ export default function CmsSettingsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Timezone</label>
                 <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                   <option>Asia/Kolkata (IST)</option>
                   <option>America/New_York (EST)</option>
@@ -121,25 +121,25 @@ export default function CmsSettingsPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-sm font-medium text-gray-800 mb-4">Embedding & Attribution</h3>
+          <div className="bg-white rounded-lg border border-[#e5e5e5] p-6">
+            <h3 className="text-sm font-medium text-[#282828] mb-4">Embedding & Attribution</h3>
             <div className="space-y-3 max-w-lg">
-              <label className="flex items-center gap-3 text-sm text-gray-600">
+              <label className="flex items-center gap-3 text-sm text-[#606060]">
                 <input type="checkbox" defaultChecked className="rounded border-gray-300" />
                 Allow embedding on external websites
               </label>
-              <label className="flex items-center gap-3 text-sm text-gray-600">
+              <label className="flex items-center gap-3 text-sm text-[#606060]">
                 <input type="checkbox" defaultChecked className="rounded border-gray-300" />
                 Show attribution in descriptions
               </label>
-              <label className="flex items-center gap-3 text-sm text-gray-600">
+              <label className="flex items-center gap-3 text-sm text-[#606060]">
                 <input type="checkbox" className="rounded border-gray-300" />
                 Restrict embedding to allowlisted domains only
               </label>
             </div>
           </div>
 
-          <button className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700">Save changes</button>
+          <button className="px-4 py-2 text-sm text-white bg-[#065FD4] rounded-lg hover:bg-[#0548a6]">Save changes</button>
         </div>
       )}
 
@@ -147,37 +147,37 @@ export default function CmsSettingsPage() {
       {activeTab === "permissions" && (
         <div className="space-y-6">
           {/* Users section */}
-          <div className="bg-white rounded-lg border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-gray-800">Users ({mockUsers.length})</h3>
+          <div className="bg-white rounded-lg border border-[#e5e5e5]">
+            <div className="px-6 py-4 border-b border-[#e5e5e5] flex items-center justify-between">
+              <h3 className="text-sm font-medium text-[#282828]">Users ({mockUsers.length})</h3>
               <div className="flex items-center gap-2">
-                <button className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Export</button>
-                <button onClick={() => setShowInviteModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                <button className="px-3 py-1.5 text-xs font-medium text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">Export</button>
+                <button onClick={() => setShowInviteModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#065FD4] rounded-lg hover:bg-[#0548a6]">
                   <UserPlus className="w-3.5 h-3.5" /> Invite user
                 </button>
               </div>
             </div>
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">User</th>
-                  <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Role</th>
-                  <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Status</th>
-                  <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Added</th>
+                <tr className="border-b border-[#e5e5e5] bg-[#f9f9f9]">
+                  <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">User</th>
+                  <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Role</th>
+                  <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Status</th>
+                  <th className="text-left text-xs font-medium text-[#606060] uppercase px-4 py-3">Added</th>
                   <th className="w-20 px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
                 {mockUsers.map(user => (
-                  <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={user.id} className="border-b border-[#e5e5e5] hover:bg-[#f9f9f9]">
                     <td className="px-4 py-3">
                       <div>
-                        <p className="text-sm font-medium text-gray-800">{user.name}</p>
-                        <p className="text-xs text-gray-500">{user.email}</p>
+                        <p className="text-sm font-medium text-[#282828]">{user.name}</p>
+                        <p className="text-xs text-[#606060]">{user.email}</p>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <select defaultValue={user.role} className="text-sm border border-gray-200 rounded px-2 py-1 bg-white">
+                      <select defaultValue={user.role} className="text-sm border border-[#e5e5e5] rounded px-2 py-1 bg-white">
                         {mockRoles.map(r => <option key={r.id}>{r.name}</option>)}
                       </select>
                     </td>
@@ -186,9 +186,9 @@ export default function CmsSettingsPage() {
                         {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">{user.addedDate}</td>
+                    <td className="px-4 py-3 text-sm text-[#606060]">{user.addedDate}</td>
                     <td className="px-4 py-3">
-                      <button className="p-1 hover:bg-gray-100 rounded"><MoreVertical className="w-4 h-4 text-gray-400" /></button>
+                      <button className="p-1 hover:bg-[#f2f2f2] rounded"><MoreVertical className="w-4 h-4 text-[#909090]" /></button>
                     </td>
                   </tr>
                 ))}
@@ -197,31 +197,31 @@ export default function CmsSettingsPage() {
           </div>
 
           {/* Roles section */}
-          <div className="bg-white rounded-lg border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-gray-800">Roles</h3>
-              <button onClick={() => setShowCreateRoleModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">
+          <div className="bg-white rounded-lg border border-[#e5e5e5]">
+            <div className="px-6 py-4 border-b border-[#e5e5e5] flex items-center justify-between">
+              <h3 className="text-sm font-medium text-[#282828]">Roles</h3>
+              <button onClick={() => setShowCreateRoleModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#065FD4] border border-blue-200 rounded-lg hover:bg-[#def1ff]">
                 <Plus className="w-3.5 h-3.5" /> Create role
               </button>
             </div>
             <div className="divide-y divide-gray-100">
               {mockRoles.map(role => (
-                <div key={role.id} className="px-6 py-4 hover:bg-gray-50">
+                <div key={role.id} className="px-6 py-4 hover:bg-[#f9f9f9]">
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-sm font-medium text-gray-800">{role.name}</h4>
-                        <span className="text-xs text-gray-400">{role.usersCount} user(s)</span>
+                        <h4 className="text-sm font-medium text-[#282828]">{role.name}</h4>
+                        <span className="text-xs text-[#909090]">{role.usersCount} user(s)</span>
                       </div>
-                      <p className="text-xs text-gray-500 mb-2">{role.description}</p>
+                      <p className="text-xs text-[#606060] mb-2">{role.description}</p>
                       <div className="flex flex-wrap gap-1.5">
                         {role.permissions.map(p => (
-                          <span key={p} className="px-2 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded-full">{p}</span>
+                          <span key={p} className="px-2 py-0.5 text-[10px] bg-[#f2f2f2] text-[#606060] rounded-full">{p}</span>
                         ))}
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
-                      <button className="p-1 hover:bg-gray-100 rounded"><Edit3 className="w-4 h-4 text-gray-400" /></button>
+                      <button className="p-1 hover:bg-[#f2f2f2] rounded"><Edit3 className="w-4 h-4 text-[#909090]" /></button>
                     </div>
                   </div>
                 </div>
@@ -233,8 +233,8 @@ export default function CmsSettingsPage() {
 
       {/* Notifications Tab */}
       {activeTab === "notifications" && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-sm font-medium text-gray-800 mb-4">Email Notification Preferences</h3>
+        <div className="bg-white rounded-lg border border-[#e5e5e5] p-6">
+          <h3 className="text-sm font-medium text-[#282828] mb-4">Email Notification Preferences</h3>
           <div className="space-y-4 max-w-lg">
             {[
               { label: "Claim alerts", desc: "Notify when new claims are created or disputed", defaultChecked: true },
@@ -249,68 +249,68 @@ export default function CmsSettingsPage() {
               <label key={n.label} className="flex items-start gap-3 cursor-pointer">
                 <input type="checkbox" defaultChecked={n.defaultChecked} className="rounded border-gray-300 mt-0.5" />
                 <div>
-                  <span className="text-sm text-gray-700 font-medium">{n.label}</span>
-                  <p className="text-xs text-gray-500">{n.desc}</p>
+                  <span className="text-sm text-[#282828] font-medium">{n.label}</span>
+                  <p className="text-xs text-[#606060]">{n.desc}</p>
                 </div>
               </label>
             ))}
           </div>
-          <button className="mt-6 px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700">Save preferences</button>
+          <button className="mt-6 px-4 py-2 text-sm text-white bg-[#065FD4] rounded-lg hover:bg-[#0548a6]">Save preferences</button>
         </div>
       )}
 
       {/* Content ID Tab */}
       {activeTab === "content-id" && (
         <div className="space-y-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-sm font-medium text-gray-800 mb-4">Default Match Policy</h3>
+          <div className="bg-white rounded-lg border border-[#e5e5e5] p-6">
+            <h3 className="text-sm font-medium text-[#282828] mb-4">Default Match Policy</h3>
             <div className="space-y-3 max-w-lg">
               <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                 <option>Monetize — Earn revenue from matching videos</option>
                 <option>Track — Only track matching videos</option>
                 <option>Block — Block matching videos from being viewed</option>
               </select>
-              <p className="text-xs text-gray-500">This policy will be applied as the default when Content ID matching is enabled for new videos.</p>
+              <p className="text-xs text-[#606060]">This policy will be applied as the default when Content ID matching is enabled for new videos.</p>
             </div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-sm font-medium text-gray-800 mb-4">Reference Settings</h3>
+          <div className="bg-white rounded-lg border border-[#e5e5e5] p-6">
+            <h3 className="text-sm font-medium text-[#282828] mb-4">Reference Settings</h3>
             <div className="space-y-3 max-w-lg">
-              <label className="flex items-center gap-3 text-sm text-gray-600">
+              <label className="flex items-center gap-3 text-sm text-[#606060]">
                 <input type="checkbox" defaultChecked className="rounded border-gray-300" />
                 Auto-create references for new uploads
               </label>
-              <label className="flex items-center gap-3 text-sm text-gray-600">
+              <label className="flex items-center gap-3 text-sm text-[#606060]">
                 <input type="checkbox" defaultChecked className="rounded border-gray-300" />
                 Route short matches to manual review
               </label>
-              <label className="flex items-center gap-3 text-sm text-gray-600">
+              <label className="flex items-center gap-3 text-sm text-[#606060]">
                 <input type="checkbox" className="rounded border-gray-300" />
                 Auto-release claims on allowlisted channels
               </label>
             </div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-sm font-medium text-gray-800 mb-4">Claim Routing</h3>
+          <div className="bg-white rounded-lg border border-[#e5e5e5] p-6">
+            <h3 className="text-sm font-medium text-[#282828] mb-4">Claim Routing</h3>
             <div className="space-y-3 max-w-lg">
-              <label className="flex items-center gap-3 text-sm text-gray-600">
+              <label className="flex items-center gap-3 text-sm text-[#606060]">
                 <input type="checkbox" defaultChecked className="rounded border-gray-300" />
                 Route potential claims to manual review
               </label>
-              <label className="flex items-center gap-3 text-sm text-gray-600">
+              <label className="flex items-center gap-3 text-sm text-[#606060]">
                 <input type="checkbox" defaultChecked className="rounded border-gray-300" />
                 Auto-reinstate claims after dispute rejection
               </label>
             </div>
           </div>
-          <button className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700">Save settings</button>
+          <button className="px-4 py-2 text-sm text-white bg-[#065FD4] rounded-lg hover:bg-[#0548a6]">Save settings</button>
         </div>
       )}
 
       {/* AdSense Tab */}
       {activeTab === "adsense" && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-sm font-medium text-gray-800 mb-4">AdSense for YouTube</h3>
+        <div className="bg-white rounded-lg border border-[#e5e5e5] p-6">
+          <h3 className="text-sm font-medium text-[#282828] mb-4">AdSense for YouTube</h3>
           <div className="flex items-center gap-4 p-4 bg-green-50 border border-green-200 rounded-lg mb-4 max-w-lg">
             <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
             <div>
@@ -320,14 +320,14 @@ export default function CmsSettingsPage() {
           </div>
           <div className="space-y-3 max-w-lg">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payout currency</label>
+              <label className="block text-sm font-medium text-[#282828] mb-1">Payout currency</label>
               <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                 <option>USD - US Dollar</option>
                 <option>INR - Indian Rupee</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payment threshold</label>
+              <label className="block text-sm font-medium text-[#282828] mb-1">Payment threshold</label>
               <input type="text" defaultValue="$100" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
             </div>
           </div>
@@ -338,22 +338,22 @@ export default function CmsSettingsPage() {
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={() => setShowInviteModal(false)}>
           <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-medium text-gray-800 mb-4">Invite user</h2>
+            <h2 className="text-lg font-medium text-[#282828] mb-4">Invite user</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email address</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Email address</label>
                 <input type="email" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="user@example.com" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Role</label>
                 <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                   {mockRoles.map(r => <option key={r.id}>{r.name}</option>)}
                 </select>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowInviteModal(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-              <button className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700">Send invite</button>
+              <button onClick={() => setShowInviteModal(false)} className="px-4 py-2 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">Cancel</button>
+              <button className="px-4 py-2 text-sm text-white bg-[#065FD4] rounded-lg hover:bg-[#0548a6]">Send invite</button>
             </div>
           </div>
         </div>
@@ -363,21 +363,21 @@ export default function CmsSettingsPage() {
       {showCreateRoleModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={() => setShowCreateRoleModal(false)}>
           <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-medium text-gray-800 mb-4">Create new role</h2>
+            <h2 className="text-lg font-medium text-[#282828] mb-4">Create new role</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role name</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Role name</label>
                 <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Enter role name" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <label className="block text-sm font-medium text-[#282828] mb-1">Description</label>
                 <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="What does this role do?" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Permissions</label>
+                <label className="block text-sm font-medium text-[#282828] mb-2">Permissions</label>
                 <div className="space-y-2">
                   {["Manage users", "Edit settings", "Manage assets", "Create references", "Manage claims", "Review disputes", "Edit policies", "View analytics", "Download reports", "View revenue", "Manage channels", "Edit permissions", "Manage ownership"].map(p => (
-                    <label key={p} className="flex items-center gap-2 text-sm text-gray-600">
+                    <label key={p} className="flex items-center gap-2 text-sm text-[#606060]">
                       <input type="checkbox" className="rounded border-gray-300" /> {p}
                     </label>
                   ))}
@@ -385,8 +385,8 @@ export default function CmsSettingsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowCreateRoleModal(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-              <button className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700">Create role</button>
+              <button onClick={() => setShowCreateRoleModal(false)} className="px-4 py-2 text-sm text-[#606060] border border-gray-300 rounded-lg hover:bg-[#f9f9f9]">Cancel</button>
+              <button className="px-4 py-2 text-sm text-white bg-[#065FD4] rounded-lg hover:bg-[#0548a6]">Create role</button>
             </div>
           </div>
         </div>

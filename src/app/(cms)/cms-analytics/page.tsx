@@ -1,37 +1,57 @@
 "use client";
 
 import { useState } from "react";
-import { BarChart3, TrendingUp, DollarSign, Users, Eye, Clock, Globe, Monitor, Smartphone, Tablet, ChevronDown } from "lucide-react";
 
-interface MetricCard {
-  label: string;
-  value: string;
-  change: string;
-  trend: "up" | "down";
-}
-
-const revenueMetrics: MetricCard[] = [
-  { label: "Estimated Revenue", value: "$4,520.00", change: "+8.2%", trend: "up" },
-  { label: "RPM", value: "$3.45", change: "+2.1%", trend: "up" },
-  { label: "CPM", value: "$5.12", change: "-1.3%", trend: "down" },
-  { label: "Ad Impressions", value: "1.31M", change: "+5.6%", trend: "up" },
+const revenueData = [
+  { label: "Estimated revenue", value: "$4,520", change: "+8.2%", up: true },
+  { label: "RPM", value: "$3.45", change: "+2.1%", up: true },
+  { label: "CPM", value: "$5.12", change: "-1.3%", up: false },
+  { label: "Playback-based CPM", value: "$7.84", change: "+3.4%", up: true },
 ];
 
-const audienceMetrics: MetricCard[] = [
-  { label: "Views", value: "3.2M", change: "+12.4%", trend: "up" },
-  { label: "Watch Time (hours)", value: "145K", change: "+9.8%", trend: "up" },
-  { label: "Unique Viewers", value: "1.8M", change: "+7.2%", trend: "up" },
-  { label: "Avg View Duration", value: "3:42", change: "+0.5%", trend: "up" },
+const overviewData = [
+  { label: "Views", value: "3.2M", change: "+12.4%", up: true },
+  { label: "Watch time (hours)", value: "145K", change: "+9.8%", up: true },
+  { label: "Subscribers", value: "+2.4K", change: "+15.2%", up: true },
+  { label: "Estimated revenue", value: "$4,520", change: "+8.2%", up: true },
 ];
 
-const ageData = [
-  { group: "13-17", percent: 8 },
-  { group: "18-24", percent: 32 },
-  { group: "25-34", percent: 28 },
-  { group: "35-44", percent: 18 },
-  { group: "45-54", percent: 9 },
-  { group: "55-64", percent: 3 },
-  { group: "65+", percent: 2 },
+const reachData = [
+  { label: "Impressions", value: "8.5M", change: "+11.3%", up: true },
+  { label: "Impressions click-through rate", value: "4.8%", change: "+0.3%", up: true },
+  { label: "Views", value: "3.2M", change: "+12.4%", up: true },
+  { label: "Unique viewers", value: "1.8M", change: "+7.2%", up: true },
+];
+
+const engagementData = [
+  { label: "Watch time (hours)", value: "145K", change: "+9.8%", up: true },
+  { label: "Average view duration", value: "3:42", change: "+5.1%", up: true },
+  { label: "Likes", value: "196K", change: "+14.6%", up: true },
+  { label: "Shares", value: "24K", change: "+8.9%", up: true },
+];
+
+const audienceData = [
+  { label: "Returning viewers", value: "1.2M", change: "+6.3%", up: true },
+  { label: "New viewers", value: "620K", change: "+18.5%", up: true },
+  { label: "Unique viewers", value: "1.8M", change: "+7.2%", up: true },
+  { label: "Subscribers", value: "89.4K", change: "+2.4K", up: true },
+];
+
+const topContent = [
+  { title: "Tere Bina - Official Music Video", views: "1.2M", watchTime: "42.5K hrs", revenue: "$1,245" },
+  { title: "Nachdi Jawani - Lyrical", views: "2.1M", watchTime: "65.2K hrs", revenue: "$2,100" },
+  { title: "Sada Punjab - Full Song", views: "856K", watchTime: "28.4K hrs", revenue: "$780" },
+  { title: "Ishq Tera - Unplugged", views: "189K", watchTime: "8.2K hrs", revenue: "$195" },
+  { title: "Punjab Di Shan - Remix", views: "567K", watchTime: "18.9K hrs", revenue: "$520" },
+];
+
+const trafficSources = [
+  { source: "YouTube search", views: "960K", percent: 30 },
+  { source: "Suggested videos", views: "832K", percent: 26 },
+  { source: "Browse features", views: "640K", percent: 20 },
+  { source: "External", views: "384K", percent: 12 },
+  { source: "Channel pages", views: "192K", percent: 6 },
+  { source: "Other YouTube features", views: "192K", percent: 6 },
 ];
 
 const geoData = [
@@ -41,186 +61,229 @@ const geoData = [
   { country: "United Kingdom", views: "192K", percent: 6 },
   { country: "Australia", views: "128K", percent: 4 },
   { country: "Pakistan", views: "96K", percent: 3 },
-  { country: "Other", views: "416K", percent: 13 },
+  { country: "Bangladesh", views: "80K", percent: 2.5 },
+  { country: "Germany", views: "64K", percent: 2 },
+  { country: "Other", views: "272K", percent: 8.5 },
 ];
 
-const trafficSources = [
-  { source: "YouTube search", views: "960K", percent: 30 },
-  { source: "Suggested videos", views: "832K", percent: 26 },
-  { source: "Browse features", views: "640K", percent: 20 },
-  { source: "External", views: "384K", percent: 12 },
-  { source: "Channel pages", views: "192K", percent: 6 },
-  { source: "Other", views: "192K", percent: 6 },
+const ageData = [
+  { group: "13-17", male: 5, female: 3 },
+  { group: "18-24", male: 22, female: 10 },
+  { group: "25-34", male: 18, female: 10 },
+  { group: "35-44", male: 12, female: 6 },
+  { group: "45-54", male: 6, female: 3 },
+  { group: "55-64", male: 2, female: 1 },
+  { group: "65+", male: 1, female: 1 },
 ];
 
-const deviceData = [
-  { device: "Mobile", icon: Smartphone, percent: 62 },
-  { device: "Desktop", icon: Monitor, percent: 25 },
-  { device: "Tablet", icon: Tablet, percent: 8 },
-  { device: "TV", icon: Monitor, percent: 5 },
-];
+const tabs = ["Overview", "Reach", "Engagement", "Audience", "Revenue"] as const;
+type Tab = typeof tabs[number];
+
+function generateChartBars(count: number, color: string) {
+  const heights: number[] = [];
+  for (let i = 0; i < count; i++) {
+    heights.push(15 + Math.sin(i * 0.5) * 25 + Math.random() * 30);
+  }
+  return (
+    <div className="h-[200px] flex items-end gap-[2px]">
+      {heights.map((h, i) => (
+        <div
+          key={i}
+          className="flex-1 rounded-t-[1px] hover:opacity-80 transition-opacity cursor-pointer"
+          style={{ height: `${h}%`, backgroundColor: color }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MetricCards({ data }: { data: { label: string; value: string; change: string; up: boolean }[] }) {
+  return (
+    <div className="flex gap-0 border-b border-[#e5e5e5]">
+      {data.map((m, i) => (
+        <div key={m.label} className={`flex-1 py-4 px-5 ${i > 0 ? "border-l border-[#e5e5e5]" : ""}`}>
+          <p className="text-[12px] text-[#606060] mb-1">{m.label}</p>
+          <p className="text-[28px] font-normal text-[#282828] leading-tight">{m.value}</p>
+          <p className={`text-[12px] mt-1 ${m.up ? "text-[#0d7d2c]" : "text-[#cc0000]"}`}>
+            {m.change}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function CmsAnalyticsPage() {
-  const [dateRange, setDateRange] = useState("28d");
-  const [activeTab, setActiveTab] = useState<"revenue" | "audience" | "traffic" | "geography">("revenue");
+  const [activeTab, setActiveTab] = useState<Tab>("Overview");
+  const [dateRange, setDateRange] = useState("Last 28 days");
 
   return (
-    <div className="max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-normal text-gray-800">Analytics</h1>
-        <select value={dateRange} onChange={(e) => setDateRange(e.target.value)} className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-600">
-          <option value="7d">Last 7 days</option>
-          <option value="28d">Last 28 days</option>
-          <option value="90d">Last 90 days</option>
-          <option value="365d">Last 365 days</option>
-          <option value="lifetime">Lifetime</option>
-        </select>
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-[20px] font-normal text-[#282828]">Channel analytics</h1>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-gray-200 mb-6">
-        {(["revenue", "audience", "traffic", "geography"] as const).map(tab => (
+      <div className="flex items-center border-b border-[#e5e5e5] mb-0">
+        {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors capitalize ${activeTab === tab ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`px-4 py-3 text-[13px] font-medium border-b-2 transition-colors ${
+              activeTab === tab
+                ? "border-[#282828] text-[#282828]"
+                : "border-transparent text-[#606060] hover:text-[#282828]"
+            }`}
           >
             {tab}
           </button>
         ))}
+        <div className="ml-auto">
+          <select
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value)}
+            className="text-[13px] text-[#606060] border border-[#d0d0d0] rounded px-3 py-1.5 bg-white cursor-pointer"
+          >
+            <option>Last 7 days</option>
+            <option>Last 28 days</option>
+            <option>Last 90 days</option>
+            <option>Last 365 days</option>
+            <option>Lifetime</option>
+          </select>
+        </div>
       </div>
 
-      {/* Revenue Tab */}
-      {activeTab === "revenue" && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {revenueMetrics.map(m => (
-              <div key={m.label} className="bg-white rounded-lg border border-gray-200 p-4">
-                <p className="text-xs text-gray-500 mb-1">{m.label}</p>
-                <p className="text-2xl font-semibold text-gray-800">{m.value}</p>
-                <p className={`text-xs mt-1 ${m.trend === "up" ? "text-green-600" : "text-red-600"}`}>{m.change} vs previous period</p>
-              </div>
-            ))}
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-            <h3 className="text-sm font-medium text-gray-800 mb-4">Revenue Over Time</h3>
-            <div className="h-[250px] flex items-end gap-1">
-              {Array.from({ length: 28 }, (_, i) => {
-                const h = 20 + Math.random() * 80;
-                return <div key={i} className="flex-1 bg-blue-400 rounded-t hover:bg-blue-500 transition-colors" style={{ height: `${h}%` }} title={`Day ${i + 1}`} />;
-              })}
-            </div>
-            <div className="flex justify-between mt-2 text-xs text-gray-400">
-              <span>28 days ago</span>
-              <span>Today</span>
+      {/* Overview Tab */}
+      {activeTab === "Overview" && (
+        <div>
+          <MetricCards data={overviewData} />
+          <div className="py-6">
+            {generateChartBars(28, "#065FD4")}
+            <div className="flex justify-between mt-2 text-[11px] text-[#909090]">
+              <span>Apr 14</span>
+              <span>Apr 21</span>
+              <span>Apr 28</span>
+              <span>May 5</span>
             </div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-sm font-medium text-gray-800 mb-4">Revenue by Ad Type</h3>
-            <div className="space-y-3">
-              {[
-                { type: "Auction ads (display)", revenue: "$2,100", percent: 46 },
-                { type: "Auction ads (video)", revenue: "$1,200", percent: 27 },
-                { type: "Reserved ads", revenue: "$820", percent: 18 },
-                { type: "YouTube Premium", revenue: "$400", percent: 9 },
-              ].map(ad => (
-                <div key={ad.type} className="flex items-center gap-4">
-                  <span className="text-sm text-gray-600 w-48">{ad.type}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-2">
-                    <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${ad.percent}%` }} />
-                  </div>
-                  <span className="text-sm text-gray-600 w-20 text-right">{ad.revenue}</span>
-                  <span className="text-xs text-gray-400 w-12 text-right">{ad.percent}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
 
-      {/* Audience Tab */}
-      {activeTab === "audience" && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {audienceMetrics.map(m => (
-              <div key={m.label} className="bg-white rounded-lg border border-gray-200 p-4">
-                <p className="text-xs text-gray-500 mb-1">{m.label}</p>
-                <p className="text-2xl font-semibold text-gray-800">{m.value}</p>
-                <p className={`text-xs mt-1 ${m.trend === "up" ? "text-green-600" : "text-red-600"}`}>{m.change}</p>
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-sm font-medium text-gray-800 mb-4">Age Distribution</h3>
-              <div className="space-y-2">
-                {ageData.map(a => (
-                  <div key={a.group} className="flex items-center gap-3">
-                    <span className="text-sm text-gray-600 w-16">{a.group}</span>
-                    <div className="flex-1 bg-gray-100 rounded-full h-3">
-                      <div className="bg-purple-500 h-3 rounded-full" style={{ width: `${a.percent}%` }} />
-                    </div>
-                    <span className="text-sm text-gray-600 w-10 text-right">{a.percent}%</span>
-                  </div>
+          {/* Top content */}
+          <div className="border border-[#e5e5e5] rounded-lg">
+            <div className="px-5 py-4 border-b border-[#e5e5e5]">
+              <h3 className="text-[14px] font-medium text-[#282828]">Top content</h3>
+              <p className="text-[12px] text-[#606060] mt-0.5">Last 28 days &middot; Views</p>
+            </div>
+            <table className="w-full">
+              <thead>
+                <tr className="text-[12px] text-[#606060] border-b border-[#e5e5e5]">
+                  <th className="text-left font-normal px-5 py-2.5">Content</th>
+                  <th className="text-right font-normal px-5 py-2.5">Views</th>
+                  <th className="text-right font-normal px-5 py-2.5">Watch time</th>
+                  <th className="text-right font-normal px-5 py-2.5">Est. revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topContent.map((item) => (
+                  <tr key={item.title} className="border-b border-[#e5e5e5] last:border-0 hover:bg-[#f9f9f9]">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-[120px] h-[68px] bg-[#f2f2f2] rounded flex items-center justify-center shrink-0">
+                          <svg className="w-8 h-8 text-[#909090]" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M10 8l6 4-6 4V8z"/>
+                          </svg>
+                        </div>
+                        <span className="text-[13px] text-[#282828] font-medium">{item.title}</span>
+                      </div>
+                    </td>
+                    <td className="text-right px-5 py-3 text-[13px] text-[#282828]">{item.views}</td>
+                    <td className="text-right px-5 py-3 text-[13px] text-[#282828]">{item.watchTime}</td>
+                    <td className="text-right px-5 py-3 text-[13px] text-[#282828]">{item.revenue}</td>
+                  </tr>
                 ))}
-              </div>
+              </tbody>
+            </table>
+            <div className="px-5 py-3 border-t border-[#e5e5e5]">
+              <button className="text-[13px] font-medium text-[#065FD4] hover:bg-[#def1ff] px-3 py-1.5 rounded transition-colors">
+                SEE MORE
+              </button>
             </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-sm font-medium text-gray-800 mb-4">Gender Distribution</h3>
-              <div className="flex items-center justify-center gap-8 py-8">
-                <div className="text-center">
-                  <div className="w-24 h-24 rounded-full border-8 border-blue-400 flex items-center justify-center">
-                    <span className="text-xl font-bold text-gray-800">68%</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-2">Male</p>
+          </div>
+
+          {/* Real-time card */}
+          <div className="border border-[#e5e5e5] rounded-lg mt-6">
+            <div className="px-5 py-4 border-b border-[#e5e5e5]">
+              <h3 className="text-[14px] font-medium text-[#282828]">Realtime</h3>
+              <p className="text-[12px] text-[#606060] mt-0.5">Updating live</p>
+            </div>
+            <div className="px-5 py-4">
+              <div className="flex gap-12">
+                <div>
+                  <p className="text-[12px] text-[#606060]">Last 48 hours</p>
+                  <p className="text-[28px] font-normal text-[#282828]">12.4K</p>
                 </div>
-                <div className="text-center">
-                  <div className="w-24 h-24 rounded-full border-8 border-pink-400 flex items-center justify-center">
-                    <span className="text-xl font-bold text-gray-800">30%</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-2">Female</p>
+                <div>
+                  <p className="text-[12px] text-[#606060]">Last 60 minutes</p>
+                  <p className="text-[28px] font-normal text-[#282828]">847</p>
                 </div>
-                <div className="text-center">
-                  <div className="w-20 h-20 rounded-full border-8 border-gray-300 flex items-center justify-center">
-                    <span className="text-lg font-bold text-gray-800">2%</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-2">Other</p>
-                </div>
+              </div>
+              <div className="mt-4">
+                {generateChartBars(48, "#909090")}
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
 
-      {/* Traffic Tab */}
-      {activeTab === "traffic" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-sm font-medium text-gray-800 mb-4">Traffic Sources</h3>
-            <div className="space-y-3">
-              {trafficSources.map(t => (
+      {/* Reach Tab */}
+      {activeTab === "Reach" && (
+        <div>
+          <MetricCards data={reachData} />
+          <div className="py-6">
+            {generateChartBars(28, "#065FD4")}
+            <div className="flex justify-between mt-2 text-[11px] text-[#909090]">
+              <span>Apr 14</span>
+              <span>Apr 21</span>
+              <span>Apr 28</span>
+              <span>May 5</span>
+            </div>
+          </div>
+
+          {/* Traffic sources */}
+          <div className="border border-[#e5e5e5] rounded-lg">
+            <div className="px-5 py-4 border-b border-[#e5e5e5]">
+              <h3 className="text-[14px] font-medium text-[#282828]">Traffic source types</h3>
+              <p className="text-[12px] text-[#606060] mt-0.5">Last 28 days</p>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              {trafficSources.map((t) => (
                 <div key={t.source} className="flex items-center gap-4">
-                  <span className="text-sm text-gray-600 w-40">{t.source}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-2">
-                    <div className="bg-green-500 h-2 rounded-full" style={{ width: `${t.percent}%` }} />
+                  <span className="text-[13px] text-[#282828] w-[200px]">{t.source}</span>
+                  <div className="flex-1 bg-[#e5e5e5] rounded-full h-[4px]">
+                    <div className="bg-[#065FD4] h-[4px] rounded-full" style={{ width: `${t.percent}%` }} />
                   </div>
-                  <span className="text-sm text-gray-600 w-16 text-right">{t.views}</span>
-                  <span className="text-xs text-gray-400 w-10 text-right">{t.percent}%</span>
+                  <span className="text-[13px] text-[#282828] w-16 text-right">{t.views}</span>
+                  <span className="text-[12px] text-[#606060] w-10 text-right">{t.percent}%</span>
                 </div>
               ))}
             </div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-sm font-medium text-gray-800 mb-4">Device Breakdown</h3>
-            <div className="space-y-4">
-              {deviceData.map(d => (
-                <div key={d.device} className="flex items-center gap-4">
-                  <d.icon className="w-5 h-5 text-gray-400" />
-                  <span className="text-sm text-gray-600 w-20">{d.device}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-3">
-                    <div className="bg-orange-400 h-3 rounded-full" style={{ width: `${d.percent}%` }} />
+
+          {/* Top geographies */}
+          <div className="border border-[#e5e5e5] rounded-lg mt-6">
+            <div className="px-5 py-4 border-b border-[#e5e5e5]">
+              <h3 className="text-[14px] font-medium text-[#282828]">Geography</h3>
+              <p className="text-[12px] text-[#606060] mt-0.5">Top countries &middot; Last 28 days</p>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              {geoData.map((g) => (
+                <div key={g.country} className="flex items-center gap-4">
+                  <span className="text-[13px] text-[#282828] w-[200px]">{g.country}</span>
+                  <div className="flex-1 bg-[#e5e5e5] rounded-full h-[4px]">
+                    <div className="bg-[#065FD4] h-[4px] rounded-full" style={{ width: `${g.percent * 1.5}%` }} />
                   </div>
-                  <span className="text-sm font-medium text-gray-700 w-10 text-right">{d.percent}%</span>
+                  <span className="text-[13px] text-[#282828] w-16 text-right">{g.views}</span>
+                  <span className="text-[12px] text-[#606060] w-12 text-right">{g.percent}%</span>
                 </div>
               ))}
             </div>
@@ -228,22 +291,232 @@ export default function CmsAnalyticsPage() {
         </div>
       )}
 
-      {/* Geography Tab */}
-      {activeTab === "geography" && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-sm font-medium text-gray-800 mb-4">Top Countries</h3>
-          <div className="space-y-3">
-            {geoData.map((g, i) => (
-              <div key={g.country} className="flex items-center gap-4">
-                <span className="text-sm text-gray-400 w-6">{i + 1}</span>
-                <span className="text-sm text-gray-700 w-40 font-medium">{g.country}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-2.5">
-                  <div className="bg-teal-500 h-2.5 rounded-full" style={{ width: `${g.percent}%` }} />
-                </div>
-                <span className="text-sm text-gray-600 w-16 text-right">{g.views}</span>
-                <span className="text-xs text-gray-400 w-10 text-right">{g.percent}%</span>
+      {/* Engagement Tab */}
+      {activeTab === "Engagement" && (
+        <div>
+          <MetricCards data={engagementData} />
+          <div className="py-6">
+            {generateChartBars(28, "#065FD4")}
+            <div className="flex justify-between mt-2 text-[11px] text-[#909090]">
+              <span>Apr 14</span>
+              <span>Apr 21</span>
+              <span>Apr 28</span>
+              <span>May 5</span>
+            </div>
+          </div>
+
+          {/* Top content by watch time */}
+          <div className="border border-[#e5e5e5] rounded-lg">
+            <div className="px-5 py-4 border-b border-[#e5e5e5]">
+              <h3 className="text-[14px] font-medium text-[#282828]">Top content</h3>
+              <p className="text-[12px] text-[#606060] mt-0.5">Last 28 days &middot; Watch time (hours)</p>
+            </div>
+            <table className="w-full">
+              <thead>
+                <tr className="text-[12px] text-[#606060] border-b border-[#e5e5e5]">
+                  <th className="text-left font-normal px-5 py-2.5">Content</th>
+                  <th className="text-right font-normal px-5 py-2.5">Watch time (hours)</th>
+                  <th className="text-right font-normal px-5 py-2.5">Avg view duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topContent.map((item) => (
+                  <tr key={item.title} className="border-b border-[#e5e5e5] last:border-0 hover:bg-[#f9f9f9]">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-[120px] h-[68px] bg-[#f2f2f2] rounded flex items-center justify-center shrink-0">
+                          <svg className="w-8 h-8 text-[#909090]" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M10 8l6 4-6 4V8z"/>
+                          </svg>
+                        </div>
+                        <span className="text-[13px] text-[#282828] font-medium">{item.title}</span>
+                      </div>
+                    </td>
+                    <td className="text-right px-5 py-3 text-[13px] text-[#282828]">{item.watchTime}</td>
+                    <td className="text-right px-5 py-3 text-[13px] text-[#282828]">3:42</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="px-5 py-3 border-t border-[#e5e5e5]">
+              <button className="text-[13px] font-medium text-[#065FD4] hover:bg-[#def1ff] px-3 py-1.5 rounded transition-colors">
+                SEE MORE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audience Tab */}
+      {activeTab === "Audience" && (
+        <div>
+          <MetricCards data={audienceData} />
+          <div className="py-6">
+            {generateChartBars(28, "#065FD4")}
+            <div className="flex justify-between mt-2 text-[11px] text-[#909090]">
+              <span>Apr 14</span>
+              <span>Apr 21</span>
+              <span>Apr 28</span>
+              <span>May 5</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            {/* Age and gender */}
+            <div className="border border-[#e5e5e5] rounded-lg">
+              <div className="px-5 py-4 border-b border-[#e5e5e5]">
+                <h3 className="text-[14px] font-medium text-[#282828]">Age and gender</h3>
+                <p className="text-[12px] text-[#606060] mt-0.5">Last 28 days</p>
               </div>
-            ))}
+              <div className="px-5 py-4">
+                <div className="flex items-center gap-4 mb-4 text-[12px]">
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#065FD4]" /> Male 66%</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#EA4335]" /> Female 32%</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#909090]" /> Other 2%</span>
+                </div>
+                <div className="space-y-2">
+                  {ageData.map((a) => (
+                    <div key={a.group} className="flex items-center gap-2">
+                      <span className="text-[12px] text-[#606060] w-10">{a.group}</span>
+                      <div className="flex-1 flex h-[18px]">
+                        <div className="bg-[#065FD4] rounded-l" style={{ width: `${a.male * 2}%` }} />
+                        <div className="bg-[#EA4335] rounded-r" style={{ width: `${a.female * 2}%` }} />
+                      </div>
+                      <span className="text-[12px] text-[#606060] w-10 text-right">{a.male + a.female}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Top geographies */}
+            <div className="border border-[#e5e5e5] rounded-lg">
+              <div className="px-5 py-4 border-b border-[#e5e5e5]">
+                <h3 className="text-[14px] font-medium text-[#282828]">Top geographies</h3>
+                <p className="text-[12px] text-[#606060] mt-0.5">Last 28 days &middot; Views</p>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {geoData.slice(0, 7).map((g) => (
+                  <div key={g.country} className="flex items-center gap-3">
+                    <span className="text-[13px] text-[#282828] w-[140px]">{g.country}</span>
+                    <div className="flex-1 bg-[#e5e5e5] rounded-full h-[4px]">
+                      <div className="bg-[#065FD4] h-[4px] rounded-full" style={{ width: `${g.percent * 1.5}%` }} />
+                    </div>
+                    <span className="text-[12px] text-[#606060] w-12 text-right">{g.percent}%</span>
+                  </div>
+                ))}
+              </div>
+              <div className="px-5 py-3 border-t border-[#e5e5e5]">
+                <button className="text-[13px] font-medium text-[#065FD4] hover:bg-[#def1ff] px-3 py-1.5 rounded transition-colors">
+                  SEE MORE
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* When your viewers are on YouTube */}
+          <div className="border border-[#e5e5e5] rounded-lg mt-6">
+            <div className="px-5 py-4 border-b border-[#e5e5e5]">
+              <h3 className="text-[14px] font-medium text-[#282828]">When your viewers are on YouTube</h3>
+              <p className="text-[12px] text-[#606060] mt-0.5">Your local time</p>
+            </div>
+            <div className="px-5 py-6">
+              <div className="grid grid-cols-8 gap-1">
+                <div></div>
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
+                  <div key={d} className="text-center text-[11px] text-[#606060] pb-2">{d}</div>
+                ))}
+                {["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"].map((time) => (
+                  <div key={time} className="contents">
+                    <div className="text-[11px] text-[#606060] pr-2 text-right flex items-center justify-end">{time}</div>
+                    {Array.from({ length: 7 }, (_, j) => {
+                      const intensity = Math.random();
+                      const opacity = 0.1 + intensity * 0.9;
+                      return (
+                        <div
+                          key={j}
+                          className="aspect-square rounded-sm cursor-pointer"
+                          style={{ backgroundColor: `rgba(6, 95, 212, ${opacity})` }}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 mt-4 text-[11px] text-[#606060]">
+                <span>Not active</span>
+                <div className="flex gap-0.5">
+                  {[0.1, 0.3, 0.5, 0.7, 0.9].map((o) => (
+                    <div key={o} className="w-4 h-4 rounded-sm" style={{ backgroundColor: `rgba(6, 95, 212, ${o})` }} />
+                  ))}
+                </div>
+                <span>Most active</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revenue Tab */}
+      {activeTab === "Revenue" && (
+        <div>
+          <MetricCards data={revenueData} />
+          <div className="py-6">
+            {generateChartBars(28, "#0d7d2c")}
+            <div className="flex justify-between mt-2 text-[11px] text-[#909090]">
+              <span>Apr 14</span>
+              <span>Apr 21</span>
+              <span>Apr 28</span>
+              <span>May 5</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            {/* Revenue sources */}
+            <div className="border border-[#e5e5e5] rounded-lg">
+              <div className="px-5 py-4 border-b border-[#e5e5e5]">
+                <h3 className="text-[14px] font-medium text-[#282828]">Revenue sources</h3>
+                <p className="text-[12px] text-[#606060] mt-0.5">Last 28 days</p>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {[
+                  { type: "Ads", revenue: "$3,300", percent: 73 },
+                  { type: "YouTube Premium", revenue: "$620", percent: 14 },
+                  { type: "Memberships", revenue: "$380", percent: 8 },
+                  { type: "Super Chat & Super Stickers", revenue: "$220", percent: 5 },
+                ].map((r) => (
+                  <div key={r.type} className="flex items-center gap-4">
+                    <span className="text-[13px] text-[#282828] w-[220px]">{r.type}</span>
+                    <div className="flex-1 bg-[#e5e5e5] rounded-full h-[4px]">
+                      <div className="bg-[#0d7d2c] h-[4px] rounded-full" style={{ width: `${r.percent}%` }} />
+                    </div>
+                    <span className="text-[13px] text-[#282828] w-16 text-right">{r.revenue}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Top earning content */}
+            <div className="border border-[#e5e5e5] rounded-lg">
+              <div className="px-5 py-4 border-b border-[#e5e5e5]">
+                <h3 className="text-[14px] font-medium text-[#282828]">Top earning content</h3>
+                <p className="text-[12px] text-[#606060] mt-0.5">Last 28 days &middot; Estimated revenue</p>
+              </div>
+              <div className="px-5 py-4">
+                {topContent.map((item, i) => (
+                  <div key={item.title} className="flex items-center gap-3 py-2">
+                    <span className="text-[12px] text-[#909090] w-5">{i + 1}</span>
+                    <div className="w-[80px] h-[45px] bg-[#f2f2f2] rounded flex items-center justify-center shrink-0">
+                      <svg className="w-5 h-5 text-[#909090]" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M10 8l6 4-6 4V8z"/>
+                      </svg>
+                    </div>
+                    <span className="text-[13px] text-[#282828] flex-1">{item.title}</span>
+                    <span className="text-[13px] text-[#282828]">{item.revenue}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
