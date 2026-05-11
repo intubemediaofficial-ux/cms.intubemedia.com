@@ -20,9 +20,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Search,
-  HelpCircle,
-  Bell,
   Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,7 +27,7 @@ import { cn } from "@/lib/utils";
 interface NavItem {
   href: string;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
 }
 
 const navItems: NavItem[] = [
@@ -57,58 +54,51 @@ export default function CmsSidebar() {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 h-screen bg-white border-r border-gray-200 flex flex-col transition-all duration-300 z-40",
+        "fixed left-0 top-0 h-screen bg-white flex flex-col transition-all duration-200 z-40",
         collapsed ? "w-[72px]" : "w-[240px]"
       )}
     >
-      {/* Header - YouTube Studio style */}
-      <div className="h-[56px] flex items-center px-4 border-b border-gray-200">
+      {/* YouTube Studio Header */}
+      <div className="h-[56px] flex items-center px-3 shrink-0">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors mr-2"
+          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
         >
-          <Menu className="w-5 h-5 text-gray-600" />
+          <Menu className="w-6 h-6 text-[#606060]" />
         </button>
         {!collapsed && (
-          <Link href="/cms-dashboard" className="flex items-center gap-1.5">
-            <div className="w-8 h-8 bg-red-600 rounded flex items-center justify-center">
-              <svg viewBox="0 0 24 24" className="w-5 h-5 text-white fill-current">
-                <path d="M10 15l5.19-3L10 9v6m11.56-7.83c.13.47.22 1.1.28 1.9.07.8.1 1.49.1 2.09L22 12c0 2.19-.16 3.8-.44 4.83-.25.9-.83 1.48-1.73 1.73-.47.13-1.33.22-2.65.28-1.3.07-2.49.1-3.59.1L12 19c-4.19 0-6.8-.16-7.83-.44-.9-.25-1.48-.83-1.73-1.73-.13-.47-.22-1.1-.28-1.9-.07-.8-.1-1.49-.1-2.09L2 12c0-2.19.16-3.8.44-4.83.25-.9.83-1.48 1.73-1.73.47-.13 1.33-.22 2.65-.28 1.3-.07 2.49-.1 3.59-.1L12 5c4.19 0 6.8.16 7.83.44.9.25 1.48.83 1.73 1.73z" />
+          <Link href="/cms-dashboard" className="flex items-center gap-1 ml-3">
+            {/* YouTube Play Button */}
+            <svg viewBox="0 0 90 20" className="h-5 w-auto">
+              <svg viewBox="0 0 28 20" width="28" height="20">
+                <path d="M27.9727 3.12324C27.6435 1.89323 26.6768 0.926623 25.4468 0.597366C23.2197 2.24288e-07 14.285 0 14.285 0C14.285 0 5.35042 2.24288e-07 3.12323 0.597366C1.89323 0.926623 0.926623 1.89323 0.597366 3.12324C2.24288e-07 5.35042 0 10 0 10C0 10 2.24288e-07 14.6496 0.597366 16.8768C0.926623 18.1068 1.89323 19.0734 3.12323 19.4026C5.35042 20 14.285 20 14.285 20C14.285 20 23.2197 20 25.4468 19.4026C26.6768 19.0734 27.6435 18.1068 27.9727 16.8768C28.5701 14.6496 28.5701 10 28.5701 10C28.5701 10 28.5677 5.35042 27.9727 3.12324Z" fill="#FF0000"/>
+                <path d="M11.4253 14.2854L18.8477 10.0004L11.4253 5.71533V14.2854Z" fill="white"/>
               </svg>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[15px] font-medium text-gray-800 leading-tight">Studio</span>
-              <span className="text-[10px] text-gray-500 leading-tight">Content Manager</span>
-            </div>
+              <text x="32" y="15" fill="#282828" fontFamily="'YouTube Sans','Roboto',sans-serif" fontSize="15" fontWeight="500">Studio</text>
+            </svg>
           </Link>
         )}
       </div>
 
-      {/* CMS Account info */}
-      {!collapsed && (
-        <div className="px-4 py-3 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-              BM
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-sm font-medium text-gray-800 truncate">Bainsla Music001</p>
-              <p className="text-xs text-gray-500 truncate">Content Manager</p>
-            </div>
-          </div>
+      {/* CMS Account - Exact YouTube CMS avatar (pink/magenta circle + building icon) */}
+      <div className={cn("flex flex-col items-center py-4 px-3", collapsed && "py-3")}>
+        <div className={cn(
+          "rounded-full bg-[#9B2E83] flex items-center justify-center",
+          collapsed ? "w-8 h-8" : "w-[88px] h-[88px]"
+        )}>
+          {/* Building/grid icon matching YouTube CMS Content Manager exactly */}
+          <svg viewBox="0 0 24 24" className={cn("text-white", collapsed ? "w-4 h-4" : "w-10 h-10")} fill="currentColor">
+            <path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm1 1h2v2H7V7zm3 0h2v2h-2V7zm3 0h2v2h-2V7zm-6 3h2v2H7v-2zm3 0h2v2h-2v-2zm3 0h2v2h-2v-2zm-6 3h2v2H7v-2zm3 0h2v2h-2v-2zm3 0h2v2h-2v-2z"/>
+          </svg>
         </div>
-      )}
-      {collapsed && (
-        <div className="flex justify-center py-3 border-b border-gray-200">
-          <div className="w-9 h-9 bg-gradient-to-br from-red-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
-            BM
-          </div>
-        </div>
-      )}
+        {!collapsed && (
+          <p className="mt-3 text-[14px] text-[#282828] font-normal">Content Manager</p>
+        )}
+      </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-2 overflow-y-auto">
-        <ul className="space-y-0.5">
+      <nav className="flex-1 overflow-y-auto pb-2">
+        <ul>
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -116,19 +106,19 @@ export default function CmsSidebar() {
                 <Link
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors relative",
+                    "flex items-center h-10 text-[13px] font-medium transition-colors",
                     isActive
-                      ? "bg-red-50 text-red-600"
-                      : "text-gray-700 hover:bg-gray-100",
-                    collapsed && "justify-center px-0"
+                      ? "bg-[#f2f2f2] text-[#282828]"
+                      : "text-[#606060] hover:bg-[#f2f2f2]",
+                    collapsed ? "justify-center mx-1 rounded-lg px-0" : "pl-6 pr-4"
                   )}
                   title={collapsed ? item.label : undefined}
                 >
-                  {isActive && (
-                    <div className="absolute left-0 top-1 bottom-1 w-[3px] bg-red-600 rounded-r" />
-                  )}
-                  <item.icon className={cn("w-5 h-5 shrink-0", isActive ? "text-red-600" : "text-gray-500")} />
-                  {!collapsed && <span>{item.label}</span>}
+                  <item.icon className={cn(
+                    "w-5 h-5 shrink-0",
+                    isActive ? "text-[#282828]" : "text-[#606060]"
+                  )} strokeWidth={1.5} />
+                  {!collapsed && <span className="ml-6">{item.label}</span>}
                 </Link>
               </li>
             );
@@ -136,25 +126,23 @@ export default function CmsSidebar() {
         </ul>
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-gray-200 py-2">
+      {/* Collapse toggle at bottom */}
+      <div className="py-2 shrink-0">
         {!collapsed ? (
-          <div className="px-4 py-2">
-            <button
-              onClick={() => setCollapsed(true)}
-              className="flex items-center gap-3 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              <span>Collapse</span>
-            </button>
-          </div>
+          <button
+            onClick={() => setCollapsed(true)}
+            className="flex items-center h-10 pl-6 pr-4 text-[13px] text-[#606060] hover:bg-[#f2f2f2] transition-colors w-full"
+          >
+            <ChevronLeft className="w-5 h-5" strokeWidth={1.5} />
+            <span className="ml-6">Collapse</span>
+          </button>
         ) : (
-          <div className="flex justify-center py-2">
+          <div className="flex justify-center">
             <button
               onClick={() => setCollapsed(false)}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              className="p-2 hover:bg-[#f2f2f2] rounded-full transition-colors"
             >
-              <ChevronRight className="w-5 h-5 text-gray-500" />
+              <ChevronRight className="w-5 h-5 text-[#606060]" strokeWidth={1.5} />
             </button>
           </div>
         )}
