@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Globe,
   CreditCard,
+  MonitorPlay,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -92,6 +93,7 @@ const adminNavItems: NavItem[] = [
   { href: "/admin-distribution", label: "Music Distribution", icon: Music },
   { href: "/admin-claims", label: "Claim Release", icon: ShieldCheck },
   { href: "/admin-settings", label: "Settings", icon: Settings },
+  { href: "/cms-dashboard", label: "YouTube CMS", icon: MonitorPlay },
 ];
 
 export default function Sidebar() {
