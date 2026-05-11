@@ -29,3 +29,19 @@ body {
   color: var(--color-foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+@media print {
+  .print\:hidden,
+  nav,
+  aside,
+  header {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+  }
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
