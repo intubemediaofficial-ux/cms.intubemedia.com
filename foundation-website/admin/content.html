@@ -17,6 +17,15 @@
     .gallery-item { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1; background: #f1f5f9; display: flex; align-items: center; justify-content: center; }
     .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
     .gallery-item .delete-btn { position: absolute; top: 5px; right: 5px; background: #dc2626; color: white; border: none; border-radius: 50%; width: 25px; height: 25px; cursor: pointer; font-size: 0.7rem; }
+    .upload-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.3s; background: #f8fafc; }
+    .upload-zone:hover, .upload-zone.dragover { border-color: #1d4ed8; background: #eff6ff; }
+    .upload-zone i { font-size: 2rem; color: #94a3b8; margin-bottom: 10px; }
+    .upload-zone p { color: #64748b; font-size: 0.85rem; margin: 5px 0; }
+    .upload-zone .upload-hint { font-size: 0.75rem; color: #94a3b8; }
+    .upload-zone img.preview { max-width: 100%; max-height: 150px; border-radius: 8px; margin-top: 10px; object-fit: cover; }
+    .upload-zone.has-file { border-color: #16a34a; background: #f0fdf4; }
+    .upload-zone.has-file i { color: #16a34a; }
+    .upload-zone.uploading { opacity: 0.6; pointer-events: none; }
     .blog-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 15px; }
     .blog-card h4 { font-size: 1rem; margin-bottom: 5px; }
     .blog-card p { font-size: 0.85rem; color: #64748b; }
@@ -83,7 +92,7 @@
           <h3><i class="fas fa-images"></i> Photo Gallery</h3>
           <button class="btn btn-primary" onclick="openModal('galleryModal')"><i class="fas fa-plus"></i> Add Photo</button>
         </div>
-        <p style="color:#64748b;font-size:0.85rem;margin-bottom:15px">Gallery page पर ये photos दिखती हैं। Photo URL paste करें।</p>
+        <p style="color:#64748b;font-size:0.85rem;margin-bottom:15px">Gallery page पर ये photos दिखती हैं। Direct photo upload करें।</p>
         <div class="gallery-grid" id="galleryGrid"></div>
       </div>
     </div>
@@ -138,7 +147,15 @@
           <h4 style="margin-bottom:15px;color:#1e293b">UPI Details</h4>
           <div class="form-grid">
             <div class="form-group"><label>UPI ID</label><input type="text" id="upiId" placeholder="example@upi"></div>
-            <div class="form-group"><label>UPI QR Code Image URL</label><input type="url" id="upiQr" placeholder="https://...qr-image.png"></div>
+            <div class="form-group"><label>UPI QR Code Image</label>
+              <div class="upload-zone" id="qrUploadZone" onclick="document.getElementById('qrFileInput').click()" ondragover="handleDragOver(event,this)" ondragleave="handleDragLeave(event,this)" ondrop="handleDrop(event,this,'qrFileInput')" style="padding:15px">
+                <i class="fas fa-qrcode" style="font-size:1.5rem"></i>
+                <p>QR Code image upload करें</p>
+                <img class="preview" id="qrPreview" style="display:none">
+              </div>
+              <input type="file" id="qrFileInput" accept="image/*" style="display:none" onchange="handleFileSelect(this,'qrPreview','qrUploadZone')">
+              <input type="hidden" id="upiQr">
+            </div>
           </div>
           <hr style="margin:20px 0;border-color:#f1f5f9">
           <h4 style="margin-bottom:15px;color:#1e293b"><i class="fas fa-credit-card"></i> Razorpay Integration</h4>
@@ -246,12 +263,21 @@
     <div class="modal">
       <div class="modal-header"><h3>Add Photo</h3><button class="modal-close" onclick="closeModal('galleryModal')">&times;</button></div>
       <form onsubmit="addPhoto(event)">
-        <div class="form-group"><label>Photo URL *</label><input type="url" id="photoUrl" required placeholder="https://...image.jpg"></div>
+        <div class="form-group"><label>Photo *</label>
+          <div class="upload-zone" id="galleryUploadZone" onclick="document.getElementById('galleryFileInput').click()" ondragover="handleDragOver(event,this)" ondragleave="handleDragLeave(event,this)" ondrop="handleDrop(event,this,'galleryFileInput')">
+            <i class="fas fa-cloud-upload-alt"></i>
+            <p>Drag & Drop photo here</p>
+            <p class="upload-hint">या click करके file select करें (JPG, PNG, max 10MB)</p>
+            <img class="preview" id="galleryPreview" style="display:none">
+          </div>
+          <input type="file" id="galleryFileInput" accept="image/*" style="display:none" onchange="handleFileSelect(this,'galleryPreview','galleryUploadZone')">
+          <input type="hidden" id="photoUrl">
+        </div>
         <div class="form-group"><label>Caption</label><input type="text" id="photoCaption" placeholder="Photo description"></div>
         <div class="form-group"><label>Category</label>
           <select id="photoCategory"><option>General</option><option>Education</option><option>Healthcare</option><option>Celebrations</option><option>Events</option><option>Food Distribution</option></select>
         </div>
-        <button type="submit" class="btn btn-primary" style="width:100%">Add Photo</button>
+        <button type="submit" class="btn btn-primary" style="width:100%" id="gallerySubmitBtn">Add Photo</button>
       </form>
     </div>
   </div>
@@ -265,7 +291,15 @@
         <div class="form-group"><label>Category</label>
           <select id="blogCategory"><option>News</option><option>Events</option><option>Success Story</option><option>Update</option><option>Campaign</option></select>
         </div>
-        <div class="form-group"><label>Cover Image URL</label><input type="url" id="blogImage" placeholder="https://...image.jpg"></div>
+        <div class="form-group"><label>Cover Image</label>
+          <div class="upload-zone" id="blogUploadZone" onclick="document.getElementById('blogFileInput').click()" ondragover="handleDragOver(event,this)" ondragleave="handleDragLeave(event,this)" ondrop="handleDrop(event,this,'blogFileInput')" style="padding:15px">
+            <i class="fas fa-image" style="font-size:1.5rem"></i>
+            <p>Drag & Drop cover image या click करें</p>
+            <img class="preview" id="blogPreview" style="display:none">
+          </div>
+          <input type="file" id="blogFileInput" accept="image/*" style="display:none" onchange="handleFileSelect(this,'blogPreview','blogUploadZone')">
+          <input type="hidden" id="blogImage">
+        </div>
         <div class="form-group"><label>Content *</label><textarea id="blogContent" required placeholder="Write blog post content here..." style="min-height:150px"></textarea></div>
         <button type="submit" class="btn btn-primary" style="width:100%">Publish Post</button>
       </form>
@@ -279,7 +313,15 @@
       <form onsubmit="addTeam(event)">
         <div class="form-group"><label>Full Name *</label><input type="text" id="teamName" required></div>
         <div class="form-group"><label>Designation *</label><input type="text" id="teamRole" required placeholder="e.g. Founder, Director, Volunteer Head"></div>
-        <div class="form-group"><label>Photo URL</label><input type="url" id="teamPhoto" placeholder="https://...photo.jpg"></div>
+        <div class="form-group"><label>Photo</label>
+          <div class="upload-zone" id="teamUploadZone" onclick="document.getElementById('teamFileInput').click()" ondragover="handleDragOver(event,this)" ondragleave="handleDragLeave(event,this)" ondrop="handleDrop(event,this,'teamFileInput')" style="padding:15px">
+            <i class="fas fa-user-circle" style="font-size:1.5rem"></i>
+            <p>Photo upload करें (drag & drop या click)</p>
+            <img class="preview" id="teamPreview" style="display:none">
+          </div>
+          <input type="file" id="teamFileInput" accept="image/*" style="display:none" onchange="handleFileSelect(this,'teamPreview','teamUploadZone')">
+          <input type="hidden" id="teamPhoto">
+        </div>
         <div class="form-group"><label>Phone</label><input type="text" id="teamPhone"></div>
         <div class="form-group"><label>Email</label><input type="email" id="teamEmail"></div>
         <button type="submit" class="btn btn-primary" style="width:100%">Add Member</button>
@@ -330,14 +372,15 @@
     function renderGallery() {
       document.getElementById('galleryGrid').innerHTML = gallery.length ? gallery.map(p => `<div class="gallery-item"><img src="${p.url}" alt="${p.caption||''}" onerror="this.parentElement.innerHTML='<i class=\\'fas fa-image\\' style=\\'font-size:2rem;color:#94a3b8\\'></i>'"><button class="delete-btn" onclick="removePhoto(${p.id})"><i class="fas fa-times"></i></button></div>`).join('') : '<div class="empty-state"><i class="fas fa-images"></i><p>No photos added yet</p></div>';
     }
-    function addPhoto(e) { e.preventDefault(); gallery.unshift({id:Date.now(),url:document.getElementById('photoUrl').value,caption:document.getElementById('photoCaption').value,category:document.getElementById('photoCategory').value}); DataAPI.save('gallery',gallery); renderGallery(); closeModal('galleryModal'); e.target.reset(); showSaved(); }
+    function addPhoto(e) { e.preventDefault(); const url=document.getElementById('photoUrl').value; if(!url){alert('Please upload a photo first');return;} gallery.unshift({id:Date.now(),url:url,caption:document.getElementById('photoCaption').value,category:document.getElementById('photoCategory').value}); DataAPI.save('gallery',gallery); renderGallery(); closeModal('galleryModal'); e.target.reset(); resetUploadZone('galleryUploadZone','galleryPreview'); showSaved(); }
+    function resetUploadZone(zoneId,previewId) { const z=document.getElementById(zoneId); const p=document.getElementById(previewId); if(z){z.classList.remove('has-file');} if(p){p.style.display='none';p.src='';} }
     function removePhoto(id) { if(confirm('Delete?')) { gallery=gallery.filter(p=>p.id!==id); DataAPI.save('gallery',gallery); renderGallery(); showSaved(); } }
 
     // ===== BLOG =====
     function renderBlogs() {
       document.getElementById('blogList').innerHTML = blogs.length ? blogs.map(b => `<div class="blog-card"><h4>${b.title}</h4><p>${b.content.substring(0,150)}...</p><div class="blog-meta"><span><i class="fas fa-tag"></i> ${b.category}</span><span><i class="fas fa-calendar"></i> ${new Date(b.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span><span style="margin-left:auto"><button onclick="removeBlog(${b.id})" style="border:none;background:none;color:#dc2626;cursor:pointer"><i class="fas fa-trash"></i> Delete</button></span></div></div>`).join('') : '<div class="empty-state"><i class="fas fa-newspaper"></i><p>No blog posts yet</p></div>';
     }
-    function addBlog(e) { e.preventDefault(); blogs.unshift({id:Date.now(),title:document.getElementById('blogTitle').value,category:document.getElementById('blogCategory').value,image:document.getElementById('blogImage').value,content:document.getElementById('blogContent').value,date:new Date().toISOString()}); DataAPI.save('blogs',blogs); renderBlogs(); closeModal('blogModal'); e.target.reset(); showSaved(); }
+    function addBlog(e) { e.preventDefault(); blogs.unshift({id:Date.now(),title:document.getElementById('blogTitle').value,category:document.getElementById('blogCategory').value,image:document.getElementById('blogImage').value,content:document.getElementById('blogContent').value,date:new Date().toISOString()}); DataAPI.save('blogs',blogs); renderBlogs(); closeModal('blogModal'); e.target.reset(); resetUploadZone('blogUploadZone','blogPreview'); showSaved(); }
     function removeBlog(id) { if(confirm('Delete?')) { blogs=blogs.filter(b=>b.id!==id); DataAPI.save('blogs',blogs); renderBlogs(); showSaved(); } }
 
     // ===== BANNER =====
@@ -353,7 +396,7 @@
     function renderTeam() {
       document.getElementById('teamList').innerHTML = team.length ? team.map(t => `<div class="team-card"><div class="team-avatar">${t.name.charAt(0)}</div><div style="flex:1"><strong>${t.name}</strong><br><span style="color:#64748b;font-size:0.85rem">${t.role}</span><br><span style="font-size:0.8rem;color:#94a3b8">${t.phone||''} ${t.email?'• '+t.email:''}</span></div><button onclick="removeTeam(${t.id})" style="border:none;background:none;color:#dc2626;cursor:pointer"><i class="fas fa-trash"></i></button></div>`).join('') : '<div class="empty-state"><i class="fas fa-user-tie"></i><p>No team members added</p></div>';
     }
-    function addTeam(e) { e.preventDefault(); team.push({id:Date.now(),name:document.getElementById('teamName').value,role:document.getElementById('teamRole').value,photo:document.getElementById('teamPhoto').value,phone:document.getElementById('teamPhone').value,email:document.getElementById('teamEmail').value}); DataAPI.save('team',team); renderTeam(); closeModal('teamModal'); e.target.reset(); showSaved(); }
+    function addTeam(e) { e.preventDefault(); team.push({id:Date.now(),name:document.getElementById('teamName').value,role:document.getElementById('teamRole').value,photo:document.getElementById('teamPhoto').value,phone:document.getElementById('teamPhone').value,email:document.getElementById('teamEmail').value}); DataAPI.save('team',team); renderTeam(); closeModal('teamModal'); e.target.reset(); resetUploadZone('teamUploadZone','teamPreview'); showSaved(); }
     function removeTeam(id) { if(confirm('Remove?')) { team=team.filter(t=>t.id!==id); DataAPI.save('team',team); renderTeam(); showSaved(); } }
 
     // ===== PROGRAMS =====
@@ -367,6 +410,58 @@
     function saveSettings(e) { e.preventDefault(); const data={phone:document.getElementById('setPhone').value,email:document.getElementById('setEmail').value,whatsapp:document.getElementById('setWhatsapp').value,address:document.getElementById('setAddress').value,fb:document.getElementById('setFb').value,insta:document.getElementById('setInsta').value,yt:document.getElementById('setYt').value,map:document.getElementById('setMap').value}; DataAPI.save('settings',data); showSaved(); }
 
     function changePassword(e) { e.preventDefault(); if(document.getElementById('currPass').value==='Hope4Kids@2026'){alert('Password changed!');} else {alert('Current password incorrect!');} }
+
+    // ===== FILE UPLOAD HANDLERS =====
+    function handleDragOver(e, zone) { e.preventDefault(); e.stopPropagation(); zone.classList.add('dragover'); }
+    function handleDragLeave(e, zone) { e.preventDefault(); e.stopPropagation(); zone.classList.remove('dragover'); }
+    function handleDrop(e, zone, inputId) {
+      e.preventDefault(); e.stopPropagation(); zone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const input = document.getElementById(inputId);
+        const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
+        input.dispatchEvent(new Event('change'));
+      }
+    }
+
+    function handleFileSelect(input, previewId, zoneId) {
+      const file = input.files[0];
+      if (!file) return;
+      const zone = document.getElementById(zoneId);
+      const preview = document.getElementById(previewId);
+      // Show local preview
+      const reader = new FileReader();
+      reader.onload = function(e) { preview.src = e.target.result; preview.style.display = 'block'; };
+      reader.readAsDataURL(file);
+      zone.classList.add('has-file');
+      // Upload to server
+      uploadFile(file, input, zone);
+    }
+
+    async function uploadFile(file, hiddenInput, zone) {
+      zone.classList.add('uploading');
+      const formData = new FormData();
+      formData.append('image', file);
+      try {
+        const resp = await fetch('/admin/upload.php', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (data.success) {
+          // Find the corresponding hidden input (sibling)
+          const hiddenId = hiddenInput.id.replace('FileInput','');
+          // Map file input IDs to hidden field IDs
+          const map = { gallery: 'photoUrl', blog: 'blogImage', team: 'teamPhoto', qr: 'upiQr' };
+          const targetId = map[hiddenId] || hiddenId;
+          document.getElementById(targetId).value = data.url;
+          zone.classList.remove('uploading');
+        } else {
+          alert('Upload failed: ' + data.error);
+          zone.classList.remove('uploading', 'has-file');
+        }
+      } catch(err) {
+        alert('Upload error: ' + err.message);
+        zone.classList.remove('uploading', 'has-file');
+      }
+    }
 
     // ===== LOAD ALL DATA FROM SERVER =====
     async function initPage() {
