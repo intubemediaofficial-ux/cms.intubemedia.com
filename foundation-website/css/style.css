@@ -2225,3 +2225,329 @@ button, input, textarea, select {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* === Celebration Section === */
+.celebrate-packages {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+  margin-top: 40px;
+}
+
+.celebrate-card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  transition: var(--transition);
+  position: relative;
+}
+
+.celebrate-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-xl);
+}
+
+.celebrate-card.featured {
+  border: 3px solid var(--primary);
+}
+
+.celebrate-card.featured::before {
+  content: 'Most Popular';
+  position: absolute;
+  top: 15px;
+  right: -30px;
+  background: var(--primary);
+  color: var(--white);
+  padding: 5px 40px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  transform: rotate(45deg);
+  z-index: 2;
+}
+
+.celebrate-card .card-header {
+  background: var(--gradient-primary);
+  color: var(--white);
+  padding: 30px 25px;
+  text-align: center;
+}
+
+.celebrate-card .card-header i {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.celebrate-card .card-header h3 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.celebrate-card .card-header .price {
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.celebrate-card .card-body {
+  padding: 25px;
+}
+
+.celebrate-card .card-body ul {
+  list-style: none;
+  margin-bottom: 20px;
+}
+
+.celebrate-card .card-body ul li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--gray-lighter);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--dark);
+}
+
+.celebrate-card .card-body ul li i {
+  color: var(--primary);
+  font-size: 0.85rem;
+}
+
+.celebrate-card .card-body ul li:last-child {
+  border-bottom: none;
+}
+
+.celebrate-how {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 25px;
+  margin-top: 40px;
+}
+
+.celebrate-step {
+  text-align: center;
+  padding: 30px 20px;
+  position: relative;
+}
+
+.celebrate-step .step-num {
+  width: 50px;
+  height: 50px;
+  background: var(--gradient-primary);
+  color: var(--white);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin: 0 auto 15px;
+}
+
+.celebrate-step h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--dark);
+}
+
+.celebrate-step p {
+  font-size: 0.85rem;
+  color: var(--gray);
+  line-height: 1.5;
+}
+
+.celebrate-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.celebrate-gallery .cel-img {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  aspect-ratio: 1;
+}
+
+.celebrate-gallery .cel-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.celebrate-gallery .cel-img:hover img {
+  transform: scale(1.08);
+}
+
+/* === Donor Wall === */
+.donor-wall-section {
+  background: linear-gradient(135deg, #f0f7ff 0%, #e0effe 100%);
+  padding: 60px 0;
+  overflow: hidden;
+}
+
+.donor-wall-section .section-header {
+  margin-bottom: 30px;
+}
+
+.donor-wall-track {
+  position: relative;
+  overflow: hidden;
+  padding: 10px 0;
+}
+
+.donor-wall-scroll {
+  display: flex;
+  gap: 15px;
+  animation: donor-scroll 60s linear infinite;
+  width: max-content;
+}
+
+.donor-wall-scroll:hover {
+  animation-play-state: paused;
+}
+
+.donor-card {
+  flex-shrink: 0;
+  background: var(--white);
+  border-radius: var(--radius-md);
+  padding: 15px 20px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+  border-left: 3px solid var(--primary);
+  transition: var(--transition);
+}
+
+.donor-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.donor-card .donor-avatar {
+  width: 40px;
+  height: 40px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.donor-card .donor-info h4 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--dark);
+  white-space: nowrap;
+}
+
+.donor-card .donor-info p {
+  font-size: 0.78rem;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.donor-card .donor-info small {
+  font-size: 0.7rem;
+  color: var(--gray-light);
+}
+
+@keyframes donor-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.donor-wall-row-2 .donor-wall-scroll {
+  animation-direction: reverse;
+}
+
+/* === Sponsor a Child Section === */
+.sponsor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 25px;
+}
+
+.sponsor-card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  transition: var(--transition);
+}
+
+.sponsor-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-xl);
+}
+
+.sponsor-card .sponsor-img {
+  height: 220px;
+  overflow: hidden;
+}
+
+.sponsor-card .sponsor-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.sponsor-card:hover .sponsor-img img {
+  transform: scale(1.05);
+}
+
+.sponsor-card .sponsor-body {
+  padding: 20px;
+}
+
+.sponsor-card .sponsor-body h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--dark);
+  margin-bottom: 5px;
+}
+
+.sponsor-card .sponsor-body .sponsor-age {
+  font-size: 0.8rem;
+  color: var(--gray);
+  margin-bottom: 10px;
+}
+
+.sponsor-card .sponsor-body p {
+  font-size: 0.85rem;
+  color: var(--gray);
+  line-height: 1.5;
+  margin-bottom: 15px;
+}
+
+.sponsor-card .sponsor-body .sponsor-amount {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 10px;
+}
+
+@media (max-width: 1024px) {
+  .celebrate-packages { grid-template-columns: repeat(2, 1fr); }
+  .celebrate-how { grid-template-columns: repeat(2, 1fr); }
+  .celebrate-gallery { grid-template-columns: repeat(2, 1fr); }
+  .sponsor-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .celebrate-packages { grid-template-columns: 1fr; }
+  .celebrate-how { grid-template-columns: 1fr; }
+  .celebrate-gallery { grid-template-columns: repeat(2, 1fr); }
+  .sponsor-grid { grid-template-columns: 1fr; }
+}
