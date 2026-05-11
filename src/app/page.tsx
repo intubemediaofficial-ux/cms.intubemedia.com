@@ -199,20 +199,27 @@ function AudioVisualizer() {
   );
 }
 
+const PARTICLE_POSITIONS = Array.from({ length: 30 }, (_, i) => ({
+  left: ((i * 37 + 13) % 100),
+  top: ((i * 53 + 7) % 100),
+  duration: 4 + (i % 5),
+  delay: (i * 0.4) % 4,
+}));
+
 function ParticleField() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {[...Array(30)].map((_, i) => (
+      {PARTICLE_POSITIONS.map((p, i) => (
         <motion.div
           key={i}
           className="absolute w-1 h-1 rounded-full bg-primary/30"
-          style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
+          style={{ left: `${p.left}%`, top: `${p.top}%` }}
           animate={{
             y: [0, -100, 0],
             opacity: [0, 1, 0],
             scale: [0, 1.5, 0],
           }}
-          transition={{ duration: 4 + Math.random() * 4, repeat: Infinity, delay: Math.random() * 4 }}
+          transition={{ duration: p.duration, repeat: Infinity, delay: p.delay }}
         />
       ))}
     </div>
