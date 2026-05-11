@@ -45,9 +45,9 @@ const NAV_LINKS = [
 
 const STATS = [
   { value: 9, suffix: "+", label: "Years Experience", icon: Award },
-  { value: 500, suffix: "+", label: "Videos Published", icon: Play },
+  { value: 669, suffix: "+", label: "Videos Published", icon: Play },
   { value: 50, suffix: "+", label: "Artists & Channels", icon: Users },
-  { value: 10, suffix: "M+", label: "Total Views", icon: TrendingUp },
+  { value: 150, suffix: "M+", label: "Total Views", icon: TrendingUp },
 ];
 
 const SERVICES = [
@@ -96,42 +96,69 @@ const SERVICES = [
 ];
 
 const CHANNELS = [
-  { name: "Bainsla Music", slug: "bainsla-music", subscribers: "1M+" },
-  { name: "Babjon", slug: "babjon", subscribers: "500K+" },
-  { name: "Buteri Music", slug: "buteri-music", subscribers: "300K+" },
-  { name: "Panghat", slug: "panghat", subscribers: "200K+" },
-  { name: "Oronba", slug: "oronba", subscribers: "150K+" },
+  { name: "Bainsla Music", handle: "bainslaofficial", subscribers: "1.51M" },
+  { name: "Bainsla Studio", handle: "bainslastudio", subscribers: "500K+" },
+  { name: "Buteri Music", handle: "buterimusic", subscribers: "300K+" },
+  { name: "Godwad Music", handle: "godwadmusic", subscribers: "200K+" },
+  { name: "Panghat", handle: "panghat", subscribers: "150K+" },
 ];
 
 const VIDEOS = [
   {
-    id: "VIDEO_1",
-    title: "बीमा जवानी को करवाले | Beema Jawani Ko Karwale",
-    artist: "Asha Meena, Pammi Khatana",
-    views: "5M+ Views",
-    thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+    id: "mu8M7Nk8ywU",
+    title: "कबूतर बोले गुटर गू | Kabutar Bole Gutar Gu | New Dj Dance",
+    artist: "DG Mawai",
+    views: "20M+ Views",
   },
   {
-    id: "VIDEO_2",
-    title: "ब्यान रोजिना ही रील बनावे तू",
-    artist: "Bainsla Music",
-    views: "3M+ Views",
-    thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+    id: "S7VZLHubP4c",
+    title: "इन दोनों कहनी ने DJ के आगे धूम मचा दी | Ajeet Katara & Balli",
+    artist: "Ajeet Katara, Balli",
+    views: "18M+ Views",
   },
   {
-    id: "VIDEO_3",
-    title: "New DJ Song - सेरो नंबर",
-    artist: "Bainsla Music",
-    views: "2M+ Views",
-    thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+    id: "3ELgvab96VQ",
+    title: "छोरी तेरी चाल मोरनी की ढाल | Chori Teri Chal Morni Ki Dhal",
+    artist: "DG Mawai",
+    views: "16M+ Views",
   },
   {
-    id: "VIDEO_4",
-    title: "गुर्जर की सेटिंग सू छाती ठोक",
-    artist: "Bainsla Music",
-    views: "4M+ Views",
-    thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+    id: "8XKjIjWs6Ak",
+    title: "अलवर की इस मुस्कान नाम की डांसर | New Gurjar Girl Dance",
+    artist: "DG Mawai",
+    views: "15M+ Views",
   },
+];
+
+const DIRECTORS = [
+  {
+    name: "Ajeet Bainsla",
+    role: "Founder & Director",
+    desc: "Born in Soorgarh, Sawai Madhopur. Passionate advocate for Rajasthani folk music since 2016.",
+  },
+  {
+    name: "Shivlal Bainsla",
+    role: "Director",
+    desc: "Driving business growth and artist partnerships across Rajasthan and beyond.",
+  },
+  {
+    name: "Aman Bainsla",
+    role: "Director",
+    desc: "Co-founder managing operations, technology and digital distribution.",
+  },
+];
+
+const PLATFORMS = [
+  "Spotify",
+  "JioSaavn",
+  "Gaana",
+  "Wynk Music",
+  "YouTube Music",
+  "Apple Music",
+  "Amazon Music",
+  "Hungama",
+  "Resso",
+  "Instagram",
 ];
 
 const TESTIMONIALS = [
@@ -371,9 +398,9 @@ export default function HomePage() {
           </h1>
 
           <p className="text-base sm:text-lg text-white/60 max-w-2xl mx-auto mb-10 animate-fadeInUp delay-200">
-            &ldquo;Music can change the world&rdquo; — Bainsla Music preserves
-            and promotes the rich heritage of Rajasthani &apos;Rasiya&apos; songs,
-            bringing world close together through its music since 9+ years.
+            &ldquo;Music can change the world&rdquo; — With 10,000+ songs and 1.5M+
+            YouTube subscribers, Bainsla Music preserves the rich heritage of
+            Rajasthani &apos;Rasiya&apos; songs, connecting the world through music since 2016.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fadeInUp delay-300">
@@ -385,7 +412,7 @@ export default function HomePage() {
               <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </a>
             <a
-              href="https://www.youtube.com/@BainslaMusic"
+              href="https://www.youtube.com/@bainslaofficial"
               target="_blank"
               rel="noopener noreferrer"
               className="group inline-flex items-center gap-2 px-8 py-3.5 rounded-full border border-white/20 text-white font-medium hover:bg-white/5 transition-all"
@@ -556,7 +583,7 @@ export default function HomePage() {
               </h2>
             </div>
             <a
-              href="https://www.youtube.com/@BainslaMusic"
+              href="https://www.youtube.com/@bainslaofficial"
               target="_blank"
               rel="noopener noreferrer"
               className="mt-4 sm:mt-0 inline-flex items-center gap-2 text-sm text-primary hover:underline"
@@ -566,15 +593,25 @@ export default function HomePage() {
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {VIDEOS.map((v, i) => (
-              <div
-                key={i}
+            {VIDEOS.map((v) => (
+              <a
+                key={v.id}
+                href={`https://www.youtube.com/watch?v=${v.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="group rounded-2xl overflow-hidden bg-white/[0.03] border border-white/[0.06] hover:border-primary/30 transition-all duration-300"
               >
-                <div className="relative aspect-video bg-gradient-to-br from-primary/20 to-orange-600/10 flex items-center justify-center overflow-hidden">
-                  <div className="absolute inset-0 bg-black/40" />
-                  <div className="relative z-10 w-14 h-14 rounded-full bg-red-600/90 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Play className="w-6 h-6 text-white ml-0.5" />
+                <div className="relative aspect-video overflow-hidden">
+                  <img
+                    src={`https://img.youtube.com/vi/${v.id}/hqdefault.jpg`}
+                    alt={v.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-full bg-red-600/90 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Play className="w-6 h-6 text-white ml-0.5" />
+                    </div>
                   </div>
                   <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/60 text-[10px] text-white/80">
                     {v.views}
@@ -586,7 +623,7 @@ export default function HomePage() {
                   </h4>
                   <p className="text-xs text-white/40 mt-1">{v.artist}</p>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
@@ -612,8 +649,11 @@ export default function HomePage() {
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6">
             {CHANNELS.map((ch) => (
-              <div
-                key={ch.slug}
+              <a
+                key={ch.handle}
+                href={`https://www.youtube.com/@${ch.handle}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="group text-center p-6 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-primary/30 transition-all duration-300 hover:-translate-y-1"
               >
                 <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-primary/30 to-orange-600/20 flex items-center justify-center mb-4 group-hover:from-primary/50 transition-all">
@@ -621,14 +661,98 @@ export default function HomePage() {
                 </div>
                 <h4 className="font-semibold text-sm">{ch.name}</h4>
                 <p className="text-xs text-primary mt-1">{ch.subscribers} Subscribers</p>
+              </a>
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      {/* ─── DIRECTORS / TEAM ─── */}
+      <Section className="py-20 md:py-28">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-16">
+            <span className="text-primary text-sm font-semibold uppercase tracking-wider">
+              Leadership
+            </span>
+            <h2 className="text-3xl md:text-4xl font-bold mt-3">
+              Our{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-amber-400">
+                Directors
+              </span>
+            </h2>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {DIRECTORS.map((d) => (
+              <div
+                key={d.name}
+                className="text-center p-8 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-primary/20 transition-all"
+              >
+                <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center text-white text-2xl font-bold mb-4">
+                  {d.name.split(" ").map((n) => n[0]).join("")}
+                </div>
+                <h4 className="text-lg font-semibold">{d.name}</h4>
+                <p className="text-primary text-sm mt-1">{d.role}</p>
+                <p className="text-white/50 text-sm mt-3">{d.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </Section>
 
+      {/* ─── DISTRIBUTION PLATFORMS ─── */}
+      <Section className="py-16 bg-[#0f0f0f]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-10">
+            <span className="text-primary text-sm font-semibold uppercase tracking-wider">
+              Available On
+            </span>
+            <h2 className="text-2xl md:text-3xl font-bold mt-3">
+              150+{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-amber-400">
+                Platforms
+              </span>
+            </h2>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6">
+            {PLATFORMS.map((p) => (
+              <div
+                key={p}
+                className="px-6 py-3 rounded-full bg-white/[0.05] border border-white/[0.08] text-sm text-white/60 hover:text-primary hover:border-primary/30 transition-all"
+              >
+                {p}
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-white/30 text-xs mt-6">
+            ...and 140+ more digital music platforms worldwide
+          </p>
+        </div>
+      </Section>
+
+      {/* ─── PRESS / FEATURED IN ─── */}
+      <Section className="py-16">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
+          <span className="text-primary text-sm font-semibold uppercase tracking-wider">
+            Featured In
+          </span>
+          <div className="flex flex-wrap items-center justify-center gap-8 mt-8">
+            {["Firstpost", "Republic Bharat", "Dainik Jagran", "Deezer", "Gaana", "JioSaavn"].map(
+              (name) => (
+                <div
+                  key={name}
+                  className="text-lg font-semibold text-white/20 hover:text-white/40 transition-colors"
+                >
+                  {name}
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      </Section>
+
       {/* ─── TESTIMONIALS ─── */}
-      <Section className="py-20 md:py-28">
+      <Section className="py-20 md:py-28 bg-[#0f0f0f]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <span className="text-primary text-sm font-semibold uppercase tracking-wider">
@@ -778,7 +902,7 @@ export default function HomePage() {
                 <p className="text-sm text-white/40 mb-3">Follow Us</p>
                 <div className="flex gap-3">
                   <a
-                    href="https://www.youtube.com/@BainslaMusic"
+                    href="https://www.youtube.com/@bainslaofficial"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-primary hover:border-primary/30 transition-all"
@@ -988,7 +1112,7 @@ export default function HomePage() {
               {[
                 {
                   label: "YouTube",
-                  href: "https://www.youtube.com/@BainslaMusic",
+                  href: "https://www.youtube.com/@bainslaofficial",
                 },
                 {
                   label: "Instagram",
@@ -1009,6 +1133,19 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* ─── WhatsApp Floating Button ─── */}
+      <a
+        href="https://wa.me/918696761606?text=Hi%2C%20I%20want%20to%20know%20about%20Bainsla%20Music%20services"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-[#25D366] flex items-center justify-center shadow-lg shadow-[#25D366]/30 hover:scale-110 transition-transform"
+        aria-label="Chat on WhatsApp"
+      >
+        <svg viewBox="0 0 24 24" fill="white" className="w-7 h-7">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+        </svg>
+      </a>
 
       {/* ─── Global CSS animations ─── */}
       <style jsx global>{`
