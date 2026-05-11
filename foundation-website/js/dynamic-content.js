@@ -101,6 +101,38 @@
     if (heroTitle) heroTitle.innerHTML = banner.title1 + ' <span>' + banner.title2 + '</span>';
     const heroSub = document.querySelector('.hero-subtitle, .hero p');
     if (heroSub) heroSub.textContent = banner.subtitle;
+    // Update impact stats
+    if (banner.impChildren) { const el = document.querySelector('[data-stat="children"], .stat-children'); if (el) el.textContent = banner.impChildren; }
+    if (banner.impPrograms) { const el = document.querySelector('[data-stat="programs"], .stat-programs'); if (el) el.textContent = banner.impPrograms; }
+    if (banner.impVolunteers) { const el = document.querySelector('[data-stat="volunteers"], .stat-volunteers'); if (el) el.textContent = banner.impVolunteers; }
+    if (banner.impDistricts) { const el = document.querySelector('[data-stat="districts"], .stat-districts'); if (el) el.textContent = banner.impDistricts; }
+  }
+
+  // Load Blog/News posts
+  async function loadBlogs() {
+    const blogs = await loadData('blogs');
+    if (!blogs || blogs.length === 0) return;
+    const container = document.querySelector('.blog-grid, .news-grid, #dynamicBlogs, .blog-container');
+    if (!container) return;
+    container.innerHTML = blogs.map(b => `<div class="blog-card"><div class="blog-image"><img src="${b.image || 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=400&h=250&fit=crop'}" alt="${b.title}" loading="lazy"></div><div class="blog-content"><span class="blog-category">${b.category}</span><h3>${b.title}</h3><p>${b.content.substring(0, 120)}...</p><div class="blog-meta"><span>${new Date(b.date).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'})}</span></div></div></div>`).join('');
+  }
+
+  // Load Team Members
+  async function loadTeam() {
+    const team = await loadData('team');
+    if (!team || team.length === 0) return;
+    const container = document.querySelector('.team-grid, .team-container, #dynamicTeam');
+    if (!container) return;
+    container.innerHTML = team.map(t => `<div class="team-card"><div class="team-image">${t.photo ? '<img src="' + t.photo + '" alt="' + t.name + '">' : '<div class="team-avatar">' + t.name.charAt(0) + '</div>'}</div><div class="team-info"><h4>${t.name}</h4><p class="team-role">${t.role}</p>${t.phone ? '<p class="team-contact"><i class="fas fa-phone"></i> ' + t.phone + '</p>' : ''}${t.email ? '<p class="team-contact"><i class="fas fa-envelope"></i> ' + t.email + '</p>' : ''}</div></div>`).join('');
+  }
+
+  // Load Programs
+  async function loadPrograms() {
+    const programs = await loadData('programs');
+    if (!programs || programs.length === 0) return;
+    const container = document.querySelector('.programs-grid, .programs-container, #dynamicPrograms');
+    if (!container) return;
+    container.innerHTML = programs.map(p => `<div class="program-card"><div class="program-icon"><i class="${p.icon}"></i></div><h3>${p.name}</h3><p>${p.desc}</p>${p.count ? '<span class="program-count"><i class="fas fa-users"></i> ' + p.count + '</span>' : ''}</div>`).join('');
   }
 
   // Initialize on page load
@@ -110,6 +142,9 @@
     // Page-specific loading
     if (window.location.pathname.includes('donate')) { loadBankDetails(); loadRazorpay(); }
     if (window.location.pathname.includes('gallery')) { loadGallery(); }
+    if (window.location.pathname.includes('blog') || window.location.pathname.includes('news')) { loadBlogs(); }
+    if (window.location.pathname.includes('about')) { loadTeam(); }
+    if (window.location.pathname.includes('programs')) { loadPrograms(); }
     if (window.location.pathname === '/' || window.location.pathname.includes('index')) { loadBanner(); loadRazorpay(); }
   });
 })();
