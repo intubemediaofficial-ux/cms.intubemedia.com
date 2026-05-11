@@ -1,28 +1,28 @@
 /* ============================================
-   Hope for Kids Care Foundation - Main Styles
+   Hope 4 Kids Care Foundation - Main Styles
    ============================================ */
 
 /* === CSS Variables === */
 :root {
-  --primary: #0e7490;
-  --primary-dark: #0a5a6e;
-  --primary-light: #22d3ee;
-  --secondary: #f59e0b;
-  --secondary-dark: #d97706;
-  --accent: #ec4899;
-  --accent-light: #f9a8d4;
+  --primary: #1d4ed8;
+  --primary-dark: #1e3a8a;
+  --primary-light: #3b82f6;
+  --secondary: #2563eb;
+  --secondary-dark: #1d4ed8;
+  --accent: #60a5fa;
+  --accent-light: #93c5fd;
   --success: #10b981;
   --danger: #ef4444;
-  --dark: #1e293b;
-  --dark-light: #334155;
+  --dark: #0f172a;
+  --dark-light: #1e293b;
   --gray: #64748b;
   --gray-light: #94a3b8;
   --gray-lighter: #e2e8f0;
-  --light: #f8fafc;
+  --light: #f0f7ff;
   --white: #ffffff;
-  --gradient-primary: linear-gradient(135deg, #0e7490 0%, #22d3ee 100%);
-  --gradient-warm: linear-gradient(135deg, #f59e0b 0%, #ec4899 100%);
-  --gradient-hero: linear-gradient(135deg, #0e7490 0%, #0a5a6e 50%, #064e5e 100%);
+  --gradient-primary: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+  --gradient-warm: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+  --gradient-hero: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #2563eb 100%);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
   --shadow-md: 0 4px 15px rgba(0,0,0,0.1);
   --shadow-lg: 0 10px 40px rgba(0,0,0,0.12);
@@ -161,24 +161,24 @@ button, input, textarea, select {
 .btn-primary {
   background: var(--gradient-primary);
   color: var(--white);
-  box-shadow: 0 4px 15px rgba(14, 116, 144, 0.4);
+  box-shadow: 0 4px 15px rgba(29, 78, 216, 0.4);
 }
 
 .btn-primary:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(14, 116, 144, 0.5);
+  box-shadow: 0 8px 25px rgba(29, 78, 216, 0.5);
 }
 
 .btn-secondary {
   background: var(--secondary);
   color: var(--white);
-  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
 }
 
 .btn-secondary:hover {
   background: var(--secondary-dark);
   transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(245, 158, 11, 0.5);
+  box-shadow: 0 8px 25px rgba(37, 99, 235, 0.5);
 }
 
 .btn-outline {
@@ -204,20 +204,20 @@ button, input, textarea, select {
 }
 
 .btn-donate {
-  background: linear-gradient(135deg, #ef4444 0%, #ec4899 100%);
+  background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
   color: var(--white);
-  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
   animation: pulse-donate 2s infinite;
 }
 
 .btn-donate:hover {
   transform: translateY(-3px) scale(1.02);
-  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.5);
+  box-shadow: 0 8px 25px rgba(220, 38, 38, 0.5);
 }
 
 @keyframes pulse-donate {
-  0%, 100% { box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); }
-  50% { box-shadow: 0 4px 25px rgba(239, 68, 68, 0.7); }
+  0%, 100% { box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4); }
+  50% { box-shadow: 0 4px 25px rgba(220, 38, 38, 0.7); }
 }
 
 /* === Top Bar === */
@@ -372,7 +372,7 @@ button, input, textarea, select {
 .nav-links a:hover,
 .nav-links a.active {
   color: var(--primary);
-  background: rgba(14, 116, 144, 0.06);
+  background: rgba(29, 78, 216, 0.06);
 }
 
 .nav-links .dropdown {
@@ -495,7 +495,7 @@ button, input, textarea, select {
 }
 
 .hero-content h1 span {
-  color: var(--secondary);
+  color: var(--accent);
 }
 
 .hero-content p {
@@ -526,7 +526,7 @@ button, input, textarea, select {
 .hero-stat h3 {
   font-size: 2rem;
   font-weight: 800;
-  color: var(--secondary);
+  color: var(--accent);
 }
 
 .hero-stat p {
@@ -589,7 +589,7 @@ button, input, textarea, select {
 .hero-floating-card .icon {
   width: 45px;
   height: 45px;
-  background: var(--gradient-warm);
+  background: var(--gradient-primary);
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
@@ -890,7 +890,7 @@ button, input, textarea, select {
   width: 70px;
   height: 70px;
   margin: 0 auto 20px;
-  background: linear-gradient(135deg, rgba(14, 116, 144, 0.1) 0%, rgba(34, 211, 238, 0.1) 100%);
+  background: linear-gradient(135deg, rgba(29, 78, 216, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
@@ -989,7 +989,7 @@ button, input, textarea, select {
 .impact-card h3 {
   font-size: 2.5rem;
   font-weight: 800;
-  color: var(--secondary);
+  color: var(--accent);
   margin-bottom: 5px;
 }
 
@@ -1045,7 +1045,7 @@ button, input, textarea, select {
 .donate-amount:hover,
 .donate-amount.active {
   border-color: var(--primary);
-  background: rgba(14, 116, 144, 0.05);
+  background: rgba(29, 78, 216, 0.08);
   color: var(--primary);
 }
 
@@ -1064,7 +1064,7 @@ button, input, textarea, select {
 
 .custom-amount input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 4px rgba(14, 116, 144, 0.1);
+  box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.1);
 }
 
 .donate-info {
@@ -1298,7 +1298,7 @@ button, input, textarea, select {
 
 .blog-card .blog-category {
   display: inline-block;
-  background: rgba(14, 116, 144, 0.1);
+  background: rgba(29, 78, 216, 0.1);
   color: var(--primary);
   padding: 4px 12px;
   border-radius: 50px;
@@ -1830,7 +1830,7 @@ button, input, textarea, select {
 .contact-form textarea:focus,
 .contact-form select:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 4px rgba(14, 116, 144, 0.1);
+  box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.1);
 }
 
 .contact-form textarea {
@@ -1912,7 +1912,7 @@ button, input, textarea, select {
 .gallery-item .gallery-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(14, 116, 144, 0.7);
+  background: rgba(29, 78, 216, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1963,7 +1963,7 @@ button, input, textarea, select {
 .benefit-card .icon {
   width: 50px;
   height: 50px;
-  background: linear-gradient(135deg, rgba(14, 116, 144, 0.1), rgba(34, 211, 238, 0.1));
+  background: linear-gradient(135deg, rgba(29, 78, 216, 0.1), rgba(59, 130, 246, 0.1));
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;

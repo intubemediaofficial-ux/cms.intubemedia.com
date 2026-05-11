@@ -1,5 +1,5 @@
 /* ============================================
-   Hope for Kids Care Foundation - Main JS
+   Hope 4 Kids Care Foundation - Main JS
    ============================================ */
 
 document.addEventListener('DOMContentLoaded', function() {
