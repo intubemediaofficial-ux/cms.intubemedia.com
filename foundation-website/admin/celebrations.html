@@ -32,10 +32,10 @@
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card stat-blue"><div class="stat-icon"><i class="fas fa-birthday-cake"></i></div><div class="stat-info"><h3>47</h3><p>Total Bookings</p></div></div>
-      <div class="stat-card stat-green"><div class="stat-icon"><i class="fas fa-check"></i></div><div class="stat-info"><h3>32</h3><p>Completed</p></div></div>
-      <div class="stat-card stat-orange"><div class="stat-icon"><i class="fas fa-clock"></i></div><div class="stat-info"><h3>8</h3><p>Upcoming</p></div></div>
-      <div class="stat-card stat-purple"><div class="stat-icon"><i class="fas fa-rupee-sign"></i></div><div class="stat-info"><h3>₹3,45,000</h3><p>Revenue</p></div></div>
+      <div class="stat-card stat-blue"><div class="stat-icon"><i class="fas fa-birthday-cake"></i></div><div class="stat-info"><h3 id="bTotal">0</h3><p>Total Bookings</p></div></div>
+      <div class="stat-card stat-green"><div class="stat-icon"><i class="fas fa-check"></i></div><div class="stat-info"><h3 id="bCompleted">0</h3><p>Completed</p></div></div>
+      <div class="stat-card stat-orange"><div class="stat-icon"><i class="fas fa-clock"></i></div><div class="stat-info"><h3 id="bUpcoming">0</h3><p>Upcoming</p></div></div>
+      <div class="stat-card stat-purple"><div class="stat-icon"><i class="fas fa-rupee-sign"></i></div><div class="stat-info"><h3 id="bRevenue">₹0</h3><p>Revenue</p></div></div>
     </div>
 
     <div class="card">
@@ -79,16 +79,7 @@
     if (sessionStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'index.html'; }
     function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
 
-    let bookings = JSON.parse(localStorage.getItem('bookings')) || [
-      { id: 1, name: 'Vikram Singh', type: 'Birthday', package: 'Grand - ₹11,000', date: '2026-05-15', phone: '9876543210', msg: 'Happy Birthday Vikram!', status: 'Upcoming' },
-      { id: 2, name: 'Sunita Mehra', type: 'Anniversary', package: 'Happiness - ₹5,100', date: '2026-05-18', phone: '9876543211', msg: 'Happy Anniversary!', status: 'Upcoming' },
-      { id: 3, name: 'Mohit Chaudhary', type: 'Birthday', package: 'Joy - ₹2,100', date: '2026-05-08', phone: '9876543212', msg: 'Happy Birthday Mohit!', status: 'Completed' },
-      { id: 4, name: 'Kavita Patel', type: 'In Memory', package: 'Grand - ₹11,000', date: '2026-05-05', phone: '9876543213', msg: 'In loving memory of Shri Ramesh Patel', status: 'Completed' },
-      { id: 5, name: 'Deepak Verma', type: 'Baby Shower', package: 'Happiness - ₹5,100', date: '2026-05-20', phone: '9876543214', msg: 'Welcome Baby!', status: 'Upcoming' },
-      { id: 6, name: 'Anita Rawat', type: 'Birthday', package: 'Joy - ₹2,100', date: '2026-05-01', phone: '9876543215', msg: 'Happy Birthday Riya!', status: 'Completed' },
-      { id: 7, name: 'Sanjay Yadav', type: 'Achievement', package: 'Happiness - ₹5,100', date: '2026-04-28', phone: '9876543216', msg: 'Congrats on passing exams!', status: 'Completed' },
-      { id: 8, name: 'Pooja Sharma', type: 'Anniversary', package: 'Grand - ₹11,000', date: '2026-05-22', phone: '9876543217', msg: '25th Anniversary Celebration', status: 'Upcoming' },
-    ];
+    let bookings = JSON.parse(localStorage.getItem('bookings')) || [];
 
     function renderTable() {
       const tbody = document.getElementById('bookingsBody');
@@ -140,7 +131,18 @@
 
     function openModal() { document.getElementById('addModal').classList.add('active'); }
     function closeModal() { document.getElementById('addModal').classList.remove('active'); }
+
+    function updateStats() {
+      document.getElementById('bTotal').textContent = bookings.length;
+      document.getElementById('bCompleted').textContent = bookings.filter(b => b.status === 'Completed').length;
+      document.getElementById('bUpcoming').textContent = bookings.filter(b => b.status === 'Upcoming').length;
+      const prices = {'Joy - ₹2,100': 2100, 'Happiness - ₹5,100': 5100, 'Grand - ₹11,000': 11000};
+      const revenue = bookings.reduce((s, b) => s + (prices[b.package] || 0), 0);
+      document.getElementById('bRevenue').textContent = '₹' + revenue.toLocaleString('en-IN');
+    }
+
     renderTable();
+    updateStats();
   </script>
 </body>
 </html>

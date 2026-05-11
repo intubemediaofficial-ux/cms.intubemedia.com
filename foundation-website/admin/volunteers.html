@@ -32,10 +32,10 @@
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card stat-blue"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-info"><h3>156</h3><p>Total Applications</p></div></div>
-      <div class="stat-card stat-green"><div class="stat-icon"><i class="fas fa-user-check"></i></div><div class="stat-info"><h3>89</h3><p>Approved</p></div></div>
-      <div class="stat-card stat-orange"><div class="stat-icon"><i class="fas fa-user-clock"></i></div><div class="stat-info"><h3>42</h3><p>Pending Review</p></div></div>
-      <div class="stat-card stat-purple"><div class="stat-icon"><i class="fas fa-star"></i></div><div class="stat-info"><h3>25</h3><p>Active Volunteers</p></div></div>
+      <div class="stat-card stat-blue"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-info"><h3 id="vTotal">0</h3><p>Total Applications</p></div></div>
+      <div class="stat-card stat-green"><div class="stat-icon"><i class="fas fa-user-check"></i></div><div class="stat-info"><h3 id="vApproved">0</h3><p>Approved</p></div></div>
+      <div class="stat-card stat-orange"><div class="stat-icon"><i class="fas fa-user-clock"></i></div><div class="stat-info"><h3 id="vPending">0</h3><p>Pending Review</p></div></div>
+      <div class="stat-card stat-purple"><div class="stat-icon"><i class="fas fa-star"></i></div><div class="stat-info"><h3 id="vActive">0</h3><p>Active Volunteers</p></div></div>
     </div>
 
     <div class="card">
@@ -74,18 +74,7 @@
     if (sessionStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'index.html'; }
     function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
 
-    let volunteers = JSON.parse(localStorage.getItem('volunteers')) || [
-      { id: 1, name: 'Aarav Mehta', email: 'aarav@gmail.com', phone: '9876543210', city: 'Jaipur', skills: 'Teaching, Mentoring', date: '2026-05-10', status: 'Approved' },
-      { id: 2, name: 'Ishita Sharma', email: 'ishita@gmail.com', phone: '9876543211', city: 'Delhi', skills: 'Healthcare, First Aid', date: '2026-05-09', status: 'Active' },
-      { id: 3, name: 'Rohan Gupta', email: 'rohan@gmail.com', phone: '9876543212', city: 'Mumbai', skills: 'Events, Photography', date: '2026-05-08', status: 'Pending' },
-      { id: 4, name: 'Sneha Patel', email: 'sneha@gmail.com', phone: '9876543213', city: 'Ahmedabad', skills: 'Teaching, Arts', date: '2026-05-07', status: 'Approved' },
-      { id: 5, name: 'Karan Singh', email: 'karan@gmail.com', phone: '9876543214', city: 'Jaipur', skills: 'Sports, Fitness', date: '2026-05-06', status: 'Active' },
-      { id: 6, name: 'Priyanka Yadav', email: 'priyanka@gmail.com', phone: '9876543215', city: 'Jodhpur', skills: 'Counseling, Teaching', date: '2026-05-05', status: 'Pending' },
-      { id: 7, name: 'Manish Tiwari', email: 'manish@gmail.com', phone: '9876543216', city: 'Udaipur', skills: 'IT, Social Media', date: '2026-05-04', status: 'Approved' },
-      { id: 8, name: 'Divya Rathore', email: 'divya@gmail.com', phone: '9876543217', city: 'Kota', skills: 'Nutrition, Cooking', date: '2026-05-03', status: 'Pending' },
-      { id: 9, name: 'Ankit Verma', email: 'ankit@gmail.com', phone: '9876543218', city: 'Jaipur', skills: 'Legal, Documentation', date: '2026-05-02', status: 'Rejected' },
-      { id: 10, name: 'Megha Soni', email: 'megha@gmail.com', phone: '9876543219', city: 'Ajmer', skills: 'Music, Dance', date: '2026-05-01', status: 'Active' },
-    ];
+    let volunteers = JSON.parse(localStorage.getItem('volunteers')) || [];
 
     function renderTable() {
       const tbody = document.getElementById('volBody');
@@ -118,12 +107,21 @@
       renderTable(); closeModal(); e.target.reset();
     }
 
-    function approveVol(id) { volunteers = volunteers.map(v => v.id === id ? {...v, status: 'Approved'} : v); localStorage.setItem('volunteers', JSON.stringify(volunteers)); renderTable(); }
-    function deleteVol(id) { if(confirm('Delete?')) { volunteers = volunteers.filter(v => v.id !== id); localStorage.setItem('volunteers', JSON.stringify(volunteers)); renderTable(); } }
+    function approveVol(id) { volunteers = volunteers.map(v => v.id === id ? {...v, status: 'Approved'} : v); localStorage.setItem('volunteers', JSON.stringify(volunteers)); renderTable(); updateStats(); }
+    function deleteVol(id) { if(confirm('Delete?')) { volunteers = volunteers.filter(v => v.id !== id); localStorage.setItem('volunteers', JSON.stringify(volunteers)); renderTable(); updateStats(); } }
     function filterTable() { const q = document.getElementById('searchVol').value.toLowerCase(); document.querySelectorAll('#volBody tr').forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'; }); }
     function openModal() { document.getElementById('addModal').classList.add('active'); }
     function closeModal() { document.getElementById('addModal').classList.remove('active'); }
+
+    function updateStats() {
+      document.getElementById('vTotal').textContent = volunteers.length;
+      document.getElementById('vApproved').textContent = volunteers.filter(v => v.status === 'Approved').length;
+      document.getElementById('vPending').textContent = volunteers.filter(v => v.status === 'Pending').length;
+      document.getElementById('vActive').textContent = volunteers.filter(v => v.status === 'Active').length;
+    }
+
     renderTable();
+    updateStats();
   </script>
 </body>
 </html>

@@ -108,22 +108,7 @@
     if (sessionStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'index.html'; }
     function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
 
-    let donorWall = JSON.parse(localStorage.getItem('donorWall')) || [
-      { id: 1, name: 'Ravi Sharma', amount: 25000, time: '2 days ago' },
-      { id: 2, name: 'Priya Gupta', amount: 10000, time: '3 days ago' },
-      { id: 3, name: 'Amit Kumar', amount: 5000, time: '3 days ago' },
-      { id: 4, name: 'Sunita Mehra', amount: 15000, time: '4 days ago' },
-      { id: 5, name: 'Rajesh Jain', amount: 50000, time: '4 days ago' },
-      { id: 6, name: 'Neha Kapoor', amount: 2000, time: '5 days ago' },
-      { id: 7, name: 'Vikram Singh', amount: 11000, time: '5 days ago' },
-      { id: 8, name: 'Aarti Desai', amount: 7500, time: '6 days ago' },
-      { id: 9, name: 'Mohit Chaudhary', amount: 3000, time: '6 days ago' },
-      { id: 10, name: 'Kavita Patel', amount: 20000, time: '1 week ago' },
-      { id: 11, name: 'Vivek Khanna', amount: 30000, time: '6 days ago' },
-      { id: 12, name: 'Gaurav Soni', amount: 12000, time: '3 days ago' },
-      { id: 13, name: 'Nisha Thakur', amount: 4000, time: '4 days ago' },
-      { id: 14, name: 'Om Gupta', amount: 50000, time: '3 weeks ago' },
-    ];
+    let donorWall = JSON.parse(localStorage.getItem('donorWall')) || [];
 
     function renderDonorWall() {
       document.getElementById('donorWallBody').innerHTML = donorWall.map((d, i) => `

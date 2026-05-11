@@ -38,72 +38,43 @@
       </div>
     </div>
 
-    <!-- Stats Cards -->
+    <!-- Stats Cards (Dynamic) -->
     <div class="stats-grid">
       <div class="stat-card stat-blue">
         <div class="stat-icon"><i class="fas fa-rupee-sign"></i></div>
-        <div class="stat-info">
-          <h3>₹12,45,000</h3>
-          <p>Total Donations</p>
-        </div>
+        <div class="stat-info"><h3 id="statDonations">₹0</h3><p>Total Donations</p></div>
       </div>
       <div class="stat-card stat-green">
         <div class="stat-icon"><i class="fas fa-birthday-cake"></i></div>
-        <div class="stat-info">
-          <h3>47</h3>
-          <p>Celebration Bookings</p>
-        </div>
+        <div class="stat-info"><h3 id="statBookings">0</h3><p>Celebration Bookings</p></div>
       </div>
       <div class="stat-card stat-purple">
         <div class="stat-icon"><i class="fas fa-users"></i></div>
-        <div class="stat-info">
-          <h3>156</h3>
-          <p>Volunteer Applications</p>
-        </div>
+        <div class="stat-info"><h3 id="statVolunteers">0</h3><p>Volunteer Applications</p></div>
       </div>
       <div class="stat-card stat-orange">
         <div class="stat-icon"><i class="fas fa-envelope"></i></div>
-        <div class="stat-info">
-          <h3>32</h3>
-          <p>New Messages</p>
-        </div>
+        <div class="stat-info"><h3 id="statMessages">0</h3><p>New Messages</p></div>
       </div>
     </div>
 
     <!-- Recent Activity -->
     <div class="content-grid">
       <div class="card">
-        <div class="card-header">
-          <h3>Recent Donations</h3>
-          <a href="donations.html">View All</a>
-        </div>
+        <div class="card-header"><h3>Recent Donations</h3><a href="donations.html">View All</a></div>
         <div class="table-container">
           <table>
             <thead><tr><th>Name</th><th>Amount</th><th>Date</th><th>Status</th></tr></thead>
-            <tbody>
-              <tr><td>Ravi Sharma</td><td>₹25,000</td><td>11 May 2026</td><td><span class="badge badge-success">Received</span></td></tr>
-              <tr><td>Priya Gupta</td><td>₹10,000</td><td>10 May 2026</td><td><span class="badge badge-success">Received</span></td></tr>
-              <tr><td>Amit Kumar</td><td>₹5,000</td><td>10 May 2026</td><td><span class="badge badge-success">Received</span></td></tr>
-              <tr><td>Rajesh Jain</td><td>₹50,000</td><td>9 May 2026</td><td><span class="badge badge-success">Received</span></td></tr>
-              <tr><td>Neha Kapoor</td><td>₹2,000</td><td>8 May 2026</td><td><span class="badge badge-pending">Pending</span></td></tr>
-            </tbody>
+            <tbody id="recentDonations"><tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:30px">No donations yet. <a href="donations.html">Add first donation</a></td></tr></tbody>
           </table>
         </div>
       </div>
       <div class="card">
-        <div class="card-header">
-          <h3>Recent Celebration Bookings</h3>
-          <a href="celebrations.html">View All</a>
-        </div>
+        <div class="card-header"><h3>Recent Celebration Bookings</h3><a href="celebrations.html">View All</a></div>
         <div class="table-container">
           <table>
             <thead><tr><th>Name</th><th>Type</th><th>Date</th><th>Status</th></tr></thead>
-            <tbody>
-              <tr><td>Vikram Singh</td><td>Birthday</td><td>15 May 2026</td><td><span class="badge badge-pending">Upcoming</span></td></tr>
-              <tr><td>Sunita Mehra</td><td>Anniversary</td><td>18 May 2026</td><td><span class="badge badge-pending">Upcoming</span></td></tr>
-              <tr><td>Mohit Chaudhary</td><td>Birthday</td><td>8 May 2026</td><td><span class="badge badge-success">Completed</span></td></tr>
-              <tr><td>Kavita Patel</td><td>Memorial</td><td>5 May 2026</td><td><span class="badge badge-success">Completed</span></td></tr>
-            </tbody>
+            <tbody id="recentBookings"><tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:30px">No bookings yet. <a href="celebrations.html">Add first booking</a></td></tr></tbody>
           </table>
         </div>
       </div>
@@ -116,7 +87,8 @@
         <a href="donations.html" class="action-btn"><i class="fas fa-plus"></i> Add Donation</a>
         <a href="celebrations.html" class="action-btn"><i class="fas fa-calendar-plus"></i> New Booking</a>
         <a href="volunteers.html" class="action-btn"><i class="fas fa-user-plus"></i> Add Volunteer</a>
-        <a href="content.html" class="action-btn"><i class="fas fa-upload"></i> Upload Photos</a>
+        <a href="content.html" class="action-btn"><i class="fas fa-cog"></i> Settings</a>
+        <a href="messages.html" class="action-btn"><i class="fas fa-envelope"></i> View Messages</a>
       </div>
     </div>
   </div>
@@ -124,6 +96,33 @@
   <script>
     if (sessionStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'index.html'; }
     function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
+
+    // Load real stats from localStorage
+    const donations = JSON.parse(localStorage.getItem('donations')) || [];
+    const bookings = JSON.parse(localStorage.getItem('bookings')) || [];
+    const volunteers = JSON.parse(localStorage.getItem('volunteers')) || [];
+    const messages = JSON.parse(localStorage.getItem('messages')) || [];
+
+    const totalDonations = donations.reduce((sum, d) => sum + (d.amount || 0), 0);
+    document.getElementById('statDonations').textContent = '₹' + totalDonations.toLocaleString('en-IN');
+    document.getElementById('statBookings').textContent = bookings.length;
+    document.getElementById('statVolunteers').textContent = volunteers.length;
+    document.getElementById('statMessages').textContent = messages.filter(m => m.status === 'Unread').length;
+
+    // Recent donations
+    if (donations.length > 0) {
+      document.getElementById('recentDonations').innerHTML = donations.slice(0, 5).map(d => `
+        <tr><td>${d.name}</td><td><strong>₹${d.amount.toLocaleString()}</strong></td>
+        <td>${new Date(d.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</td>
+        <td><span class="badge ${d.status==='Received'?'badge-success':'badge-pending'}">${d.status}</span></td></tr>`).join('');
+    }
+    // Recent bookings
+    if (bookings.length > 0) {
+      document.getElementById('recentBookings').innerHTML = bookings.slice(0, 5).map(b => `
+        <tr><td>${b.name}</td><td>${b.type}</td>
+        <td>${new Date(b.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</td>
+        <td><span class="badge ${b.status==='Completed'?'badge-success':'badge-pending'}">${b.status}</span></td></tr>`).join('');
+    }
   </script>
 </body>
 </html>

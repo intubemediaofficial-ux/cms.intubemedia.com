@@ -32,10 +32,10 @@
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card stat-blue"><div class="stat-icon"><i class="fas fa-envelope"></i></div><div class="stat-info"><h3>89</h3><p>Total Messages</p></div></div>
-      <div class="stat-card stat-orange"><div class="stat-icon"><i class="fas fa-envelope-open"></i></div><div class="stat-info"><h3>32</h3><p>Unread</p></div></div>
-      <div class="stat-card stat-green"><div class="stat-icon"><i class="fas fa-reply"></i></div><div class="stat-info"><h3>57</h3><p>Replied</p></div></div>
-      <div class="stat-card stat-purple"><div class="stat-icon"><i class="fas fa-calendar-day"></i></div><div class="stat-info"><h3>8</h3><p>Today</p></div></div>
+      <div class="stat-card stat-blue"><div class="stat-icon"><i class="fas fa-envelope"></i></div><div class="stat-info"><h3 id="mTotal">0</h3><p>Total Messages</p></div></div>
+      <div class="stat-card stat-orange"><div class="stat-icon"><i class="fas fa-envelope-open"></i></div><div class="stat-info"><h3 id="mUnread">0</h3><p>Unread</p></div></div>
+      <div class="stat-card stat-green"><div class="stat-icon"><i class="fas fa-reply"></i></div><div class="stat-info"><h3 id="mReplied">0</h3><p>Replied</p></div></div>
+      <div class="stat-card stat-purple"><div class="stat-icon"><i class="fas fa-calendar-day"></i></div><div class="stat-info"><h3 id="mToday">0</h3><p>Today</p></div></div>
     </div>
 
     <div class="card">
@@ -63,16 +63,7 @@
     if (sessionStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'index.html'; }
     function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
 
-    let messages = JSON.parse(localStorage.getItem('messages')) || [
-      { id: 1, name: 'Rahul Kapoor', email: 'rahul@gmail.com', phone: '9876543210', subject: 'Want to donate monthly', msg: 'I want to set up a monthly donation of ₹5000. Please guide me on how to proceed.', date: '2026-05-11', status: 'Unread' },
-      { id: 2, name: 'Meera Joshi', email: 'meera@gmail.com', phone: '9876543211', subject: 'Volunteer inquiry', msg: 'I am a teacher and want to volunteer on weekends. What programs do you have for teaching?', date: '2026-05-11', status: 'Unread' },
-      { id: 3, name: 'Ashok Tiwari', email: 'ashok@gmail.com', phone: '9876543212', subject: 'CSR Partnership', msg: 'Our company wants to partner with your foundation for CSR activities. Please share details.', date: '2026-05-10', status: 'Replied' },
-      { id: 4, name: 'Lakshmi Nair', email: 'lakshmi@gmail.com', phone: '9876543213', subject: 'Birthday celebration query', msg: 'I want to celebrate my daughter birthday with kids. What packages are available for 50 children?', date: '2026-05-10', status: 'Replied' },
-      { id: 5, name: 'Vinod Sharma', email: 'vinod@gmail.com', phone: '9876543214', subject: 'Visit request', msg: 'Can I visit your center to see the work you are doing? Available this Saturday.', date: '2026-05-09', status: 'Unread' },
-      { id: 6, name: 'Geeta Rani', email: 'geeta@gmail.com', phone: '9876543215', subject: 'Sponsorship inquiry', msg: 'I want to sponsor education of 2 children. How much will it cost per month?', date: '2026-05-09', status: 'Replied' },
-      { id: 7, name: 'Suresh Babu', email: 'suresh@gmail.com', phone: '9876543216', subject: 'Media coverage', msg: 'I am a journalist and would like to cover your foundation work. Please connect.', date: '2026-05-08', status: 'Unread' },
-      { id: 8, name: 'Komal Agarwal', email: 'komal@gmail.com', phone: '9876543217', subject: 'Internship', msg: 'I am a social work student looking for internship opportunities. Do you accept interns?', date: '2026-05-07', status: 'Replied' },
-    ];
+    let messages = JSON.parse(localStorage.getItem('messages')) || [];
 
     function renderTable() {
       const tbody = document.getElementById('msgBody');
@@ -111,11 +102,21 @@
       if (m.status === 'Unread') { markRead(id); }
     }
 
-    function markRead(id) { messages = messages.map(m => m.id === id ? {...m, status: 'Replied'} : m); localStorage.setItem('messages', JSON.stringify(messages)); renderTable(); }
-    function deleteMsg(id) { if(confirm('Delete this message?')) { messages = messages.filter(m => m.id !== id); localStorage.setItem('messages', JSON.stringify(messages)); renderTable(); } }
+    function markRead(id) { messages = messages.map(m => m.id === id ? {...m, status: 'Replied'} : m); localStorage.setItem('messages', JSON.stringify(messages)); renderTable(); updateStats(); }
+    function deleteMsg(id) { if(confirm('Delete this message?')) { messages = messages.filter(m => m.id !== id); localStorage.setItem('messages', JSON.stringify(messages)); renderTable(); updateStats(); } }
     function filterTable() { const q = document.getElementById('searchMsg').value.toLowerCase(); document.querySelectorAll('#msgBody tr').forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'; }); }
     function closeViewModal() { document.getElementById('viewModal').classList.remove('active'); }
+
+    function updateStats() {
+      document.getElementById('mTotal').textContent = messages.length;
+      document.getElementById('mUnread').textContent = messages.filter(m => m.status === 'Unread').length;
+      document.getElementById('mReplied').textContent = messages.filter(m => m.status === 'Replied').length;
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('mToday').textContent = messages.filter(m => m.date === today).length;
+    }
+
     renderTable();
+    updateStats();
   </script>
 </body>
 </html>
