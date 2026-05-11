@@ -75,11 +75,12 @@
     </div>
   </div>
 
+  <script src="api.js"></script>
   <script>
     if (sessionStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'index.html'; }
     function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
 
-    let bookings = JSON.parse(localStorage.getItem('bookings')) || [];
+    let bookings = [];
 
     function renderTable() {
       const tbody = document.getElementById('bookingsBody');
@@ -110,8 +111,8 @@
         status: document.getElementById('bookStatus').value
       };
       bookings.unshift(newBooking);
-      localStorage.setItem('bookings', JSON.stringify(bookings));
-      renderTable();
+      DataAPI.save('bookings', bookings);
+      renderTable(); updateStats();
       closeModal();
       e.target.reset();
     }
@@ -119,8 +120,8 @@
     function deleteBooking(id) {
       if (confirm('Delete this booking?')) {
         bookings = bookings.filter(b => b.id !== id);
-        localStorage.setItem('bookings', JSON.stringify(bookings));
-        renderTable();
+        DataAPI.save('bookings', bookings);
+        renderTable(); updateStats();
       }
     }
 
@@ -141,8 +142,8 @@
       document.getElementById('bRevenue').textContent = '₹' + revenue.toLocaleString('en-IN');
     }
 
-    renderTable();
-    updateStats();
+    async function init() { bookings = await DataAPI.load('bookings') || []; renderTable(); updateStats(); }
+    init();
   </script>
 </body>
 </html>

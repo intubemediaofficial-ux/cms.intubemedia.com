@@ -93,36 +93,37 @@
     </div>
   </div>
 
+  <script src="api.js"></script>
   <script>
     if (sessionStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'index.html'; }
     function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
 
-    // Load real stats from localStorage
-    const donations = JSON.parse(localStorage.getItem('donations')) || [];
-    const bookings = JSON.parse(localStorage.getItem('bookings')) || [];
-    const volunteers = JSON.parse(localStorage.getItem('volunteers')) || [];
-    const messages = JSON.parse(localStorage.getItem('messages')) || [];
+    async function loadDashboard() {
+      const donations = await DataAPI.load('donations') || [];
+      const bookings = await DataAPI.load('bookings') || [];
+      const volunteers = await DataAPI.load('volunteers') || [];
+      const messages = await DataAPI.load('messages') || [];
 
-    const totalDonations = donations.reduce((sum, d) => sum + (d.amount || 0), 0);
-    document.getElementById('statDonations').textContent = '₹' + totalDonations.toLocaleString('en-IN');
-    document.getElementById('statBookings').textContent = bookings.length;
-    document.getElementById('statVolunteers').textContent = volunteers.length;
-    document.getElementById('statMessages').textContent = messages.filter(m => m.status === 'Unread').length;
+      const totalDonations = donations.reduce((sum, d) => sum + (d.amount || 0), 0);
+      document.getElementById('statDonations').textContent = '₹' + totalDonations.toLocaleString('en-IN');
+      document.getElementById('statBookings').textContent = bookings.length;
+      document.getElementById('statVolunteers').textContent = volunteers.length;
+      document.getElementById('statMessages').textContent = messages.filter(m => m.status === 'Unread').length;
 
-    // Recent donations
-    if (donations.length > 0) {
-      document.getElementById('recentDonations').innerHTML = donations.slice(0, 5).map(d => `
-        <tr><td>${d.name}</td><td><strong>₹${d.amount.toLocaleString()}</strong></td>
-        <td>${new Date(d.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</td>
-        <td><span class="badge ${d.status==='Received'?'badge-success':'badge-pending'}">${d.status}</span></td></tr>`).join('');
+      if (donations.length > 0) {
+        document.getElementById('recentDonations').innerHTML = donations.slice(0, 5).map(d => `
+          <tr><td>${d.name}</td><td><strong>₹${d.amount.toLocaleString()}</strong></td>
+          <td>${new Date(d.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</td>
+          <td><span class="badge ${d.status==='Received'?'badge-success':'badge-pending'}">${d.status}</span></td></tr>`).join('');
+      }
+      if (bookings.length > 0) {
+        document.getElementById('recentBookings').innerHTML = bookings.slice(0, 5).map(b => `
+          <tr><td>${b.name}</td><td>${b.type}</td>
+          <td>${new Date(b.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</td>
+          <td><span class="badge ${b.status==='Completed'?'badge-success':'badge-pending'}">${b.status}</span></td></tr>`).join('');
+      }
     }
-    // Recent bookings
-    if (bookings.length > 0) {
-      document.getElementById('recentBookings').innerHTML = bookings.slice(0, 5).map(b => `
-        <tr><td>${b.name}</td><td>${b.type}</td>
-        <td>${new Date(b.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</td>
-        <td><span class="badge ${b.status==='Completed'?'badge-success':'badge-pending'}">${b.status}</span></td></tr>`).join('');
-    }
+    loadDashboard();
   </script>
 </body>
 </html>

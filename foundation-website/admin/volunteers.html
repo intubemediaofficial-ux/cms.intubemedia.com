@@ -70,11 +70,12 @@
     </div>
   </div>
 
+  <script src="api.js"></script>
   <script>
     if (sessionStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'index.html'; }
     function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
 
-    let volunteers = JSON.parse(localStorage.getItem('volunteers')) || [];
+    let volunteers = [];
 
     function renderTable() {
       const tbody = document.getElementById('volBody');
@@ -103,12 +104,12 @@
         skills: document.getElementById('volSkills').value, date: new Date().toISOString().split('T')[0],
         status: document.getElementById('volStatus').value
       });
-      localStorage.setItem('volunteers', JSON.stringify(volunteers));
-      renderTable(); closeModal(); e.target.reset();
+      DataAPI.save('volunteers', volunteers);
+      renderTable(); updateStats(); closeModal(); e.target.reset();
     }
 
-    function approveVol(id) { volunteers = volunteers.map(v => v.id === id ? {...v, status: 'Approved'} : v); localStorage.setItem('volunteers', JSON.stringify(volunteers)); renderTable(); updateStats(); }
-    function deleteVol(id) { if(confirm('Delete?')) { volunteers = volunteers.filter(v => v.id !== id); localStorage.setItem('volunteers', JSON.stringify(volunteers)); renderTable(); updateStats(); } }
+    function approveVol(id) { volunteers = volunteers.map(v => v.id === id ? {...v, status: 'Approved'} : v); DataAPI.save('volunteers', volunteers); renderTable(); updateStats(); }
+    function deleteVol(id) { if(confirm('Delete?')) { volunteers = volunteers.filter(v => v.id !== id); DataAPI.save('volunteers', volunteers); renderTable(); updateStats(); } }
     function filterTable() { const q = document.getElementById('searchVol').value.toLowerCase(); document.querySelectorAll('#volBody tr').forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'; }); }
     function openModal() { document.getElementById('addModal').classList.add('active'); }
     function closeModal() { document.getElementById('addModal').classList.remove('active'); }
@@ -120,8 +121,8 @@
       document.getElementById('vActive').textContent = volunteers.filter(v => v.status === 'Active').length;
     }
 
-    renderTable();
-    updateStats();
+    async function init() { volunteers = await DataAPI.load('volunteers') || []; renderTable(); updateStats(); }
+    init();
   </script>
 </body>
 </html>

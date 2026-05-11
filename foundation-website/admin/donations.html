@@ -77,12 +77,12 @@
     </div>
   </div>
 
+  <script src="api.js"></script>
   <script>
     if (sessionStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'index.html'; }
     function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
 
-    // Data storage - starts empty, admin adds real data
-    let donations = JSON.parse(localStorage.getItem('donations')) || [];
+    let donations = [];
 
     function renderTable() {
       const tbody = document.getElementById('donationsBody');
@@ -111,8 +111,8 @@
         status: document.getElementById('donorStatus').value
       };
       donations.unshift(newDonation);
-      localStorage.setItem('donations', JSON.stringify(donations));
-      renderTable();
+      DataAPI.save('donations', donations);
+      renderTable(); updateStats();
       closeModal();
       e.target.reset();
     }
@@ -120,8 +120,8 @@
     function deleteDonation(id) {
       if (confirm('Are you sure you want to delete this donation?')) {
         donations = donations.filter(d => d.id !== id);
-        localStorage.setItem('donations', JSON.stringify(donations));
-        renderTable();
+        DataAPI.save('donations', donations);
+        renderTable(); updateStats();
       }
     }
 
@@ -155,8 +155,9 @@
       a.download = 'donations_' + new Date().toISOString().split('T')[0] + '.csv'; a.click();
     }
 
-    renderTable();
-    updateStats();
+    // Load from server
+    async function init() { donations = await DataAPI.load('donations') || []; renderTable(); updateStats(); }
+    init();
   </script>
 </body>
 </html>

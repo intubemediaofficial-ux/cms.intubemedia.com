@@ -59,11 +59,12 @@
     </div>
   </div>
 
+  <script src="api.js"></script>
   <script>
     if (sessionStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'index.html'; }
     function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
 
-    let messages = JSON.parse(localStorage.getItem('messages')) || [];
+    let messages = [];
 
     function renderTable() {
       const tbody = document.getElementById('msgBody');
@@ -102,8 +103,8 @@
       if (m.status === 'Unread') { markRead(id); }
     }
 
-    function markRead(id) { messages = messages.map(m => m.id === id ? {...m, status: 'Replied'} : m); localStorage.setItem('messages', JSON.stringify(messages)); renderTable(); updateStats(); }
-    function deleteMsg(id) { if(confirm('Delete this message?')) { messages = messages.filter(m => m.id !== id); localStorage.setItem('messages', JSON.stringify(messages)); renderTable(); updateStats(); } }
+    function markRead(id) { messages = messages.map(m => m.id === id ? {...m, status: 'Replied'} : m); DataAPI.save('messages', messages); renderTable(); updateStats(); }
+    function deleteMsg(id) { if(confirm('Delete this message?')) { messages = messages.filter(m => m.id !== id); DataAPI.save('messages', messages); renderTable(); updateStats(); } }
     function filterTable() { const q = document.getElementById('searchMsg').value.toLowerCase(); document.querySelectorAll('#msgBody tr').forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'; }); }
     function closeViewModal() { document.getElementById('viewModal').classList.remove('active'); }
 
@@ -115,8 +116,8 @@
       document.getElementById('mToday').textContent = messages.filter(m => m.date === today).length;
     }
 
-    renderTable();
-    updateStats();
+    async function init() { messages = await DataAPI.load('messages') || []; renderTable(); updateStats(); }
+    init();
   </script>
 </body>
 </html>
