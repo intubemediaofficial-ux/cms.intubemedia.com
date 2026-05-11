@@ -282,9 +282,126 @@
     <div class="footer-links-col"><h4>Contact</h4><div class="footer-contact"><p><span class="icon"><i class="fas fa-map-marker-alt"></i></span> <a href="https://maps.app.goo.gl/m4xnsi9tt7NCLREf8" target="_blank" style="color:#94a3b8;text-decoration:none">Rajasthan, India</a></p><p><span class="icon"><i class="fas fa-phone"></i></span> +91 77330 10010</p><p><span class="icon"><i class="fas fa-envelope"></i></span> info@hope4kidscarefoundation.org</p></div></div>
   </div><div class="footer-bottom"><p>&copy; 2026 Hope 4 Kids Care Foundation.</p><div class="footer-bottom-links"><a href="#">Privacy</a><a href="#">Terms</a></div></div></div></footer>
 
+  <!-- Thank You Certificate Section -->
+  <section class="section" id="thankYouSection" style="display:none;padding:60px 0">
+    <div class="container">
+      <div id="certificateBox" style="max-width:800px;margin:0 auto;background:white;border:3px solid #1d4ed8;border-radius:20px;padding:50px;text-align:center;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:0;left:0;right:0;height:8px;background:linear-gradient(90deg,#1d4ed8,#3b82f6,#60a5fa,#3b82f6,#1d4ed8)"></div>
+        <div style="position:absolute;bottom:0;left:0;right:0;height:8px;background:linear-gradient(90deg,#1d4ed8,#3b82f6,#60a5fa,#3b82f6,#1d4ed8)"></div>
+        <img src="images/logo.png" alt="Logo" style="height:80px;margin-bottom:15px">
+        <h2 style="color:#1d4ed8;font-size:1.8rem;margin-bottom:5px">Hope 4 Kids Care Foundation</h2>
+        <p style="color:#64748b;font-size:0.9rem;margin-bottom:30px">Reg. No. | NITI Aayog | 80G | 12A Certified</p>
+        <div style="border:2px dashed #e5e7eb;border-radius:15px;padding:30px;margin-bottom:25px">
+          <p style="color:#64748b;font-size:1rem;margin-bottom:10px">Certificate of Appreciation</p>
+          <h1 id="certDonorName" style="color:#1e293b;font-size:2.2rem;margin-bottom:10px">Donor Name</h1>
+          <p style="color:#374151;font-size:1.1rem;line-height:1.8">
+            Thank you for your generous donation of<br>
+            <strong id="certAmount" style="color:#1d4ed8;font-size:1.8rem">₹0</strong><br>
+            to Hope 4 Kids Care Foundation
+          </p>
+        </div>
+        <p style="color:#64748b;font-size:0.9rem;margin-bottom:20px">Your contribution helps us provide education, food, and healthcare to underprivileged children across India.</p>
+        <div style="display:flex;justify-content:center;gap:15px;margin-bottom:25px">
+          <img src="https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=120&h=80&fit=crop" style="width:120px;height:80px;object-fit:cover;border-radius:10px" alt="Children">
+          <img src="https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=120&h=80&fit=crop" style="width:120px;height:80px;object-fit:cover;border-radius:10px" alt="Children">
+          <img src="https://images.unsplash.com/photo-1497486751825-1233686d5d80?w=120&h=80&fit=crop" style="width:120px;height:80px;object-fit:cover;border-radius:10px" alt="Children">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e5e7eb;padding-top:20px;margin-top:20px">
+          <div style="text-align:left"><p style="font-size:0.8rem;color:#94a3b8">Certificate No.</p><p id="certNumber" style="font-weight:600;color:#1e293b">H4K-2026-0001</p></div>
+          <div style="text-align:center"><p style="font-size:0.8rem;color:#94a3b8">Date</p><p id="certDate" style="font-weight:600;color:#1e293b">12 May 2026</p></div>
+          <div style="text-align:right"><p style="font-size:0.8rem;color:#94a3b8">Authorized</p><p style="font-weight:600;color:#1d4ed8">Hope 4 Kids Care Foundation</p></div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:25px">
+        <button onclick="downloadCertificate()" class="btn-primary" style="padding:15px 35px;border:none;border-radius:10px;background:#1d4ed8;color:white;font-size:1rem;cursor:pointer;font-weight:600"><i class="fas fa-download"></i> Download Certificate</button>
+        <button onclick="shareWhatsApp()" style="padding:15px 35px;border:none;border-radius:10px;background:#25d366;color:white;font-size:1rem;cursor:pointer;font-weight:600;margin-left:10px"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Donation Confirmation Form (after payment) -->
+  <div class="modal-overlay" id="donorFormModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:white;border-radius:20px;padding:40px;width:90%;max-width:450px;text-align:center">
+      <div style="width:70px;height:70px;background:#dcfce7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:2rem;color:#16a34a"><i class="fas fa-heart"></i></div>
+      <h2 style="color:#1e293b;margin-bottom:10px">Thank You for Donating!</h2>
+      <p style="color:#64748b;margin-bottom:25px;font-size:0.9rem">Please fill your details to receive your Thank You Certificate</p>
+      <form onsubmit="generateCertificate(event)" style="text-align:left">
+        <div style="margin-bottom:15px"><label style="font-size:0.85rem;font-weight:600;color:#374151;display:block;margin-bottom:5px">Your Full Name *</label><input type="text" id="dfName" required style="width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:10px;font-size:0.95rem" placeholder="Enter your name"></div>
+        <div style="margin-bottom:15px"><label style="font-size:0.85rem;font-weight:600;color:#374151;display:block;margin-bottom:5px">Email *</label><input type="email" id="dfEmail" required style="width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:10px;font-size:0.95rem" placeholder="your@email.com"></div>
+        <div style="margin-bottom:15px"><label style="font-size:0.85rem;font-weight:600;color:#374151;display:block;margin-bottom:5px">WhatsApp Number *</label><input type="tel" id="dfPhone" required style="width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:10px;font-size:0.95rem" placeholder="91XXXXXXXXXX"></div>
+        <div style="margin-bottom:20px"><label style="font-size:0.85rem;font-weight:600;color:#374151;display:block;margin-bottom:5px">Donation Amount (₹) *</label><input type="number" id="dfAmount" required style="width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:10px;font-size:0.95rem" placeholder="500"></div>
+        <button type="submit" style="width:100%;padding:14px;background:#1d4ed8;color:white;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer"><i class="fas fa-certificate"></i> Get My Certificate</button>
+      </form>
+    </div>
+  </div>
+
   <a href="https://wa.me/917733010010" class="whatsapp-float" target="_blank"><i class="fab fa-whatsapp"></i></a>
   <div class="back-to-top"><i class="fas fa-arrow-up"></i></div>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script src="js/main.js"></script>
   <script src="js/dynamic-content.js"></script>
+  <script>
+    // Show donor form - triggered after payment or manually
+    function showDonorForm() {
+      document.getElementById('donorFormModal').style.display = 'flex';
+    }
+
+    // Add "I've Donated" button near donate section
+    document.addEventListener('DOMContentLoaded', function() {
+      const donateSection = document.querySelector('.donate-methods, .donation-amounts');
+      if (donateSection) {
+        const btn = document.createElement('div');
+        btn.style.cssText = 'text-align:center;margin-top:30px;';
+        btn.innerHTML = '<button onclick="showDonorForm()" style="padding:16px 40px;background:#16a34a;color:white;border:none;border-radius:12px;font-size:1.1rem;font-weight:600;cursor:pointer;box-shadow:0 4px 15px rgba(22,163,74,0.3)"><i class="fas fa-check-circle"></i> I\'ve Donated — Get Certificate</button>';
+        donateSection.parentElement.appendChild(btn);
+      }
+    });
+
+    function generateCertificate(e) {
+      e.preventDefault();
+      const name = document.getElementById('dfName').value;
+      const email = document.getElementById('dfEmail').value;
+      const phone = document.getElementById('dfPhone').value;
+      const amount = document.getElementById('dfAmount').value;
+
+      // Generate certificate number
+      const certNo = 'H4K-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random()*9000)+1000);
+      const today = new Date().toLocaleDateString('en-IN', {day:'numeric', month:'long', year:'numeric'});
+
+      // Fill certificate
+      document.getElementById('certDonorName').textContent = name;
+      document.getElementById('certAmount').textContent = '₹' + parseInt(amount).toLocaleString('en-IN');
+      document.getElementById('certNumber').textContent = certNo;
+      document.getElementById('certDate').textContent = today;
+
+      // Hide form, show certificate
+      document.getElementById('donorFormModal').style.display = 'none';
+      document.getElementById('thankYouSection').style.display = 'block';
+      document.getElementById('thankYouSection').scrollIntoView({behavior:'smooth'});
+
+      // Save donation to API
+      fetch('/admin/api.php?action=load&type=donations').then(r=>r.json()).then(donations => {
+        donations = donations || [];
+        donations.unshift({id:Date.now(), name:name, amount:parseInt(amount), date:new Date().toISOString().split('T')[0], phone:phone, email:email, mode:'Online', status:'Received'});
+        fetch('/admin/api.php?action=save&type=donations', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(donations)});
+      });
+    }
+
+    function downloadCertificate() {
+      html2canvas(document.getElementById('certificateBox'), {scale:2, useCORS:true}).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'Hope4Kids_ThankYou_Certificate.png';
+        link.href = canvas.toDataURL();
+        link.click();
+      });
+    }
+
+    function shareWhatsApp() {
+      const name = document.getElementById('certDonorName').textContent;
+      const amount = document.getElementById('certAmount').textContent;
+      const msg = encodeURIComponent(`🙏 I just donated ${amount} to Hope 4 Kids Care Foundation!\n\nThank you certificate received ✅\n\nYou can also donate: https://hope4kidscarefoundation.org/donate.html`);
+      window.open('https://wa.me/?text=' + msg, '_blank');
+    }
+  </script>
 </body>
 </html>
