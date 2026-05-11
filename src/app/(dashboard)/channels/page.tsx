@@ -74,7 +74,7 @@ const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 const CATEGORIES = ["Music", "Entertainment", "Education", "Comedy", "Gaming", "News", "Sports"];
 const CHANNEL_TYPES = ["Original", "Refurbished", "Licensed"];
 const TOKEN_STATUSES = ["Valid", "Invalid", "Expired", "N/A"];
-const NETWORK_OPTIONS = ["Bainsla Music", "WMG - MUSIC", "Sony Music", "T-Series", "Other"];
+const DEFAULT_NETWORK_OPTIONS = ["Bainsla Music", "WMG - MUSIC", "Sony Music", "T-Series", "Other"];
 
 type TabType = "channels" | "requests" | "bulk" | "transferred";
 
@@ -167,6 +167,7 @@ export default function ChannelsPage() {
   const [activeActionMenu, setActiveActionMenu] = useState<string | null>(null);
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, string>>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [userNetworks, setUserNetworks] = useState<string[]>([]);
   const [showChannelDetail, setShowChannelDetail] = useState<string | null>(null);
   const [channelDetailData, setChannelDetailData] = useState<{
     revenue?: number;
@@ -244,6 +245,22 @@ export default function ChannelsPage() {
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
+
+  // Fetch user's assigned networks from admin
+  useEffect(() => {
+    if (!isAuthenticated || isAdmin) return;
+    fetch("/api/users?action=me")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data?.networks?.length) {
+          setUserNetworks(j.data.networks.map((n: { networkName: string }) => n.networkName));
+        }
+      })
+      .catch(() => {});
+  }, [isAuthenticated, isAdmin]);
+
+  // Use admin-assigned networks if available, fallback to defaults
+  const networkOptions = userNetworks.length > 0 ? userNetworks : DEFAULT_NETWORK_OPTIONS;
 
   const [inviteError, setInviteError] = useState("");
 
@@ -767,7 +784,7 @@ export default function ChannelsPage() {
                 className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 <option value="">All Networks</option>
-                {NETWORK_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                {networkOptions.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
               <select
                 value={categoryFilter}
@@ -838,8 +855,8 @@ export default function ChannelsPage() {
           )}
 
           {/* Table */}
-          <div className="bg-white rounded-xl border border-border overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="bg-white rounded-xl border border-border overflow-visible">
+            <div className="overflow-x-auto overflow-y-visible">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-border">
@@ -946,13 +963,14 @@ export default function ChannelsPage() {
                       <td className="px-4 py-3">
                         <div className="relative">
                           <button
-                            onClick={() => setActiveActionMenu(activeActionMenu === channel.id ? null : channel.id)}
-                            className="p-1.5 rounded hover:bg-slate-100 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setActiveActionMenu(activeActionMenu === channel.id ? null : channel.id); }}
+                            className="p-2 rounded hover:bg-slate-100 transition-colors"
+                            title="Actions"
                           >
                             <MoreVertical className="w-4 h-4 text-muted" />
                           </button>
                           {activeActionMenu === channel.id && (
-                            <div className="absolute right-0 top-8 z-50 bg-white rounded-lg shadow-lg border border-border py-1 min-w-[200px]">
+                            <div className="absolute right-0 top-8 z-[60] bg-white rounded-lg shadow-lg border border-border py-1 min-w-[200px]">
                               <button
                                 onClick={() => handleGenerateInviteLink(channel.id, channel.name)}
                                 disabled={generatingLink}
@@ -1179,7 +1197,7 @@ export default function ChannelsPage() {
               className="border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
               <option value="">Select Network</option>
-              {NETWORK_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+              {networkOptions.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
@@ -1286,7 +1304,7 @@ export default function ChannelsPage() {
                     className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   >
                     <option value="">Select Network</option>
-                    {NETWORK_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                    {networkOptions.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
