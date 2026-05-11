@@ -33,7 +33,7 @@ export async function getChannelStatsByIdPublic(channelIds: string[]) {
   return allItems;
 }
 
-export async function getChannelVideosPublic(channelId: string, maxResults = 50) {
+export async function getChannelVideosPublic(channelId: string, maxResults = 0) {
   const youtube = getApiKeyYouTube();
   if (!youtube) return [];
   const channelRes = await youtube.channels.list({
@@ -45,12 +45,12 @@ export async function getChannelVideosPublic(channelId: string, maxResults = 50)
 
   const allVideoIds: string[] = [];
   let nextPageToken: string | undefined;
-  while (allVideoIds.length < maxResults) {
-    const remaining = maxResults - allVideoIds.length;
+  // maxResults=0 means fetch ALL videos (no limit)
+  while (maxResults === 0 || allVideoIds.length < maxResults) {
     const playlistRes = await youtube.playlistItems.list({
       part: ["contentDetails"],
       playlistId: uploadsPlaylistId,
-      maxResults: Math.min(remaining, 50),
+      maxResults: 50,
       pageToken: nextPageToken,
     });
     const ids = playlistRes.data.items
@@ -195,7 +195,7 @@ export async function lookupChannel(
 export async function getChannelVideos(
   accessToken: string,
   channelId: string,
-  maxResults = 50
+  maxResults = 0
 ) {
   const auth = getAuthClient(accessToken);
   const youtube = google.youtube({ version: "v3", auth });
@@ -210,16 +210,15 @@ export async function getChannelVideos(
 
   if (!uploadsPlaylistId) return [];
 
-  // Fetch videos from the uploads playlist (more reliable than search)
+  // Fetch ALL videos from the uploads playlist (maxResults=0 means no limit)
   const allVideoIds: string[] = [];
   let nextPageToken: string | undefined;
 
-  while (allVideoIds.length < maxResults) {
-    const remaining = maxResults - allVideoIds.length;
+  while (maxResults === 0 || allVideoIds.length < maxResults) {
     const playlistRes = await youtube.playlistItems.list({
       part: ["contentDetails"],
       playlistId: uploadsPlaylistId,
-      maxResults: Math.min(remaining, 50),
+      maxResults: 50,
       pageToken: nextPageToken,
     });
 

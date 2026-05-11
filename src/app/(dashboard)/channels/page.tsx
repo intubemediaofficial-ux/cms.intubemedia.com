@@ -165,6 +165,7 @@ export default function ChannelsPage() {
   const [inviteSentMessage, setInviteSentMessage] = useState("");
   const [generatingLink, setGeneratingLink] = useState(false);
   const [activeActionMenu, setActiveActionMenu] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, string>>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [userNetworks, setUserNetworks] = useState<string[]>([]);
@@ -855,8 +856,8 @@ export default function ChannelsPage() {
           )}
 
           {/* Table */}
-          <div className="bg-white rounded-xl border border-border overflow-visible">
-            <div className="overflow-x-auto overflow-y-visible">
+          <div className="bg-white rounded-xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-border">
@@ -961,62 +962,24 @@ export default function ChannelsPage() {
                         <td className="px-4 py-3 text-muted">{channel.delinkedDate}</td>
                       )}
                       <td className="px-4 py-3">
-                        <div className="relative">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setActiveActionMenu(activeActionMenu === channel.id ? null : channel.id); }}
-                            className="p-2 rounded hover:bg-slate-100 transition-colors"
-                            title="Actions"
-                          >
-                            <MoreVertical className="w-4 h-4 text-muted" />
-                          </button>
-                          {activeActionMenu === channel.id && (
-                            <div className="absolute right-0 top-8 z-[60] bg-white rounded-lg shadow-lg border border-border py-1 min-w-[200px]">
-                              <button
-                                onClick={() => handleGenerateInviteLink(channel.id, channel.name)}
-                                disabled={generatingLink}
-                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-slate-50 transition-colors"
-                              >
-                                <Key className="w-4 h-4 text-amber-500" />
-                                {generatingLink ? "Generating..." : "Generate Invite Link"}
-                              </button>
-                              {activeTab === "channels" && !channel.isOwn && (
-                                <>
-                                  <button
-                                    onClick={() => { handleDelink(channel.id); setActiveActionMenu(null); }}
-                                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                  >
-                                    <WifiOff className="w-4 h-4" />
-                                    Delink Channel
-                                  </button>
-                                  <button
-                                    onClick={() => { handleTransfer(channel.id); setActiveActionMenu(null); }}
-                                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
-                                  >
-                                    <ArrowRightLeft className="w-4 h-4" />
-                                    Transfer Channel
-                                  </button>
-                                </>
-                              )}
-                              <div className="border-t border-border my-1" />
-                              <button
-                                onClick={() => { setShowDeleteConfirm(channel.id); setActiveActionMenu(null); }}
-                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Delete Channel
-                              </button>
-                              {activeTab === "transferred" && (
-                                <button
-                                  onClick={() => { handleRelink(channel.id); setActiveActionMenu(null); }}
-                                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-green-600 hover:bg-green-50 transition-colors"
-                                >
-                                  <RefreshCw className="w-4 h-4" />
-                                  Relink Channel
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (activeActionMenu === channel.id) {
+                              setActiveActionMenu(null);
+                              setMenuPosition(null);
+                            } else {
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                              setMenuPosition({ top: rect.bottom + 4, left: rect.right - 200 });
+                              setActiveActionMenu(channel.id);
+                            }
+                          }}
+                          className="p-2 rounded hover:bg-slate-100 transition-colors"
+                          title="Actions"
+                        >
+                          <MoreVertical className="w-4 h-4 text-muted" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1570,13 +1533,67 @@ export default function ChannelsPage() {
         </div>
       )}
 
-      {/* Click outside to close action menu */}
-      {activeActionMenu && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setActiveActionMenu(null)}
-        />
-      )}
+      {/* Fixed-position action menu (renders outside table to avoid overflow clipping) */}
+      {activeActionMenu && menuPosition && (() => {
+        const channel = pageChannels.find((c) => c.id === activeActionMenu);
+        if (!channel) return null;
+        return (
+          <>
+            <div
+              className="fixed inset-0 z-[70]"
+              onClick={() => { setActiveActionMenu(null); setMenuPosition(null); }}
+            />
+            <div
+              className="fixed z-[80] bg-white rounded-lg shadow-lg border border-border py-1 min-w-[200px]"
+              style={{ top: menuPosition.top, left: Math.max(8, menuPosition.left) }}
+            >
+              <button
+                onClick={() => { handleGenerateInviteLink(channel.id, channel.name); setActiveActionMenu(null); setMenuPosition(null); }}
+                disabled={generatingLink}
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-slate-50 transition-colors"
+              >
+                <Key className="w-4 h-4 text-amber-500" />
+                {generatingLink ? "Generating..." : "Generate Invite Link"}
+              </button>
+              {activeTab === "channels" && !channel.isOwn && (
+                <>
+                  <button
+                    onClick={() => { handleDelink(channel.id); setActiveActionMenu(null); setMenuPosition(null); }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <WifiOff className="w-4 h-4" />
+                    Delink Channel
+                  </button>
+                  <button
+                    onClick={() => { handleTransfer(channel.id); setActiveActionMenu(null); setMenuPosition(null); }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+                  >
+                    <ArrowRightLeft className="w-4 h-4" />
+                    Transfer Channel
+                  </button>
+                </>
+              )}
+              <div className="border-t border-border my-1" />
+              <button
+                onClick={() => { setShowDeleteConfirm(channel.id); setActiveActionMenu(null); setMenuPosition(null); }}
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Channel
+              </button>
+              {activeTab === "transferred" && (
+                <button
+                  onClick={() => { handleRelink(channel.id); setActiveActionMenu(null); setMenuPosition(null); }}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-green-600 hover:bg-green-50 transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Relink Channel
+                </button>
+              )}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

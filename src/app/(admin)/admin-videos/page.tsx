@@ -210,7 +210,7 @@ export default function AdminVideosPage() {
     const allVideos: VideoItem[] = [];
     for (const channelId of channelIds) {
       try {
-        const res = await fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}&maxResults=500`);
+        const res = await fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`);
         const json = await res.json();
         if (res.ok && json.data) {
           allVideos.push(...json.data);
