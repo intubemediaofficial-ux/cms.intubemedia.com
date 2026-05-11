@@ -12,6 +12,10 @@ import {
   Loader2,
   DollarSign,
   Eye,
+  MoreVertical,
+  Trash2,
+  Edit3,
+  ArrowRightLeft,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -87,6 +91,10 @@ export default function AdminChannelsPage() {
   const [clientFilter, setClientFilter] = useState("");
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, string>>({});
   const [selectedChannel, setSelectedChannel] = useState<ChannelRow | null>(null);
+  const [activeActionMenu, setActiveActionMenu] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -278,6 +286,100 @@ export default function AdminChannelsPage() {
   const totalPages = Math.ceil(filteredChannels.length / perPage);
   const pageChannels = filteredChannels.slice((currentPage - 1) * perPage, currentPage * perPage);
 
+  const handleDeleteChannel = async (channelId: string, clientName: string) => {
+    setActionLoading(true);
+    try {
+      const owner = clients.find((c) => c.name === clientName || c.channels.includes(channelId));
+      if (!owner) {
+        alert("Could not find the client who owns this channel.");
+        setActionLoading(false);
+        return;
+      }
+      const updatedChannels = owner.channels.filter((ch) => ch !== channelId);
+      const res = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: owner.id, channels: updatedChannels }),
+      });
+      if (res.ok) {
+        setClients((prev) =>
+          prev.map((c) =>
+            c.id === owner.id ? { ...c, channels: updatedChannels } : c
+          )
+        );
+        setChannelDataMap((prev) => {
+          const next = { ...prev };
+          delete next[channelId];
+          return next;
+        });
+        setDeleteConfirm(null);
+        setActiveActionMenu(null);
+        setMenuPosition(null);
+      } else {
+        alert("Failed to delete channel. Please try again.");
+      }
+    } catch {
+      alert("Error deleting channel.");
+    }
+    setActionLoading(false);
+  };
+
+  const handleTransferChannel = async (channelId: string, fromClientName: string) => {
+    const otherClients = clients.filter((c) => c.name !== fromClientName);
+    if (otherClients.length === 0) {
+      alert("No other clients to transfer to.");
+      return;
+    }
+    const targetName = prompt(
+      `Transfer channel to which client?\n\nAvailable:\n${otherClients.map((c) => `- ${c.name}`).join("\n")}\n\nType the client name:`
+    );
+    if (!targetName) return;
+    const targetClient = otherClients.find(
+      (c) => c.name.toLowerCase() === targetName.toLowerCase()
+    );
+    if (!targetClient) {
+      alert("Client not found. Make sure to type the exact name.");
+      return;
+    }
+    const fromClient = clients.find(
+      (c) => c.name === fromClientName || c.channels.includes(channelId)
+    );
+    if (!fromClient) return;
+
+    setActionLoading(true);
+    try {
+      const res = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "transfer_channel",
+          channelId,
+          fromUserId: fromClient.id,
+          toUserId: targetClient.id,
+        }),
+      });
+      if (res.ok) {
+        setClients((prev) =>
+          prev.map((c) => {
+            if (c.id === fromClient.id)
+              return { ...c, channels: c.channels.filter((ch) => ch !== channelId) };
+            if (c.id === targetClient.id)
+              return { ...c, channels: [...c.channels, channelId] };
+            return c;
+          })
+        );
+        setActiveActionMenu(null);
+        setMenuPosition(null);
+        alert(`Channel transferred to ${targetClient.name}`);
+      } else {
+        alert("Failed to transfer channel.");
+      }
+    } catch {
+      alert("Error transferring channel.");
+    }
+    setActionLoading(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 text-sm text-muted">
@@ -455,6 +557,24 @@ export default function AdminChannelsPage() {
                       >
                         <ExternalLink className="w-4 h-4 text-red-500" />
                       </a>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          if (activeActionMenu === channel.channelId) {
+                            setActiveActionMenu(null);
+                            setMenuPosition(null);
+                          } else {
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setMenuPosition({ top: rect.bottom + 4, left: rect.right - 200 });
+                            setActiveActionMenu(channel.channelId);
+                          }
+                        }}
+                        className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="More actions"
+                      >
+                        <MoreVertical className="w-4 h-4 text-slate-600" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -576,6 +696,101 @@ export default function AdminChannelsPage() {
           </div>
         </div>
       )}
+
+      {/* 3-Dot Action Menu Portal */}
+      {activeActionMenu && menuPosition && (() => {
+        const channel = pageChannels.find((c) => c.channelId === activeActionMenu);
+        if (!channel) return null;
+        return (
+          <>
+            <div
+              className="fixed inset-0 z-[70]"
+              onClick={() => { setActiveActionMenu(null); setMenuPosition(null); }}
+            />
+            <div
+              className="fixed z-[80] bg-white rounded-lg shadow-lg border border-border py-1 min-w-[200px]"
+              style={{ top: menuPosition.top, left: Math.max(8, menuPosition.left) }}
+            >
+              <button
+                className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 flex items-center gap-2"
+                onClick={() => {
+                  setSelectedChannel(channel);
+                  setActiveActionMenu(null);
+                  setMenuPosition(null);
+                }}
+              >
+                <Eye className="w-4 h-4 text-blue-500" />
+                View Details
+              </button>
+              <a
+                href={`https://www.youtube.com/channel/${channel.channelId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-2"
+                onClick={() => { setActiveActionMenu(null); setMenuPosition(null); }}
+              >
+                <ExternalLink className="w-4 h-4 text-red-500" />
+                View on YouTube
+              </a>
+              <button
+                className="w-full px-4 py-2.5 text-left text-sm hover:bg-amber-50 flex items-center gap-2"
+                onClick={() => {
+                  handleTransferChannel(channel.channelId, channel.clientName);
+                }}
+              >
+                <ArrowRightLeft className="w-4 h-4 text-amber-500" />
+                Transfer to Client
+              </button>
+              <div className="border-t border-border my-1" />
+              <button
+                className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-600"
+                onClick={() => {
+                  setDeleteConfirm(channel.channelId);
+                  setActiveActionMenu(null);
+                  setMenuPosition(null);
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Channel
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (() => {
+        const channel = allChannelRows.find((c) => c.channelId === deleteConfirm);
+        if (!channel) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90] p-4" onClick={() => setDeleteConfirm(null)}>
+            <div className="bg-white rounded-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-foreground mb-2">Delete Channel?</h3>
+              <p className="text-sm text-muted mb-1">
+                Are you sure you want to remove <strong>{channel.name}</strong> ({channel.channelId}) from <strong>{channel.clientName}</strong>?
+              </p>
+              <p className="text-xs text-red-500 mb-4">This will remove the channel from the client&apos;s account. The YouTube channel itself will not be affected.</p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-slate-50"
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteChannel(channel.channelId, channel.clientName)}
+                  className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-1.5"
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
