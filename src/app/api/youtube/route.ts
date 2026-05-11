@@ -74,7 +74,9 @@ export async function GET(request: Request) {
         const channelId = url.searchParams.get("channelId");
         if (!channelId)
           return Response.json({ error: "channelId required" }, { status: 400 });
-        const maxResults = Math.min(Number(url.searchParams.get("maxResults")) || 500, 1000);
+        // 0 = fetch ALL videos (no limit)
+        const maxResultsParam = url.searchParams.get("maxResults");
+        const maxResults = maxResultsParam ? Number(maxResultsParam) : 0;
         // Try using per-channel token first, then fall back to admin token
         let videoToken = session.accessToken;
         if (!videoToken) {
