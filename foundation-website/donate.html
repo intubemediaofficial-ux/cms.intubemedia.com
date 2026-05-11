@@ -382,7 +382,7 @@
       // Save donation to API
       fetch('/admin/api.php?action=load&type=donations').then(r=>r.json()).then(donations => {
         donations = donations || [];
-        donations.unshift({id:Date.now(), name:name, amount:parseInt(amount), date:new Date().toISOString().split('T')[0], phone:phone, email:email, mode:'Online', status:'Received'});
+        donations.unshift({id:Date.now(), name:name, amount:parseInt(amount), date:new Date().toISOString().split('T')[0], phone:phone, email:email, mode:'Online', status:'Received', certificate:certNo});
         fetch('/admin/api.php?action=save&type=donations', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(donations)});
       });
     }

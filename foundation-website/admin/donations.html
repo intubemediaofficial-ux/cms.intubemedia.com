@@ -50,7 +50,7 @@
       </div>
       <div class="table-container">
         <table id="donationsTable">
-          <thead><tr><th>S.No</th><th>Donor Name</th><th>Amount</th><th>Date</th><th>Phone</th><th>Mode</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>S.No</th><th>Donor Name</th><th>Amount</th><th>Date</th><th>Email</th><th>Phone</th><th>Certificate</th><th>Mode</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody id="donationsBody"></tbody>
         </table>
       </div>
@@ -64,6 +64,7 @@
       <form onsubmit="addDonation(event)">
         <div class="form-group"><label>Donor Name *</label><input type="text" id="donorName" required></div>
         <div class="form-group"><label>Amount (₹) *</label><input type="number" id="donorAmount" required></div>
+        <div class="form-group"><label>Email</label><input type="email" id="donorEmail"></div>
         <div class="form-group"><label>Phone</label><input type="text" id="donorPhone"></div>
         <div class="form-group"><label>Date</label><input type="date" id="donorDate"></div>
         <div class="form-group"><label>Payment Mode</label>
@@ -92,7 +93,9 @@
           <td><strong>${d.name}</strong></td>
           <td><strong>₹${d.amount.toLocaleString()}</strong></td>
           <td>${new Date(d.date).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'})}</td>
+          <td>${d.email || '-'}</td>
           <td>${d.phone || '-'}</td>
+          <td>${d.certificate ? '<span style="color:#1d4ed8;font-weight:600;font-size:0.8rem">' + d.certificate + '</span>' : '-'}</td>
           <td>${d.mode}</td>
           <td><span class="badge ${d.status === 'Received' ? 'badge-success' : 'badge-pending'}">${d.status}</span></td>
           <td><button onclick="deleteDonation(${d.id})" style="border:none;background:none;color:#dc2626;cursor:pointer"><i class="fas fa-trash"></i></button></td>
@@ -106,6 +109,7 @@
         name: document.getElementById('donorName').value,
         amount: parseInt(document.getElementById('donorAmount').value),
         date: document.getElementById('donorDate').value || new Date().toISOString().split('T')[0],
+        email: document.getElementById('donorEmail').value,
         phone: document.getElementById('donorPhone').value,
         mode: document.getElementById('donorMode').value,
         status: document.getElementById('donorStatus').value
@@ -148,8 +152,8 @@
 
     function exportCSV() {
       if (donations.length === 0) { alert('No data to export'); return; }
-      let csv = 'Name,Amount,Date,Phone,Mode,Status\n';
-      donations.forEach(d => { csv += `"${d.name}",${d.amount},${d.date},"${d.phone}","${d.mode}","${d.status}"\n`; });
+      let csv = 'Name,Amount,Date,Email,Phone,Certificate,Mode,Status\n';
+      donations.forEach(d => { csv += `"${d.name}",${d.amount},${d.date},"${d.email || ''}","${d.phone}","${d.certificate || ''}","${d.mode}","${d.status}"\n`; });
       const blob = new Blob([csv], {type: 'text/csv'});
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
       a.download = 'donations_' + new Date().toISOString().split('T')[0] + '.csv'; a.click();
