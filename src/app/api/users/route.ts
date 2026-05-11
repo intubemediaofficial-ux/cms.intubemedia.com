@@ -71,7 +71,25 @@ async function isAdmin(): Promise<boolean> {
   return ADMIN_EMAILS.includes(session.user.email.toLowerCase());
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const action = url.searchParams.get("action");
+
+  // Non-admin: return only own user info (for fetching assigned networks etc.)
+  if (action === "me") {
+    const users = await getUsers();
+    const me = users.find((u) => u.email.toLowerCase() === session.user!.email!.toLowerCase());
+    if (!me) return Response.json({ data: null });
+    const { password, ...safe } = me;
+    return Response.json({ data: safe });
+  }
+
+  // Admin-only: return all users
   if (!(await isAdmin())) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }

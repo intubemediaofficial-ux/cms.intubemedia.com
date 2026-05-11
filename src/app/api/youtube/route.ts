@@ -74,6 +74,7 @@ export async function GET(request: Request) {
         const channelId = url.searchParams.get("channelId");
         if (!channelId)
           return Response.json({ error: "channelId required" }, { status: 400 });
+        const maxResults = Math.min(Number(url.searchParams.get("maxResults")) || 500, 1000);
         // Try using per-channel token first, then fall back to admin token
         let videoToken = session.accessToken;
         if (!videoToken) {
@@ -81,11 +82,11 @@ export async function GET(request: Request) {
           if (channelSpecificToken) videoToken = channelSpecificToken;
         }
         if (videoToken) {
-          const videos = await getChannelVideos(videoToken, channelId);
+          const videos = await getChannelVideos(videoToken, channelId, maxResults);
           return Response.json({ data: videos });
         }
         // Fallback: use API key for public video data
-        const publicVideos = await getChannelVideosPublic(channelId);
+        const publicVideos = await getChannelVideosPublic(channelId, maxResults);
         if (publicVideos.length > 0) {
           return Response.json({ data: publicVideos });
         }

@@ -59,6 +59,9 @@ interface VideoItem {
   } | null;
   status?: {
     privacyStatus?: string | null;
+    uploadStatus?: string | null;
+    license?: string | null;
+    rejectionReason?: string | null;
   } | null;
 }
 
@@ -111,6 +114,19 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
       claimType: claim.claimType,
       claimant: claim.claimant,
       label: typeLabel,
+      color: "bg-red-100 text-red-700",
+    };
+  }
+
+  // Auto-detect copyright issues from YouTube API status
+  const rejectionReason = video.status?.rejectionReason;
+  if (rejectionReason === "copyright" || rejectionReason === "duplicate") {
+    return {
+      isMonetized: false,
+      hasActiveClaim: true,
+      claimType: "copyright",
+      claimant: "YouTube Auto-Detected",
+      label: "Copyright Claim (Auto)",
       color: "bg-red-100 text-red-700",
     };
   }
@@ -194,7 +210,7 @@ export default function AdminVideosPage() {
     const allVideos: VideoItem[] = [];
     for (const channelId of channelIds) {
       try {
-        const res = await fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`);
+        const res = await fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}&maxResults=500`);
         const json = await res.json();
         if (res.ok && json.data) {
           allVideos.push(...json.data);

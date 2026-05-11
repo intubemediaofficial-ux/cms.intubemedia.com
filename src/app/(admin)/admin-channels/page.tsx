@@ -79,6 +79,7 @@ export default function AdminChannelsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [channelDataMap, setChannelDataMap] = useState<Record<string, YouTubeChannel>>({});
   const [channelRevenueMap, setChannelRevenueMap] = useState<Record<string, number>>({});
+  const [channelClientMap, setChannelClientMap] = useState<Record<string, string>>({}); // channelId → client name
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [perPage, setPerPage] = useState(10);
@@ -115,10 +116,14 @@ export default function AdminChannelsPage() {
     }
   }, [status, session]);
 
-  // Fetch token statuses for all channels
+  // Fetch token statuses for all channels (KV + cached)
   useEffect(() => {
-    const allIds = clients.flatMap((c) => c.channels);
-    if (allIds.length === 0 || !isAuthenticated) return;
+    if (!isAuthenticated) return;
+    const kvIds = clients.flatMap((c) => c.channels);
+    const cachedIds = Object.keys(channelDataMap);
+    const allIdsSet = new Set([...kvIds, ...cachedIds].filter((id) => !id.startsWith("UCtest") && id !== "test"));
+    const allIds = Array.from(allIdsSet);
+    if (allIds.length === 0) return;
     const fetchStatuses = async () => {
       try {
         const res = await fetch(`/api/channel-tokens?action=bulkTokenStatus&channelIds=${allIds.join(",")}`);
@@ -133,28 +138,30 @@ export default function AdminChannelsPage() {
       } catch { /* silent */ }
     };
     fetchStatuses();
-  }, [clients, isAuthenticated]);
+  }, [clients, channelDataMap, isAuthenticated]);
 
   useEffect(() => {
-    if (!isAuthenticated || clients.length === 0) return;
-    const allIds = clients.flatMap((c) => c.channels);
-    if (allIds.length === 0) return;
+    if (!isAuthenticated) return;
 
     setLoadingChannels(true);
     const fetchAll = async () => {
       const newMap: Record<string, YouTubeChannel> = {};
       const revMap: Record<string, number> = {};
+      const clientMap: Record<string, string> = {};
 
       // First try to get cached data for all channels (includes channels synced from client)
-      const cachedClientChannelIds: string[] = [];
       try {
         const cachedRes = await fetch("/api/client-data?action=getAllCachedData");
         if (cachedRes.ok) {
           const cachedJson = await cachedRes.json();
           const cachedData = cachedJson.data || [];
           for (const cd of cachedData) {
+            // Map channels to client name using cached data email → client name
+            const clientEmail = (cd.email || "").toLowerCase();
+            const matchedClient = clients.find((c) => c.email.toLowerCase() === clientEmail);
+            const clientName = matchedClient?.name || cd.email || "Unknown";
+            
             for (const ch of (cd.channels || [])) {
-              // Include ALL cached channels — they may not yet be synced to KV user record
               newMap[ch.channelId] = {
                 id: ch.channelId,
                 snippet: {
@@ -168,13 +175,13 @@ export default function AdminChannelsPage() {
                 },
               };
               revMap[ch.channelId] = ch.estimatedRevenue || 0;
-              if (!allIds.includes(ch.channelId)) {
-                cachedClientChannelIds.push(ch.channelId);
-              }
+              clientMap[ch.channelId] = clientName;
             }
           }
         }
       } catch { /* silent */ }
+      
+      const allIds = clients.flatMap((c) => c.channels);
 
       // Then try YouTube API for channels not in cache
       const remainingIds = allIds.filter((id) => !newMap[id]);
@@ -192,6 +199,7 @@ export default function AdminChannelsPage() {
 
       setChannelDataMap((prev) => ({ ...prev, ...newMap }));
       setChannelRevenueMap((prev) => ({ ...prev, ...revMap }));
+      setChannelClientMap((prev) => ({ ...prev, ...clientMap }));
       setLoadingChannels(false);
     };
     fetchAll();
@@ -227,6 +235,10 @@ export default function AdminChannelsPage() {
     for (const [chId, data] of Object.entries(channelDataMap)) {
       if (seenIds.has(chId)) continue;
       if (chId.startsWith("UCtest") || chId === "test") continue;
+      // Find client name from channelClientMap (mapped from cached data email)
+      const cachedClientName = channelClientMap[chId] || "";
+      // Try to match to a known client
+      const matchedClient = clients.find((c) => c.name === cachedClientName);
       rows.push({
         channelId: chId,
         name: data?.snippet?.title || chId,
@@ -235,13 +247,13 @@ export default function AdminChannelsPage() {
         videos: Number(data?.statistics?.videoCount || 0),
         views: Number(data?.statistics?.viewCount || 0),
         revenue: channelRevenueMap[chId] || 0,
-        clientName: "(from cache)",
-        category: "-",
+        clientName: cachedClientName || "Unknown",
+        category: matchedClient?.category || "-",
         tokenStatus: tokenStatuses[chId] || "none",
       });
     }
     return rows;
-  }, [clients, channelDataMap, channelRevenueMap, tokenStatuses]);
+  }, [clients, channelDataMap, channelRevenueMap, channelClientMap, tokenStatuses]);
 
   const filteredChannels = useMemo(() => {
     let result = allChannelRows;
