@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Donations — Admin Panel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div class="sidebar">
+    <div class="sidebar-logo"><img src="../images/logo.png" alt="Logo"><h3>Admin Panel</h3></div>
+    <nav class="sidebar-nav">
+      <a href="dashboard.html"><i class="fas fa-th-large"></i> Dashboard</a>
+      <a href="donations.html" class="active"><i class="fas fa-hand-holding-heart"></i> Donations</a>
+      <a href="celebrations.html"><i class="fas fa-birthday-cake"></i> Celebrations</a>
+      <a href="volunteers.html"><i class="fas fa-users"></i> Volunteers</a>
+      <a href="messages.html"><i class="fas fa-envelope"></i> Messages</a>
+      <a href="content.html"><i class="fas fa-images"></i> Content</a>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+      <a href="../index.html"><i class="fas fa-globe"></i> View Site</a>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div class="topbar">
+      <h1>Donations</h1>
+      <div class="topbar-right"><span class="admin-name"><i class="fas fa-user-circle"></i> Admin</span></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card stat-blue"><div class="stat-icon"><i class="fas fa-rupee-sign"></i></div><div class="stat-info"><h3>₹12,45,000</h3><p>Total Received</p></div></div>
+      <div class="stat-card stat-green"><div class="stat-icon"><i class="fas fa-check-circle"></i></div><div class="stat-info"><h3>234</h3><p>Total Donors</p></div></div>
+      <div class="stat-card stat-purple"><div class="stat-icon"><i class="fas fa-calendar"></i></div><div class="stat-info"><h3>₹1,85,000</h3><p>This Month</p></div></div>
+      <div class="stat-card stat-orange"><div class="stat-icon"><i class="fas fa-clock"></i></div><div class="stat-info"><h3>5</h3><p>Pending</p></div></div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="card">
+      <div class="toolbar">
+        <div class="search-box">
+          <i class="fas fa-search"></i>
+          <input type="text" placeholder="Search donor..." id="searchDonor" onkeyup="filterTable()">
+        </div>
+        <button class="btn btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> Add Donation</button>
+      </div>
+      <div class="table-container">
+        <table id="donationsTable">
+          <thead><tr><th>S.No</th><th>Donor Name</th><th>Amount</th><th>Date</th><th>Phone</th><th>Mode</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="donationsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Modal -->
+  <div class="modal-overlay" id="addModal">
+    <div class="modal">
+      <div class="modal-header"><h3>Add New Donation</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
+      <form onsubmit="addDonation(event)">
+        <div class="form-group"><label>Donor Name *</label><input type="text" id="donorName" required></div>
+        <div class="form-group"><label>Amount (₹) *</label><input type="number" id="donorAmount" required></div>
+        <div class="form-group"><label>Phone</label><input type="text" id="donorPhone"></div>
+        <div class="form-group"><label>Date</label><input type="date" id="donorDate"></div>
+        <div class="form-group"><label>Payment Mode</label>
+          <select id="donorMode"><option>UPI</option><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option></select>
+        </div>
+        <div class="form-group"><label>Status</label>
+          <select id="donorStatus"><option>Received</option><option>Pending</option></select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">Save Donation</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    if (sessionStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'index.html'; }
+    function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
+
+    // Sample data
+    let donations = JSON.parse(localStorage.getItem('donations')) || [
+      { id: 1, name: 'Ravi Sharma', amount: 25000, date: '2026-05-11', phone: '9876543210', mode: 'UPI', status: 'Received' },
+      { id: 2, name: 'Priya Gupta', amount: 10000, date: '2026-05-10', phone: '9876543211', mode: 'Bank Transfer', status: 'Received' },
+      { id: 3, name: 'Amit Kumar', amount: 5000, date: '2026-05-10', phone: '9876543212', mode: 'UPI', status: 'Received' },
+      { id: 4, name: 'Sunita Mehra', amount: 15000, date: '2026-05-09', phone: '9876543213', mode: 'Cash', status: 'Received' },
+      { id: 5, name: 'Rajesh Jain', amount: 50000, date: '2026-05-09', phone: '9876543214', mode: 'Cheque', status: 'Received' },
+      { id: 6, name: 'Neha Kapoor', amount: 2000, date: '2026-05-08', phone: '9876543215', mode: 'UPI', status: 'Pending' },
+      { id: 7, name: 'Vikram Singh', amount: 11000, date: '2026-05-08', phone: '9876543216', mode: 'Online', status: 'Received' },
+      { id: 8, name: 'Aarti Desai', amount: 7500, date: '2026-05-07', phone: '9876543217', mode: 'UPI', status: 'Received' },
+      { id: 9, name: 'Mohit Chaudhary', amount: 3000, date: '2026-05-07', phone: '9876543218', mode: 'Cash', status: 'Received' },
+      { id: 10, name: 'Kavita Patel', amount: 20000, date: '2026-05-06', phone: '9876543219', mode: 'Bank Transfer', status: 'Received' },
+      { id: 11, name: 'Vivek Khanna', amount: 30000, date: '2026-05-05', phone: '9876543220', mode: 'UPI', status: 'Received' },
+      { id: 12, name: 'Gaurav Soni', amount: 12000, date: '2026-05-04', phone: '9876543221', mode: 'Online', status: 'Pending' },
+      { id: 13, name: 'Nisha Thakur', amount: 4000, date: '2026-05-03', phone: '9876543222', mode: 'UPI', status: 'Received' },
+      { id: 14, name: 'Om Gupta', amount: 50000, date: '2026-04-28', phone: '9876543223', mode: 'Cheque', status: 'Received' },
+      { id: 15, name: 'Deepak Verma', amount: 8000, date: '2026-04-25', phone: '9876543224', mode: 'UPI', status: 'Pending' },
+    ];
+
+    function renderTable() {
+      const tbody = document.getElementById('donationsBody');
+      tbody.innerHTML = donations.map((d, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td><strong>${d.name}</strong></td>
+          <td><strong>₹${d.amount.toLocaleString()}</strong></td>
+          <td>${new Date(d.date).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'})}</td>
+          <td>${d.phone || '-'}</td>
+          <td>${d.mode}</td>
+          <td><span class="badge ${d.status === 'Received' ? 'badge-success' : 'badge-pending'}">${d.status}</span></td>
+          <td><button onclick="deleteDonation(${d.id})" style="border:none;background:none;color:#dc2626;cursor:pointer"><i class="fas fa-trash"></i></button></td>
+        </tr>`).join('');
+    }
+
+    function addDonation(e) {
+      e.preventDefault();
+      const newDonation = {
+        id: Date.now(),
+        name: document.getElementById('donorName').value,
+        amount: parseInt(document.getElementById('donorAmount').value),
+        date: document.getElementById('donorDate').value || new Date().toISOString().split('T')[0],
+        phone: document.getElementById('donorPhone').value,
+        mode: document.getElementById('donorMode').value,
+        status: document.getElementById('donorStatus').value
+      };
+      donations.unshift(newDonation);
+      localStorage.setItem('donations', JSON.stringify(donations));
+      renderTable();
+      closeModal();
+      e.target.reset();
+    }
+
+    function deleteDonation(id) {
+      if (confirm('Are you sure you want to delete this donation?')) {
+        donations = donations.filter(d => d.id !== id);
+        localStorage.setItem('donations', JSON.stringify(donations));
+        renderTable();
+      }
+    }
+
+    function filterTable() {
+      const query = document.getElementById('searchDonor').value.toLowerCase();
+      const rows = document.querySelectorAll('#donationsBody tr');
+      rows.forEach(row => { row.style.display = row.textContent.toLowerCase().includes(query) ? '' : 'none'; });
+    }
+
+    function openModal() { document.getElementById('addModal').classList.add('active'); }
+    function closeModal() { document.getElementById('addModal').classList.remove('active'); }
+
+    renderTable();
+  </script>
+</body>
+</html>
