@@ -6,6 +6,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit; }
 $method = $_SERVER['REQUEST_METHOD'];
 $section = $_GET['section'] ?? '';
 
+// Public read access (no auth needed)
 if ($method === 'GET' && $section === 'public') {
     $data = readData();
     jsonResponse($data);
@@ -28,6 +29,13 @@ switch ($method) {
         if (!$section || !$input) {
             jsonResponse(['error' => 'Missing section or data'], 400);
         }
+        // Settings is an object, not array
+        if ($section === 'settings') {
+            $data['settings'] = array_merge($data['settings'] ?? [], $input);
+            writeData($data);
+            jsonResponse(['success' => true]);
+            break;
+        }
         if (!isset($data[$section])) $data[$section] = [];
         $input['id'] = uniqid();
         $input['created_at'] = date('Y-m-d H:i:s');
@@ -40,8 +48,18 @@ switch ($method) {
         $data = readData();
         $input = json_decode(file_get_contents('php://input'), true);
         $id = $_GET['id'] ?? '';
-        if (!$section || !$input || !$id) {
-            jsonResponse(['error' => 'Missing section, id or data'], 400);
+        if (!$section || !$input) {
+            jsonResponse(['error' => 'Missing section or data'], 400);
+        }
+        // Settings update
+        if ($section === 'settings') {
+            $data['settings'] = array_merge($data['settings'] ?? [], $input);
+            writeData($data);
+            jsonResponse(['success' => true]);
+            break;
+        }
+        if (!$id) {
+            jsonResponse(['error' => 'Missing id'], 400);
         }
         if (isset($data[$section])) {
             foreach ($data[$section] as $i => $item) {
