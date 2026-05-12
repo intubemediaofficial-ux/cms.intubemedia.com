@@ -1,11 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+
+/* ───── Scroll-triggered animation hook ───── */
+function useScrollReveal() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setIsVisible(true); obs.unobserve(el); } },
+      { threshold: 0.15 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  return { ref, isVisible };
+}
 import {
   Play,
-  ChevronRight,
   Phone,
   Mail,
   MapPin,
@@ -17,12 +33,7 @@ import {
   Users,
   Shield,
   Globe,
-  Award,
-  Eye,
-  Clock,
   ArrowRight,
-  Heart,
-  Volume2,
   Headphones,
 } from "lucide-react";
 
@@ -84,35 +95,35 @@ const NAV_LINKS = [
 ];
 
 const HERO_SLIDES = [
-  { id: 1, image: "https://img.youtube.com/vi/mu8M7Nk8ywU/maxresdefault.jpg" },
-  { id: 2, image: "https://img.youtube.com/vi/S7VZLHubP4c/maxresdefault.jpg" },
-  { id: 3, image: "https://img.youtube.com/vi/3ELgvab96VQ/maxresdefault.jpg" },
-  { id: 4, image: "https://img.youtube.com/vi/8XKjIjWs6Ak/maxresdefault.jpg" },
+  { id: 1, image: "/images/hero/krishna-hero.png" },
+  { id: 2, image: "/images/songs/shyam-teri-bansi.jpg" },
+  { id: 3, image: "/images/songs/radha-rani.jpg" },
+  { id: 4, image: "/images/songs/hanuman-chalisa.jpg" },
 ];
 
 const RELEASES = [
-  { hindiTitle: "श्याम तेरी बंसी पागल कर जाती है", engTitle: "Shyam Teri Bansi Pagaal Kar Jaati Hai", artist: "Bhumika Sharma", label: "Bainsla Music", image: "https://img.youtube.com/vi/mu8M7Nk8ywU/hqdefault.jpg", url: "https://www.youtube.com/watch?v=mu8M7Nk8ywU" },
-  { hindiTitle: "राधा रानी मेरी है", engTitle: "Radha Rani Meri Hai", artist: "Rashmi Nishad", label: "Bainsla Music", image: "https://img.youtube.com/vi/S7VZLHubP4c/hqdefault.jpg", url: "https://www.youtube.com/watch?v=S7VZLHubP4c" },
-  { hindiTitle: "हनुमान चालीसा", engTitle: "Hanuman Chalisa", artist: "Bainsla Music", label: "Bainsla Music", image: "https://img.youtube.com/vi/3ELgvab96VQ/hqdefault.jpg", url: "https://www.youtube.com/watch?v=3ELgvab96VQ" },
-  { hindiTitle: "राम नाम की महिमा", engTitle: "Ram Naam Ki Mahima", artist: "DG Mawai", label: "Bainsla Music", image: "https://img.youtube.com/vi/8XKjIjWs6Ak/hqdefault.jpg", url: "https://www.youtube.com/watch?v=8XKjIjWs6Ak" },
-  { hindiTitle: "गुर्जर रसिया", engTitle: "Gurjar Rasiya", artist: "Gurjar Rasiya", label: "Bainsla Music", image: "https://img.youtube.com/vi/DFJYVn39dHE/hqdefault.jpg", url: "https://www.youtube.com/watch?v=DFJYVn39dHE" },
-  { hindiTitle: "डीजे रसिया 2024", engTitle: "DJ Rasiya 2024", artist: "DJ Rasiya 2024", label: "Bainsla Music", image: "https://img.youtube.com/vi/GwQnIPL68y8/hqdefault.jpg", url: "https://www.youtube.com/watch?v=GwQnIPL68y8" },
+  { hindiTitle: "श्याम तेरी बंसी पागल कर जाती है", engTitle: "Shyam Teri Bansi Pagaal Kar Jaati Hai", artist: "Bhumika Sharma", label: "Bainsla Music", image: "/images/songs/shyam-teri-bansi.jpg", url: "https://www.youtube.com/watch?v=mu8M7Nk8ywU" },
+  { hindiTitle: "राधा रानी मेरी है", engTitle: "Radha Rani Meri Hai", artist: "Rashmi Nishad", label: "Bainsla Music", image: "/images/songs/radha-rani.jpg", url: "https://www.youtube.com/watch?v=S7VZLHubP4c" },
+  { hindiTitle: "हनुमान चालीसा", engTitle: "Hanuman Chalisa", artist: "Bainsla Music", label: "Bainsla Music", image: "/images/songs/hanuman-chalisa.jpg", url: "https://www.youtube.com/watch?v=3ELgvab96VQ" },
+  { hindiTitle: "राम नाम की महिमा", engTitle: "Ram Naam Ki Mahima", artist: "DG Mawai", label: "Bainsla Music", image: "/images/songs/ram-naam.jpg", url: "https://www.youtube.com/watch?v=8XKjIjWs6Ak" },
+  { hindiTitle: "गुर्जर रसिया", engTitle: "Gurjar Rasiya", artist: "Gurjar Rasiya", label: "Bainsla Music", image: "/images/songs/gurjar-rasiya.jpg", url: "https://www.youtube.com/watch?v=DFJYVn39dHE" },
+  { hindiTitle: "डीजे रसिया 2024", engTitle: "DJ Rasiya 2024", artist: "DJ Rasiya 2024", label: "Bainsla Music", image: "/images/songs/dj-rasiya.jpg", url: "https://www.youtube.com/watch?v=GwQnIPL68y8" },
 ];
 
 const ARTISTS = [
-  { name: "Bhumika Sharma", role: "Singer", genre: "Devotional, Folk", image: "https://img.youtube.com/vi/mu8M7Nk8ywU/hqdefault.jpg" },
-  { name: "DG Mawai", role: "Singer", genre: "Rasiya, Folk", image: "https://img.youtube.com/vi/S7VZLHubP4c/hqdefault.jpg" },
-  { name: "Rashmi Nishad", role: "Singer", genre: "Devotional, Bhajan", image: "https://img.youtube.com/vi/3ELgvab96VQ/hqdefault.jpg" },
-  { name: "Ajeet Bainsla", role: "Producer", genre: "Music Producer", image: "https://img.youtube.com/vi/8XKjIjWs6Ak/hqdefault.jpg" },
+  { name: "Bhumika Sharma", role: "Singer", genre: "Devotional, Folk", image: "/images/artists/bhumika-sharma.jpg" },
+  { name: "DG Mawai", role: "Singer", genre: "Rasiya, Folk", image: "/images/artists/dg-mawai.jpg" },
+  { name: "Rashmi Nishad", role: "Singer", genre: "Devotional, Bhajan", image: "/images/artists/rashmi-nishad.jpg" },
+  { name: "Ajeet Bainsla", role: "Producer", genre: "Music Producer", image: "/images/artists/ajeet-bainsla.jpg" },
 ];
 
 const VIDEOS = [
-  { hindiTitle: "श्याम तेरी बंसी", engTitle: "Shyam Teri Bansi Pagaal Kar Jaati Hai", category: "Krishna Bhajan", duration: "04:35", views: "1.2M", id: "mu8M7Nk8ywU" },
-  { hindiTitle: "राधा रानी मेरी है", engTitle: "Radha Rani Meri Hai", category: "Radha Bhajan", duration: "04:12", views: "856K", id: "S7VZLHubP4c" },
-  { hindiTitle: "हनुमान चालीसा", engTitle: "Hanuman Chalisa", category: "Hanuman Bhajan", duration: "06:21", views: "2.4M", id: "3ELgvab96VQ" },
-  { hindiTitle: "गुरु चरणों में", engTitle: "Guru Charno Mein", category: "Guru Bhajan", duration: "05:08", views: "452K", id: "8XKjIjWs6Ak" },
-  { hindiTitle: "मेरे बांके बिहारी", engTitle: "Mere Banke Bihari", category: "Krishna Bhajan", duration: "04:50", views: "789K", id: "DFJYVn39dHE" },
-  { hindiTitle: "जय श्री राम", engTitle: "Jai Shri Ram", category: "Ram Bhajan", duration: "03:58", views: "1.5M", id: "GwQnIPL68y8" },
+  { hindiTitle: "श्याम तेरी बंसी", engTitle: "Shyam Teri Bansi Pagaal Kar Jaati Hai", category: "Krishna Bhajan", duration: "04:35", views: "1.2M", id: "mu8M7Nk8ywU", thumbnail: "/images/songs/shyam-teri-bansi.jpg" },
+  { hindiTitle: "राधा रानी मेरी है", engTitle: "Radha Rani Meri Hai", category: "Radha Bhajan", duration: "04:12", views: "856K", id: "S7VZLHubP4c", thumbnail: "/images/songs/radha-rani.jpg" },
+  { hindiTitle: "हनुमान चालीसा", engTitle: "Hanuman Chalisa", category: "Hanuman Bhajan", duration: "06:21", views: "2.4M", id: "3ELgvab96VQ", thumbnail: "/images/songs/hanuman-chalisa.jpg" },
+  { hindiTitle: "गुरु चरणों में", engTitle: "Guru Charno Mein", category: "Guru Bhajan", duration: "05:08", views: "452K", id: "8XKjIjWs6Ak", thumbnail: "/images/songs/guru-charno.jpg" },
+  { hindiTitle: "मेरे बांके बिहारी", engTitle: "Mere Banke Bihari", category: "Krishna Bhajan", duration: "04:50", views: "789K", id: "DFJYVn39dHE", thumbnail: "/images/songs/banke-bihari.jpg" },
+  { hindiTitle: "जय श्री राम", engTitle: "Jai Shri Ram", category: "Ram Bhajan", duration: "03:58", views: "1.5M", id: "GwQnIPL68y8", thumbnail: "/images/songs/jai-shri-ram.jpg" },
 ];
 
 const CATALOGUE_CATEGORIES = [
@@ -146,6 +157,12 @@ const DISTRIBUTION_PLATFORMS = [
   "Wynk Music", "Hungama", "Resso", "Gaana",
 ];
 
+const GENRE_MARQUEE = [
+  "Krishna Bhajan", "Radha Bhajan", "Hanuman Bhajan", "Ram Bhajan",
+  "Shiv Bhajan", "Gurjar Rasiya", "DJ Rasiya", "Folk Songs",
+  "Devotional Music", "Bhakti Sangeet", "Rasiya Music", "Lok Geet",
+];
+
 /* ───── Section heading with decorative lines (exactly like reference) ───── */
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
@@ -161,6 +178,29 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
         <div className="w-2 h-2 rounded-full bg-amber-500" />
         <div className="w-8 h-[1px] bg-amber-700" />
       </div>
+    </div>
+  );
+}
+
+/* ───── Scroll-triggered section wrapper ───── */
+function ScrollSection({ children, className = "", direction = "up" }: { children: React.ReactNode; className?: string; direction?: "up" | "left" | "right" }) {
+  const { ref, isVisible } = useScrollReveal();
+  const transforms = {
+    up: "translateY(60px)",
+    left: "translateX(-60px)",
+    right: "translateX(60px)",
+  };
+  return (
+    <div
+      ref={ref}
+      className={className}
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translate(0,0)" : transforms[direction],
+        transition: "opacity 0.8s ease-out, transform 0.8s ease-out",
+      }}
+    >
+      {children}
     </div>
   );
 }
@@ -354,36 +394,51 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ═══════ GENRE MARQUEE — scrolling genres below hero ═══════ */}
+      <div className="bg-[#0a0a0a] border-y border-amber-500/10 py-4 overflow-hidden">
+        <div className="flex animate-marquee whitespace-nowrap">
+          {[...GENRE_MARQUEE, ...GENRE_MARQUEE].map((genre, i) => (
+            <span key={i} className="inline-flex items-center mx-4 text-sm font-semibold tracking-wider">
+              <span className="text-amber-500 mr-2">♪</span>
+              <span className="text-gray-300">{genre}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+
       {/* ═══════ LATEST RELEASES — 6 cards exactly like reference ═══════ */}
       <section id="releases" className="py-16 md:py-24 bg-[#0d0d0d]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-10">
-            <SectionHeading>LATEST RELEASES</SectionHeading>
-            <a href="https://www.youtube.com/@bainslaofficial" target="_blank" rel="noopener noreferrer" className="hidden md:inline-flex items-center gap-2 px-4 py-2 border border-gray-700 text-sm text-gray-300 rounded hover:border-amber-500 hover:text-amber-500 transition-all">
-              VIEW ALL
-            </a>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            {RELEASES.map((r, i) => (
-              <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="group">
-                <div className="relative overflow-hidden rounded-lg aspect-square mb-2">
-                  <img src={r.image} alt={r.engTitle} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Play className="w-10 h-10 text-white fill-white" />
-                  </div>
-                </div>
-                <h3 className="text-sm font-bold text-amber-500 truncate">{r.hindiTitle}</h3>
-                <p className="text-xs text-gray-400 truncate">{r.engTitle}</p>
-                <p className="text-[10px] text-gray-600">{r.label}</p>
+        <ScrollSection>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between mb-10">
+              <SectionHeading>LATEST RELEASES</SectionHeading>
+              <a href="https://www.youtube.com/@bainslaofficial" target="_blank" rel="noopener noreferrer" className="hidden md:inline-flex items-center gap-2 px-4 py-2 border border-gray-700 text-sm text-gray-300 rounded hover:border-amber-500 hover:text-amber-500 transition-all">
+                VIEW ALL
               </a>
-            ))}
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+              {RELEASES.map((r, i) => (
+                <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="group">
+                  <div className="relative overflow-hidden rounded-lg aspect-square mb-2">
+                    <img src={r.image} alt={r.engTitle} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Play className="w-10 h-10 text-white fill-white" />
+                    </div>
+                  </div>
+                  <h3 className="text-sm font-bold text-amber-500 truncate">{r.hindiTitle}</h3>
+                  <p className="text-xs text-gray-400 truncate">{r.engTitle}</p>
+                  <p className="text-[10px] text-gray-600">{r.label}</p>
+                </a>
+              ))}
+            </div>
           </div>
-        </div>
+        </ScrollSection>
       </section>
 
       {/* ═══════ OUR ARTISTS — circular photos like reference ═══════ */}
       <section id="artists" className="py-16 md:py-24 bg-[#0a0a0a]">
+        <ScrollSection direction="left">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-10">
             <SectionHeading>OUR ARTISTS</SectionHeading>
@@ -412,28 +467,32 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        </ScrollSection>
       </section>
 
       {/* ═══════ QUICK LINKS — 4 cards exactly like reference ═══════ */}
       <section className="py-12 bg-[#0d0d0d]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {QUICK_LINKS_CARDS.map((card, i) => (
-              <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-5 hover:border-amber-500/30 transition-all group">
-                <card.icon className="w-8 h-8 text-amber-500 mb-3" />
-                <h3 className="font-extrabold text-xs tracking-wider text-amber-500 mb-2">{card.title}</h3>
-                <p className="text-xs text-gray-400 mb-4 leading-relaxed">{card.desc}</p>
-                <a href={card.href} className="inline-flex items-center gap-1 text-[11px] font-semibold border border-gray-700 px-4 py-2 rounded hover:border-amber-500 hover:text-amber-500 transition-all text-gray-300">
-                  {card.btn}
-                </a>
-              </div>
-            ))}
+        <ScrollSection direction="right">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {QUICK_LINKS_CARDS.map((card, i) => (
+                <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-5 hover:border-amber-500/30 transition-all group">
+                  <card.icon className="w-8 h-8 text-amber-500 mb-3" />
+                  <h3 className="font-extrabold text-xs tracking-wider text-amber-500 mb-2">{card.title}</h3>
+                  <p className="text-xs text-gray-400 mb-4 leading-relaxed">{card.desc}</p>
+                  <a href={card.href} className="inline-flex items-center gap-1 text-[11px] font-semibold border border-gray-700 px-4 py-2 rounded hover:border-amber-500 hover:text-amber-500 transition-all text-gray-300">
+                    {card.btn}
+                  </a>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        </ScrollSection>
       </section>
 
       {/* ═══════ LATEST VIDEOS — 3 or 6 cards with thumbnails ═══════ */}
       <section id="videos" className="py-16 md:py-24 bg-[#0a0a0a]">
+        <ScrollSection>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-10">
             <SectionHeading>LATEST VIDEOS</SectionHeading>
@@ -446,7 +505,7 @@ export default function HomePage() {
             {VIDEOS.slice(0, 3).map((v, i) => (
               <a key={i} href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="group">
                 <div className="relative overflow-hidden rounded-xl aspect-video mb-3">
-                  <img src={`https://img.youtube.com/vi/${v.id}/hqdefault.jpg`} alt={v.engTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <img src={v.thumbnail} alt={v.engTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center">
                     <div className="w-14 h-14 rounded-full bg-amber-500/80 flex items-center justify-center group-hover:scale-110 transition-transform">
                       <Play className="w-6 h-6 text-black fill-black ml-1" />
@@ -467,7 +526,7 @@ export default function HomePage() {
             {VIDEOS.slice(3).map((v, i) => (
               <a key={i} href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="group">
                 <div className="relative overflow-hidden rounded-xl aspect-video mb-3">
-                  <img src={`https://img.youtube.com/vi/${v.id}/hqdefault.jpg`} alt={v.engTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <img src={v.thumbnail} alt={v.engTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center">
                     <div className="w-14 h-14 rounded-full bg-amber-500/80 flex items-center justify-center group-hover:scale-110 transition-transform">
                       <Play className="w-6 h-6 text-black fill-black ml-1" />
@@ -483,10 +542,12 @@ export default function HomePage() {
             ))}
           </div>
         </div>
+        </ScrollSection>
       </section>
 
       {/* ═══════ MUSIC CATALOGUE — 8 categories like admin reference ═══════ */}
       <section id="catalogue" className="py-16 md:py-24 bg-[#0d0d0d]">
+        <ScrollSection direction="left">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <SectionHeading>MUSIC CATALOGUE</SectionHeading>
           <p className="text-center text-gray-500 text-sm mb-10 -mt-4">Browse our extensive collection of 725+ songs across 8 categories</p>
@@ -511,10 +572,12 @@ export default function HomePage() {
             ))}
           </div>
         </div>
+        </ScrollSection>
       </section>
 
       {/* ═══════ ABOUT SECTION ═══════ */}
       <section id="about" className="py-16 md:py-24 bg-[#0a0a0a]">
+        <ScrollSection direction="right">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
@@ -545,7 +608,7 @@ export default function HomePage() {
             </div>
             <div className="relative">
               <div className="rounded-2xl overflow-hidden border border-gray-800">
-                <img src="https://img.youtube.com/vi/mu8M7Nk8ywU/maxresdefault.jpg" alt="Bainsla Music" className="w-full h-auto" />
+                <img src="/images/hero/krishna-hero.png" alt="Bainsla Music" className="w-full h-auto" />
               </div>
               <div className="absolute -bottom-4 -right-4 bg-amber-500 text-black px-6 py-3 rounded-xl font-bold text-sm">
                 Since 2016
@@ -553,10 +616,12 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        </ScrollSection>
       </section>
 
       {/* ═══════ LICENSING SECTION — 6 cards exactly like reference ═══════ */}
       <section id="licensing" className="py-16 md:py-24 bg-[#0d0d0d]">
+        <ScrollSection>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <p className="text-amber-500 text-sm tracking-widest mb-2">LICENSING &amp; COPYRIGHT</p>
@@ -581,6 +646,7 @@ export default function HomePage() {
             ))}
           </div>
         </div>
+        </ScrollSection>
       </section>
 
       {/* ═══════ DISTRIBUTION + LICENSING + STAY CONNECTED row ═══════ */}
@@ -622,6 +688,7 @@ export default function HomePage() {
 
       {/* ═══════ CONTACT SECTION ═══════ */}
       <section id="contact" className="py-16 md:py-24 bg-[#0d0d0d]">
+        <ScrollSection direction="left">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <p className="text-amber-500 text-sm tracking-widest mb-2">GET IN TOUCH</p>
@@ -680,6 +747,7 @@ export default function HomePage() {
             </form>
           </div>
         </div>
+        </ScrollSection>
       </section>
 
       {/* ═══════ FOOTER — exactly like reference photo ═══════ */}
