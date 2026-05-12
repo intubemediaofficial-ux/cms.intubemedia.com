@@ -132,6 +132,57 @@ function showSection(s) {
 }
 
 /* ═══════ HELPERS ═══════ */
+async function uploadImage(file, folder) {
+  const fd = new FormData();
+  fd.append('image', file);
+  fd.append('folder', folder);
+  const res = await fetch('/api/upload.php', { method: 'POST', credentials: 'include', body: fd });
+  return res.json();
+}
+
+function imageUploadField(label, name, value, folder) {
+  const uid = Math.random().toString(36).slice(2,8);
+  const previewId = 'preview_' + uid;
+  const inputId = 'file_' + uid;
+  const dropId = 'drop_' + uid;
+  const statusId = 'status_' + uid;
+  return `<div class="form-group"><label>${label}</label>
+    <input type="file" id="${inputId}" accept="image/*" style="display:none">
+    <input type="hidden" name="${name}" value="${value || ''}">
+    <div id="${dropId}" class="upload-drop-zone" style="border:2px dashed var(--border2);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(245,158,11,.03);min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center"
+      onclick="document.getElementById('${inputId}').click()">
+      <div id="${previewId}">${value ? `<img src="${value}" style="max-height:100px;border-radius:6px;margin-bottom:8px">` : '<div style="font-size:36px;margin-bottom:8px">📷</div>'}</div>
+      <div style="font-size:13px;font-weight:600;color:#f59e0b">Click to upload or drag & drop</div>
+      <div style="font-size:11px;color:#666;margin-top:4px">JPG, PNG or WEBP. Max 5MB.</div>
+      <div id="${statusId}" style="font-size:11px;margin-top:6px;color:#999"></div>
+    </div>
+    <script>(function(){
+      var inp=document.getElementById('${inputId}');
+      var drop=document.getElementById('${dropId}');
+      var prev=document.getElementById('${previewId}');
+      var stat=document.getElementById('${statusId}');
+      var hidden=drop.parentElement.querySelector('input[name="${name}"]');
+      async function handleFile(file){
+        if(!file||!file.type.startsWith('image/'))return;
+        if(file.size>5*1024*1024){stat.textContent='File too large (max 5MB)';stat.style.color='#ef4444';return;}
+        var reader=new FileReader();
+        reader.onload=function(e){prev.innerHTML='<img src="'+e.target.result+'" style="max-height:100px;border-radius:6px;margin-bottom:8px">';};
+        reader.readAsDataURL(file);
+        stat.textContent='Uploading...';stat.style.color='#f59e0b';
+        try{
+          var r=await uploadImage(file,'${folder}');
+          if(r.url){hidden.value=r.url;stat.textContent='Uploaded!';stat.style.color='#22c55e';drop.style.borderColor='#22c55e';}
+          else{stat.textContent='Error: '+(r.error||'Upload failed');stat.style.color='#ef4444';}
+        }catch(e){stat.textContent='Upload failed';stat.style.color='#ef4444';}
+      }
+      inp.addEventListener('change',function(){if(this.files[0])handleFile(this.files[0]);});
+      drop.addEventListener('dragover',function(e){e.preventDefault();e.stopPropagation();this.style.borderColor='#f59e0b';this.style.background='rgba(245,158,11,.08)';});
+      drop.addEventListener('dragleave',function(e){e.preventDefault();e.stopPropagation();this.style.borderColor='var(--border2)';this.style.background='rgba(245,158,11,.03)';});
+      drop.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();this.style.borderColor='var(--border2)';this.style.background='rgba(245,158,11,.03)';if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+    })();</script>
+  </div>`;
+}
+
 function field(label, name, value, type = 'text', required = false) {
   const req = required ? ' <span class="required">*</span>' : '';
   return `<div class="form-group"><label>${label}${req}</label><input type="${type}" name="${name}" value="${value || ''}" placeholder="Enter ${label.toLowerCase()}"></div>`;
@@ -438,13 +489,7 @@ function renderBanners(area) {
           <div class="panel-header"><h2>BANNER SETTINGS</h2></div>
           <div class="panel-body">
             <form id="bannerSettingsForm">
-              <div class="form-group"><label>Banner Image</label>
-                <div class="upload-area" style="padding:20px;min-height:150px">
-                  <div class="upload-icon">📷</div>
-                  <div class="upload-text">Click to upload or drag & drop</div>
-                  <div class="upload-hint">JPG, PNG or WEBP. Max size 2MB.</div>
-                </div>
-              </div>
+              ${imageUploadField('Banner Image', 'image', banners[0]?.image || '', 'hero')}
               ${field('Banner Title', 'title', banners[0]?.title || 'BAINSLA MUSIC PRIVATE LIMITED')}
               ${field('Banner Subtitle', 'subtitle', banners[0]?.subtitle || "India's Devotional, Folk & Rasiya Music Label")}
               ${textareaField('Description', 'description', banners[0]?.description || 'Devotional Bhajans, Gurjar Rasiya, Folk Songs and Digital Music Distribution.')}
@@ -471,7 +516,7 @@ function renderBanners(area) {
   // Event listeners
   document.getElementById('addBannerBtn')?.addEventListener('click', () => {
     showModal('Add New Banner', `<form>
-      ${field('Image URL', 'image', '', 'url')}
+      ${imageUploadField('Banner Image', 'image', '', 'hero')}
       ${field('Title', 'title', '')}
       ${field('Subtitle', 'subtitle', '')}
       ${textareaField('Description', 'description', '')}
@@ -489,13 +534,12 @@ function renderBanners(area) {
     b.addEventListener('click', () => {
       const item = banners.find(x => x.id === b.dataset.id);
       showModal('Edit Banner', `<form>
-        ${field('Image URL', 'image', item?.image, 'url')}
+        ${imageUploadField('Banner Image', 'image', item?.image || '', 'hero')}
         ${field('Title', 'title', item?.title)}
         ${field('Subtitle', 'subtitle', item?.subtitle)}
         ${textareaField('Description', 'description', item?.description)}
         ${field('CTA Text', 'cta_text', item?.cta_text)}
         ${field('CTA Link', 'cta_link', item?.cta_link)}
-        ${item?.image ? `<img src="${item.image}" class="img-preview">` : ''}
         ${formActions()}
       </form>`, async (obj) => {
         await api('PUT', 'banners', obj, item.id);
@@ -560,7 +604,11 @@ function renderArtists(area) {
       <div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px" id="artistGrid">
           ${artists.map(a => `
-            <div class="artist-card">
+            <div class="artist-card" style="position:relative">
+              <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:2">
+                <button class="btn btn-outline btn-sm edit-artist-btn" data-id="${a.id}" style="padding:4px 8px;font-size:10px">✏ Edit</button>
+                <button class="btn btn-outline btn-sm delete-artist-btn" data-id="${a.id}" style="padding:4px 8px;font-size:10px;border-color:#ef4444;color:#ef4444">✕ Delete</button>
+              </div>
               <div class="featured-badge">FEATURED</div>
               ${a.image ? `<img src="${a.image}" class="artist-img" alt="${a.name}">` : '<div class="artist-img" style="background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:32px">👤</div>'}
               <div class="artist-name">${a.name || ''}</div>
@@ -572,16 +620,11 @@ function renderArtists(area) {
                 ${a.email ? `<div>✉ ${a.email}</div>` : ''}
               </div>
               <div class="artist-social">
-                <a href="#" class="platform-icon pi-yt">▶</a>
-                <a href="#" class="platform-icon pi-spotify" style="background:#e1306c">📷</a>
-                <a href="#" class="platform-icon pi-apple" style="background:#1877f2">f</a>
-                <a href="#" class="platform-icon pi-spotify">♪</a>
-              </div>
-              <div class="top-songs">
-                <h4>Top Songs</h4>
-                <ul>
-                  ${(a.top_songs || ['Song 1', 'Song 2', 'Song 3']).slice(0, 3).map(s => `<li>${typeof s === 'string' ? s : s.name || s}</li>`).join('')}
-                </ul>
+                ${a.youtube_url ? `<a href="${a.youtube_url}" target="_blank" class="platform-icon pi-yt">▶</a>` : ''}
+                ${a.instagram_url ? `<a href="${a.instagram_url}" target="_blank" class="platform-icon pi-spotify" style="background:#e1306c">📷</a>` : ''}
+                ${a.facebook_url ? `<a href="${a.facebook_url}" target="_blank" class="platform-icon pi-apple" style="background:#1877f2">f</a>` : ''}
+                ${a.spotify_url ? `<a href="${a.spotify_url}" target="_blank" class="platform-icon pi-spotify">♪</a>` : ''}
+                ${!a.youtube_url && !a.instagram_url && !a.facebook_url && !a.spotify_url ? '<span style="color:#666;font-size:11px">No social links</span>' : ''}
               </div>
             </div>
           `).join('')}
@@ -601,28 +644,20 @@ function renderArtists(area) {
           <div class="panel-header"><h2>Add New Artist</h2></div>
           <div class="panel-body">
             <form id="addArtistForm">
-              <div class="form-group"><label>Artist Photo</label>
-                <div class="upload-area" style="padding:20px">
-                  <div class="upload-icon">📷</div>
-                  <div class="upload-text">Click to upload or drag & drop</div>
-                  <div class="upload-hint">JPG, PNG or WEBP. Max size 5MB.</div>
-                </div>
-              </div>
+              ${imageUploadField('Artist Photo', 'image', '', 'artists')}
               ${field('Artist Name', 'name', '', 'text', true)}
               ${selectField('Role', 'role', ['Select Role', 'Singer', 'Producer', 'Lyricist', 'Composer', 'Music Director'], '')}
               ${selectField('Genre / Category', 'genre', ['Select Genre', 'Devotional', 'Folk', 'Rasiya', 'Bhajan', 'DJ Rasiya', 'Classical'], '')}
               ${textareaField('Short Biography', 'description', '', 'Write a short biography about the artist...')}
               ${field('Contact Number', 'phone', '', 'tel')}
               ${field('Email Address', 'email', '', 'email')}
-              <div class="form-group"><label>Social Media Links</label></div>
+              <div class="form-group"><label style="color:#f59e0b;font-weight:700">Social Media Links</label></div>
               ${field('YouTube URL', 'youtube_url', '', 'url')}
               ${field('Instagram URL', 'instagram_url', '', 'url')}
               ${field('Facebook URL', 'facebook_url', '', 'url')}
               ${field('Spotify URL', 'spotify_url', '', 'url')}
-              <div class="form-group"><label>Image URL (if not uploading)</label><input type="url" name="image" placeholder="https://..."></div>
-              <div class="flex-between" style="margin:12px 0"><label class="text-sm">Publish Status</label><div class="toggle active"></div></div>
               <div class="form-actions">
-                <button type="button" class="btn btn-secondary cancel-btn">CANCEL</button>
+                <button type="button" class="btn btn-secondary cancel-btn" onclick="showSection('artists')">CANCEL</button>
                 <button type="submit" class="btn btn-primary">ADD ARTIST</button>
               </div>
             </form>
@@ -643,6 +678,44 @@ function renderArtists(area) {
   });
   document.getElementById('addArtistBtn')?.addEventListener('click', () => {
     document.getElementById('addArtistForm')?.scrollIntoView({ behavior: 'smooth' });
+  });
+  // Edit artist
+  document.querySelectorAll('.edit-artist-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const a = (DATA.artists || []).find(x => x.id === id);
+      if (!a) return;
+      showModal('Edit Artist', `<form>
+        ${imageUploadField('Artist Photo', 'image', a.image || '', 'artists')}
+        ${field('Artist Name', 'name', a.name, 'text', true)}
+        ${selectField('Role', 'role', ['Singer', 'Producer', 'Lyricist', 'Composer', 'Music Director'], a.role || '')}
+        ${selectField('Genre / Category', 'genre', ['Devotional', 'Folk', 'Rasiya', 'Bhajan', 'DJ Rasiya', 'Classical'], a.genre || '')}
+        ${textareaField('Short Biography', 'description', a.description || '', 'Write a short biography...')}
+        ${field('Contact Number', 'phone', a.phone || '', 'tel')}
+        ${field('Email Address', 'email', a.email || '', 'email')}
+        <div class="form-group"><label style="color:#f59e0b;font-weight:700">Social Media Links</label></div>
+        ${field('YouTube URL', 'youtube_url', a.youtube_url || '', 'url')}
+        ${field('Instagram URL', 'instagram_url', a.instagram_url || '', 'url')}
+        ${field('Facebook URL', 'facebook_url', a.facebook_url || '', 'url')}
+        ${field('Spotify URL', 'spotify_url', a.spotify_url || '', 'url')}
+        ${formActions()}
+      </form>`, async (obj) => {
+        await api('PUT', 'artists', obj, id);
+        toast('Artist updated');
+        await loadData();
+        showSection('artists');
+      });
+    });
+  });
+  // Delete artist
+  document.querySelectorAll('.delete-artist-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to delete this artist?')) return;
+      await api('DELETE', 'artists', null, btn.dataset.id);
+      toast('Artist deleted', 'error');
+      await loadData();
+      showSection('artists');
+    });
   });
 }
 
@@ -672,15 +745,7 @@ function renderReleases(area) {
             ${selectField('Singer', 'singer', ['Select or enter singer name', ...artists.filter(a => a.role === 'Singer').map(a => a.name)], '')}
             ${selectField('Genre / Category', 'category', ['Select genre or category', 'Krishna Bhajan', 'Radha Bhajan', 'Hanuman Bhajan', 'Ram Bhajan', 'Shiv Bhajan', 'Gurjar Rasiya', 'DJ Rasiya', 'Folk Song'], '')}
             ${field('Release Date', 'release_date', '', 'date', true)}
-            <div class="form-row">
-              <div class="form-group"><label>Cover Image <span class="required">*</span></label>
-                <div class="upload-area" style="padding:16px"><div class="upload-icon">📷</div><div class="upload-text">Upload Cover Image</div><div class="upload-hint">JPG, PNG (Max. 5MB)</div></div>
-              </div>
-              <div class="form-group"><label>Audio File <span class="required">*</span></label>
-                <div class="upload-area" style="padding:16px"><div class="upload-icon">🎵</div><div class="upload-text">Upload Audio File</div><div class="upload-hint">MP3, WAV (Max. 50MB)</div></div>
-              </div>
-            </div>
-            ${field('Image URL (if not uploading)', 'image', '', 'url')}
+            ${imageUploadField('Cover Image', 'image', '', 'songs')}
             ${textareaField('Lyrics', 'lyrics', '', 'Enter lyrics here...')}
             ${field('ISRC / Catalogue Number', 'isrc', '', 'text')}
             ${field('English Title', 'eng_title', '')}
@@ -761,11 +826,13 @@ function renderReleases(area) {
         ${field('Hindi Title', 'hindi_title', item?.hindi_title)}
         ${field('English Title', 'eng_title', item?.eng_title)}
         ${field('Artist', 'artist', item?.artist)}
-        ${field('Image URL', 'image', item?.image, 'url')}
+        ${imageUploadField('Cover Image', 'image', item?.image || '', 'songs')}
         ${field('YouTube / Link URL', 'url', item?.url, 'url')}
+        ${field('Spotify URL', 'spotify_url', item?.spotify_url || '', 'url')}
+        ${field('Apple Music URL', 'apple_url', item?.apple_url || '', 'url')}
+        ${field('JioSaavn URL', 'jiosaavn_url', item?.jiosaavn_url || '', 'url')}
         ${field('Release Date', 'release_date', item?.release_date, 'date')}
         ${selectField('Status', 'status', ['Draft', 'Scheduled', 'Published'], item?.status || 'Published')}
-        ${item?.image ? `<img src="${item.image}" class="img-preview">` : ''}
         ${formActions()}
       </form>`, async (obj) => {
         obj.label = 'Bainsla Music';
@@ -806,13 +873,7 @@ function renderVideos(area) {
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px">
           <!-- Thumbnail -->
           <div>
-            <div class="form-group"><label>VIDEO THUMBNAIL <span class="required">*</span></label>
-              <div class="upload-area" style="min-height:160px">
-                <div class="upload-icon">📷</div>
-                <div class="upload-text">Click to upload thumbnail</div>
-                <div class="upload-hint">Recommended: 1280x720px (16:9)<br>Max size: 2MB (JPG, PNG)</div>
-              </div>
-            </div>
+            ${imageUploadField('VIDEO THUMBNAIL', 'thumbnail', '', 'songs')}
             <div style="background:var(--amber-bg);border-radius:var(--radius-xs);padding:10px;margin-top:8px;text-align:center">
               <div class="text-xs">Video will be published on <span style="color:red">▶ YouTube</span></div>
               <div class="text-xs text-muted">Make sure the video is already uploaded to your YouTube channel.</div>
@@ -926,10 +987,10 @@ function renderVideos(area) {
         ${field('Hindi Title', 'hindi_title', item?.hindi_title)}
         ${field('English Title', 'eng_title', item?.eng_title)}
         ${field('YouTube Video ID', 'youtube_id', item?.youtube_id)}
-        ${field('Category', 'category', item?.category)}
+        ${selectField('Category', 'category', ['Krishna Bhajan', 'Radha Bhajan', 'Hanuman Bhajan', 'Ram Bhajan', 'Shiv Bhajan', 'Gurjar Rasiya', 'DJ Rasiya', 'Folk Song', 'Guru Bhajan', 'Devotional'], item?.category || '')}
         ${field('Duration', 'duration', item?.duration)}
         ${field('Views', 'views', item?.views)}
-        ${field('Thumbnail URL', 'thumbnail', item?.thumbnail, 'url')}
+        ${imageUploadField('Thumbnail', 'thumbnail', item?.thumbnail || '', 'songs')}
         ${selectField('Status', 'status', ['Draft', 'Published', 'Scheduled'], item?.status || 'Published')}
         ${formActions()}
       </form>`, async (obj) => {
