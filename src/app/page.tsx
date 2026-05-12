@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Play,
   ChevronRight,
-  ChevronLeft,
   Phone,
   Mail,
   MapPin,
@@ -14,12 +13,17 @@ import {
   X,
   Music,
   Mic2,
-  Headphones,
   Send,
   Users,
-  BookOpen,
   Shield,
   Globe,
+  Award,
+  Eye,
+  Clock,
+  ArrowRight,
+  Heart,
+  Volume2,
+  Headphones,
 } from "lucide-react";
 
 /* ───── SVG Icons ───── */
@@ -58,29 +62,6 @@ function SpotifyIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-function JioSaavnIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
-      <text x="12" y="16" textAnchor="middle" fontSize="10" fill="currentColor" fontWeight="bold">J</text>
-    </svg>
-  );
-}
-function AppleMusicIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M23.994 6.124a9.23 9.23 0 00-.24-2.19c-.317-1.31-1.062-2.31-2.18-3.043a5.022 5.022 0 00-1.877-.726 10.496 10.496 0 00-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026-.747.043-1.49.123-2.193.4-1.336.53-2.3 1.452-2.865 2.78-.192.448-.292.925-.363 1.408-.056.392-.088.785-.1 1.18 0 .032-.007.062-.01.093v12.223c.01.14.017.283.027.424.05.815.154 1.624.497 2.373.65 1.42 1.738 2.353 3.234 2.801.42.127.856.187 1.293.228.555.053 1.11.06 1.667.06h11.03c.525 0 1.048-.034 1.57-.1.823-.107 1.597-.35 2.296-.81a5.046 5.046 0 001.88-2.207c.186-.42.293-.87.37-1.324.113-.675.138-1.358.137-2.04-.002-3.8 0-7.595-.003-11.393zm-6.423 3.99v5.712c0 .417-.058.827-.244 1.206-.29.59-.76.962-1.388 1.14-.35.1-.706.157-1.07.173-.95.042-1.8-.6-1.965-1.483-.18-.965.46-1.97 1.442-2.17.293-.06.59-.11.886-.16.39-.066.674-.272.795-.66.04-.13.06-.27.06-.406V9.873c0-.34-.14-.523-.48-.56-.478-.05-.958-.09-1.436-.14-.7-.074-1.4-.15-2.1-.226-.266-.03-.376.07-.376.34v6.17c0 .39-.05.77-.214 1.126-.283.612-.762 1.003-1.406 1.188-.34.098-.69.154-1.04.172-.97.046-1.846-.577-2.02-1.49-.185-.97.43-1.99 1.395-2.2.29-.063.587-.11.88-.16.4-.068.684-.28.803-.68.036-.12.053-.25.053-.38V7.03c0-.39.143-.603.527-.657.455-.065.91-.125 1.366-.187l2.452-.332 1.727-.234c.26-.035.52-.067.78-.1.296-.038.464.1.465.4.003 1.396.002 2.794.002 4.192z" />
-    </svg>
-  );
-}
-function WynkIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
-      <text x="12" y="16" textAnchor="middle" fontSize="9" fill="currentColor" fontWeight="bold">W</text>
-    </svg>
-  );
-}
 function MusicNote({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -89,13 +70,15 @@ function MusicNote({ className }: { className?: string }) {
   );
 }
 
-/* ───── Data Constants ───── */
+/* ───── Data — EXACT content from reference photos ───── */
+
 const NAV_LINKS = [
   { label: "HOME", href: "#home" },
   { label: "ABOUT", href: "#about" },
   { label: "ARTISTS", href: "#artists" },
   { label: "RELEASES", href: "#releases" },
   { label: "VIDEOS", href: "#videos" },
+  { label: "CATALOGUE", href: "#catalogue" },
   { label: "LICENSING", href: "#licensing" },
   { label: "CONTACT", href: "#contact" },
 ];
@@ -108,41 +91,79 @@ const HERO_SLIDES = [
 ];
 
 const RELEASES = [
-  { title: "श्याम तेरी बंसी पागल कर जाती है", subtitle: "Shyam Teri Bansi Pagaal Kar Jaati Hai", artist: "Bainsla Music", image: "https://img.youtube.com/vi/mu8M7Nk8ywU/hqdefault.jpg", url: "https://www.youtube.com/watch?v=mu8M7Nk8ywU" },
-  { title: "राधा रानी मेरी है", subtitle: "Radha Rani Meri Hai", artist: "Bainsla Music", image: "https://img.youtube.com/vi/S7VZLHubP4c/hqdefault.jpg", url: "https://www.youtube.com/watch?v=S7VZLHubP4c" },
-  { title: "हनुमान चालीसा", subtitle: "Hanuman Chalisa", artist: "Bainsla Music", image: "https://img.youtube.com/vi/3ELgvab96VQ/hqdefault.jpg", url: "https://www.youtube.com/watch?v=3ELgvab96VQ" },
-  { title: "राम नाम की महिमा", subtitle: "Ram Naam Ki Mahima", artist: "Bainsla Music", image: "https://img.youtube.com/vi/8XKjIjWs6Ak/hqdefault.jpg", url: "https://www.youtube.com/watch?v=8XKjIjWs6Ak" },
-  { title: "गुर्जर रसिया", subtitle: "Gurjar Rasiya", artist: "Bainsla Music", image: "https://img.youtube.com/vi/DFJYVn39dHE/hqdefault.jpg", url: "https://www.youtube.com/watch?v=DFJYVn39dHE" },
-  { title: "डीजे रसिया 2024", subtitle: "DJ Rasiya 2024", artist: "Bainsla Music", image: "https://img.youtube.com/vi/GwQnIPL68y8/hqdefault.jpg", url: "https://www.youtube.com/watch?v=GwQnIPL68y8" },
+  { hindiTitle: "श्याम तेरी बंसी पागल कर जाती है", engTitle: "Shyam Teri Bansi Pagaal Kar Jaati Hai", artist: "Bhumika Sharma", label: "Bainsla Music", image: "https://img.youtube.com/vi/mu8M7Nk8ywU/hqdefault.jpg", url: "https://www.youtube.com/watch?v=mu8M7Nk8ywU" },
+  { hindiTitle: "राधा रानी मेरी है", engTitle: "Radha Rani Meri Hai", artist: "Rashmi Nishad", label: "Bainsla Music", image: "https://img.youtube.com/vi/S7VZLHubP4c/hqdefault.jpg", url: "https://www.youtube.com/watch?v=S7VZLHubP4c" },
+  { hindiTitle: "हनुमान चालीसा", engTitle: "Hanuman Chalisa", artist: "Bainsla Music", label: "Bainsla Music", image: "https://img.youtube.com/vi/3ELgvab96VQ/hqdefault.jpg", url: "https://www.youtube.com/watch?v=3ELgvab96VQ" },
+  { hindiTitle: "राम नाम की महिमा", engTitle: "Ram Naam Ki Mahima", artist: "DG Mawai", label: "Bainsla Music", image: "https://img.youtube.com/vi/8XKjIjWs6Ak/hqdefault.jpg", url: "https://www.youtube.com/watch?v=8XKjIjWs6Ak" },
+  { hindiTitle: "गुर्जर रसिया", engTitle: "Gurjar Rasiya", artist: "Gurjar Rasiya", label: "Bainsla Music", image: "https://img.youtube.com/vi/DFJYVn39dHE/hqdefault.jpg", url: "https://www.youtube.com/watch?v=DFJYVn39dHE" },
+  { hindiTitle: "डीजे रसिया 2024", engTitle: "DJ Rasiya 2024", artist: "DJ Rasiya 2024", label: "Bainsla Music", image: "https://img.youtube.com/vi/GwQnIPL68y8/hqdefault.jpg", url: "https://www.youtube.com/watch?v=GwQnIPL68y8" },
 ];
 
 const ARTISTS = [
-  { name: "Bhumika Sharma", role: "Singer", image: "https://img.youtube.com/vi/mu8M7Nk8ywU/hqdefault.jpg" },
-  { name: "DG Mawai", role: "Singer", image: "https://img.youtube.com/vi/S7VZLHubP4c/hqdefault.jpg" },
-  { name: "Rashmi Nishad", role: "Singer", image: "https://img.youtube.com/vi/3ELgvab96VQ/hqdefault.jpg" },
-  { name: "Ajeet Bainsla", role: "Producer", image: "https://img.youtube.com/vi/8XKjIjWs6Ak/hqdefault.jpg" },
+  { name: "Bhumika Sharma", role: "Singer", genre: "Devotional, Folk", image: "https://img.youtube.com/vi/mu8M7Nk8ywU/hqdefault.jpg" },
+  { name: "DG Mawai", role: "Singer", genre: "Rasiya, Folk", image: "https://img.youtube.com/vi/S7VZLHubP4c/hqdefault.jpg" },
+  { name: "Rashmi Nishad", role: "Singer", genre: "Devotional, Bhajan", image: "https://img.youtube.com/vi/3ELgvab96VQ/hqdefault.jpg" },
+  { name: "Ajeet Bainsla", role: "Producer", genre: "Music Producer", image: "https://img.youtube.com/vi/8XKjIjWs6Ak/hqdefault.jpg" },
 ];
 
 const VIDEOS = [
-  { title: "श्याम तेरी बंसी", subtitle: "Shyam Teri Bansi Pagaal Kar Jaati Hai", duration: "4:35", views: "1.2M", id: "mu8M7Nk8ywU" },
-  { title: "राधा रानी मेरी है", subtitle: "Radha Rani Meri Hai", duration: "4:12", views: "856K", id: "S7VZLHubP4c" },
-  { title: "हनुमान चालीसा", subtitle: "Hanuman Chalisa", duration: "6:21", views: "2.4M", id: "3ELgvab96VQ" },
+  { hindiTitle: "श्याम तेरी बंसी", engTitle: "Shyam Teri Bansi Pagaal Kar Jaati Hai", category: "Krishna Bhajan", duration: "04:35", views: "1.2M", id: "mu8M7Nk8ywU" },
+  { hindiTitle: "राधा रानी मेरी है", engTitle: "Radha Rani Meri Hai", category: "Radha Bhajan", duration: "04:12", views: "856K", id: "S7VZLHubP4c" },
+  { hindiTitle: "हनुमान चालीसा", engTitle: "Hanuman Chalisa", category: "Hanuman Bhajan", duration: "06:21", views: "2.4M", id: "3ELgvab96VQ" },
+  { hindiTitle: "गुरु चरणों में", engTitle: "Guru Charno Mein", category: "Guru Bhajan", duration: "05:08", views: "452K", id: "8XKjIjWs6Ak" },
+  { hindiTitle: "मेरे बांके बिहारी", engTitle: "Mere Banke Bihari", category: "Krishna Bhajan", duration: "04:50", views: "789K", id: "DFJYVn39dHE" },
+  { hindiTitle: "जय श्री राम", engTitle: "Jai Shri Ram", category: "Ram Bhajan", duration: "03:58", views: "1.5M", id: "GwQnIPL68y8" },
+];
+
+const CATALOGUE_CATEGORIES = [
+  { name: "Krishna Bhajan", hindi: "कृष्ण भजन", count: 128 },
+  { name: "Radha Bhajan", hindi: "राधा भजन", count: 102 },
+  { name: "Hanuman Bhajan", hindi: "हनुमान भजन", count: 96 },
+  { name: "Ram Bhajan", hindi: "राम भजन", count: 88 },
+  { name: "Shiv Bhajan", hindi: "शिव भजन", count: 74 },
+  { name: "Gurjar Rasiya", hindi: "गुर्जर रसिया", count: 111 },
+  { name: "DJ Rasiya", hindi: "डीजे रसिया", count: 67 },
+  { name: "Folk Songs", hindi: "लोकगीत", count: 139 },
 ];
 
 const QUICK_LINKS_CARDS = [
   { icon: Music, title: "MUSIC CATALOGUE", desc: "Explore our wide range of Devotional, Folk & Rasiya songs.", btn: "EXPLORE CATALOGUE", href: "#catalogue" },
   { icon: Play, title: "YOUTUBE VIDEOS", desc: "Watch our latest videos and subscribe to our official YouTube channel.", btn: "WATCH NOW", href: "https://www.youtube.com/@bainslaofficial" },
   { icon: Shield, title: "LICENSING / COPYRIGHT", desc: "For music licensing, copyright claims, YouTube CMS and other inquiries.", btn: "LEARN MORE", href: "#licensing" },
-  { icon: Globe, title: "DISTRIBUTION", desc: "We provide digital music distribution across all major platforms.", btn: "DISTRIBUTE NOW", href: "#contact" },
+  { icon: Headphones, title: "DISTRIBUTION", desc: "We provide digital music distribution across all major platforms.", btn: "DISTRIBUTE NOW", href: "#contact" },
 ];
 
 const PLATFORMS = [
-  { name: "Spotify", icon: SpotifyIcon, color: "text-green-500" },
-  { name: "Apple Music", icon: AppleMusicIcon, color: "text-red-400" },
-  { name: "JioSaavn", icon: JioSaavnIcon, color: "text-green-400" },
   { name: "YouTube", icon: YoutubeIcon, color: "text-red-500" },
-  { name: "Wynk Music", icon: WynkIcon, color: "text-blue-400" },
+  { name: "Spotify", icon: SpotifyIcon, color: "text-green-500" },
+  { name: "JioSaavn", color: "text-green-400" },
+  { name: "Apple Music", color: "text-red-400" },
+  { name: "Wynk Music", color: "text-blue-400" },
 ];
+
+const DISTRIBUTION_PLATFORMS = [
+  "Spotify", "Apple Music", "JioSaavn", "YouTube", "Amazon Music",
+  "Wynk Music", "Hungama", "Resso", "Gaana",
+];
+
+/* ───── Section heading with decorative lines (exactly like reference) ───── */
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-center gap-4 mb-10">
+      <div className="flex items-center gap-1">
+        <div className="w-8 h-[1px] bg-amber-700" />
+        <div className="w-2 h-2 rounded-full bg-amber-500" />
+        <div className="w-16 h-[1px] bg-gradient-to-r from-amber-500 to-amber-700" />
+      </div>
+      <h2 className="text-2xl md:text-3xl font-bold tracking-wider text-white">{children}</h2>
+      <div className="flex items-center gap-1">
+        <div className="w-16 h-[1px] bg-gradient-to-l from-amber-500 to-amber-700" />
+        <div className="w-2 h-2 rounded-full bg-amber-500" />
+        <div className="w-8 h-[1px] bg-amber-700" />
+      </div>
+    </div>
+  );
+}
 
 /* ───── Component ───── */
 export default function HomePage() {
@@ -165,45 +186,57 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      {/* ───── NAVBAR ───── */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-[#0a0a0a]/95 backdrop-blur-md shadow-lg shadow-black/20" : "bg-transparent"}`}>
+    <div className="min-h-screen bg-[#0a0a0a] text-white overflow-x-hidden">
+
+      {/* ═══════ NAVBAR ═══════ */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+        scrolled
+          ? "bg-[#0a0a0a]/95 backdrop-blur-xl shadow-lg shadow-black/20 border-b border-amber-500/10"
+          : "bg-gradient-to-b from-black/90 to-transparent"
+      }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 md:h-20">
             {/* Logo */}
-            <Link href="#home" className="flex items-center gap-2">
+            <Link href="#home" className="flex items-center gap-2 group">
               <MusicNote className="w-8 h-8 text-amber-500" />
               <div className="leading-tight">
-                <span className="text-lg font-bold tracking-wide text-white">BAINSLA</span>
+                <span className="text-lg font-extrabold tracking-wider text-white">BAINSLA</span>
                 <div className="flex items-center gap-1">
-                  <span className="text-[10px] tracking-[0.2em] text-amber-500">MUSIC</span>
-                  <span className="text-[8px] text-gray-400 tracking-wider">PRIVATE LIMITED</span>
+                  <span className="text-[10px] tracking-[0.2em] text-amber-500 font-semibold">MUSIC</span>
+                  <span className="text-[8px] text-gray-500 tracking-wider">PRIVATE LIMITED</span>
                 </div>
               </div>
             </Link>
 
             {/* Desktop Nav */}
-            <div className="hidden lg:flex items-center gap-6">
-              {NAV_LINKS.map((link) => (
-                <Link key={link.label} href={link.href} className="text-xs tracking-wider text-gray-300 hover:text-amber-500 transition-colors font-medium">
+            <div className="hidden lg:flex items-center gap-1">
+              {NAV_LINKS.map((link, i) => (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  className={`text-[11px] tracking-[0.12em] px-3 py-2 font-semibold transition-all duration-300 ${
+                    i === 0
+                      ? "text-amber-500 border-b-2 border-amber-500"
+                      : "text-gray-400 hover:text-amber-500 border-b-2 border-transparent hover:border-amber-500/50"
+                  }`}
+                >
                   {link.label}
                 </Link>
               ))}
-              <Link href="/login" className="text-xs tracking-wider px-4 py-2 border border-amber-500 text-amber-500 rounded hover:bg-amber-500 hover:text-black transition-all font-medium">
-                DASHBOARD
-              </Link>
             </div>
 
-            {/* Social + Mobile */}
+            {/* Social Icons + Mobile Menu */}
             <div className="flex items-center gap-3">
               <div className="hidden md:flex items-center gap-2">
-                <a href="https://www.youtube.com/@bainslaofficial" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center hover:scale-110 transition-transform"><YoutubeIcon className="w-4 h-4" /></a>
-                <a href="https://www.instagram.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center hover:scale-110 transition-transform"><InstagramIcon className="w-4 h-4" /></a>
-                <a href="https://facebook.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center hover:scale-110 transition-transform"><FacebookIcon className="w-4 h-4" /></a>
-                <a href="https://wa.me/917297897628" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center hover:scale-110 transition-transform"><WhatsAppIcon className="w-4 h-4" /></a>
+                <a href="https://www.youtube.com/@bainslaofficial" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center hover:scale-110 transition-transform"><YoutubeIcon className="w-3.5 h-3.5" /></a>
+                <a href="https://www.instagram.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center hover:scale-110 transition-transform"><InstagramIcon className="w-3.5 h-3.5" /></a>
+                <a href="https://facebook.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center hover:scale-110 transition-transform"><FacebookIcon className="w-3.5 h-3.5" /></a>
               </div>
-              <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden text-white">
-                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="lg:hidden w-10 h-10 flex items-center justify-center"
+              >
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
             </div>
           </div>
@@ -212,144 +245,185 @@ export default function HomePage() {
         {/* Mobile Menu */}
         <AnimatePresence>
           {mobileMenuOpen && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="lg:hidden bg-[#0a0a0a]/98 border-t border-gray-800 overflow-hidden">
-              <div className="px-4 py-4 space-y-2">
+            <motion.div
+              initial={{ height: 0, opacity: 1 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 1 }}
+              className="lg:hidden bg-[#0a0a0a]/98 border-t border-amber-500/10 overflow-hidden"
+            >
+              <div className="px-4 py-3 space-y-1">
                 {NAV_LINKS.map((link) => (
-                  <Link key={link.label} href={link.href} onClick={() => setMobileMenuOpen(false)} className="block py-2 text-sm text-gray-300 hover:text-amber-500 transition-colors">
+                  <Link key={link.label} href={link.href} onClick={() => setMobileMenuOpen(false)} className="block py-2.5 px-4 text-sm text-gray-300 hover:text-amber-500 transition-colors">
                     {link.label}
                   </Link>
                 ))}
-                <Link href="/login" className="block py-2 text-sm text-amber-500 font-semibold">DASHBOARD</Link>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </nav>
 
-      {/* ───── HERO SECTION ───── */}
-      <section id="home" className="relative h-screen min-h-[600px] overflow-hidden">
+      {/* ═══════ HERO SECTION — exactly like reference photo ═══════ */}
+      <section id="home" className="relative min-h-screen overflow-hidden">
+        {/* Background Slideshow */}
         <AnimatePresence mode="wait">
-          <motion.div key={currentSlide} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 1 }} className="absolute inset-0">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent z-10" />
+          <motion.div
+            key={currentSlide}
+            initial={{ opacity: 1, scale: 1 }}
+            animate={{ opacity: 1, scale: 1.05 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 6, ease: "linear" }}
+            className="absolute inset-0"
+          >
             <img src={HERO_SLIDES[currentSlide].image} alt="Bainsla Music" className="absolute inset-0 w-full h-full object-cover" />
           </motion.div>
         </AnimatePresence>
 
-        <div className="relative z-20 h-full flex items-center">
+        {/* Dark overlay — stronger on left for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-[#0a0a0a]/30 z-10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-[#0a0a0a]/20 z-10" />
+        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#0a0a0a] to-transparent z-10" />
+
+        {/* Hero Content */}
+        <div className="relative z-20 min-h-screen flex items-center pt-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-            <div className="max-w-2xl">
-              <motion.h1 initial={{ opacity: 1, y: 0 }} animate={{ opacity: 1, y: 0 }} className="text-5xl md:text-7xl font-bold leading-tight mb-2">
-                BAINSLA
-              </motion.h1>
-              <motion.p initial={{ opacity: 1, y: 0 }} animate={{ opacity: 1, y: 0 }} className="text-2xl md:text-3xl font-semibold text-gray-200 mb-4">
+            <div className="max-w-xl">
+              <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black leading-[0.9] tracking-tight mb-2">
+                <span className="block text-white">BAINSLA</span>
+              </h1>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-4 tracking-wide">
                 MUSIC PRIVATE LIMITED
-              </motion.p>
-              <motion.p initial={{ opacity: 1, y: 0 }} animate={{ opacity: 1, y: 0 }} className="text-amber-500 text-lg md:text-xl italic mb-3">
+              </p>
+              <p className="text-amber-500 text-base sm:text-lg md:text-xl italic mb-4 font-medium">
                 India&apos;s Devotional, Folk &amp; Rasiya Music Label
-              </motion.p>
-              <motion.p initial={{ opacity: 1 }} animate={{ opacity: 1 }} className="text-gray-400 text-sm md:text-base mb-8 max-w-lg">
+              </p>
+              <p className="text-gray-400 text-sm md:text-base mb-8 leading-relaxed">
                 Devotional Bhajans, Gurjar Rasiya, Folk Songs<br />and Digital Music Distribution.
-              </motion.p>
-              <motion.div initial={{ opacity: 1, y: 0 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap gap-4 mb-10">
-                <a href="https://www.youtube.com/@bainslaofficial" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-6 py-3 bg-white/10 border border-white/20 rounded hover:bg-amber-500/20 hover:border-amber-500/50 transition-all text-sm font-medium">
-                  <Play className="w-4 h-4 fill-white" /> LISTEN NOW
-                </a>
-              </motion.div>
-              <div className="flex items-center gap-4 flex-wrap">
-                {PLATFORMS.map((p) => (
-                  <div key={p.name} className="flex items-center gap-1.5 text-xs text-gray-400">
-                    <p.icon className={`w-5 h-5 ${p.color}`} />
-                    <span>{p.name}</span>
+              </p>
+
+              <a
+                href="https://www.youtube.com/@bainslaofficial"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2.5 px-6 py-3 border border-amber-500 text-amber-500 rounded-lg font-bold text-sm tracking-wider hover:bg-amber-500 hover:text-black transition-all duration-300 mb-8"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                LISTEN NOW
+              </a>
+
+              {/* Platform Icons */}
+              <div className="flex items-center gap-6 flex-wrap">
+                <div className="flex items-center gap-2 text-xs text-gray-300">
+                  <YoutubeIcon className="w-5 h-5 text-red-500" />
+                  <span>YouTube</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-300">
+                  <SpotifyIcon className="w-5 h-5 text-green-500" />
+                  <span>Spotify</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-300">
+                  <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-[8px] font-bold text-white">J</div>
+                  <span>JioSaavn</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-300">
+                  <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                    <Music className="w-3 h-3 text-white" />
                   </div>
-                ))}
+                  <span>Apple Music</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-300">
+                  <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-[8px] font-bold text-white">W</div>
+                  <span>Wynk Music</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Slide dots */}
+        {/* Slide indicator dots */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex gap-2">
           {HERO_SLIDES.map((_, i) => (
-            <button key={i} onClick={() => setCurrentSlide(i)} className={`w-3 h-3 rounded-full transition-all ${i === currentSlide ? "bg-amber-500 scale-125" : "bg-white/30 hover:bg-white/50"}`} />
+            <button
+              key={i}
+              onClick={() => setCurrentSlide(i)}
+              className={`w-3 h-3 rounded-full transition-all duration-500 ${
+                i === currentSlide ? "bg-amber-500 scale-110" : "bg-gray-600 hover:bg-gray-400"
+              }`}
+            />
           ))}
         </div>
       </section>
 
-      {/* ───── LATEST RELEASES ───── */}
-      <section id="releases" className="py-16 md:py-24 bg-[#0a0a0a]">
+      {/* ═══════ LATEST RELEASES — 6 cards exactly like reference ═══════ */}
+      <section id="releases" className="py-16 md:py-24 bg-[#0d0d0d]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-10">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-[2px] bg-amber-500" />
-              <h2 className="text-2xl md:text-3xl font-bold tracking-wider">LATEST RELEASES</h2>
-              <div className="w-8 h-[2px] bg-amber-500" />
-            </div>
+            <SectionHeading>LATEST RELEASES</SectionHeading>
             <a href="https://www.youtube.com/@bainslaofficial" target="_blank" rel="noopener noreferrer" className="hidden md:inline-flex items-center gap-2 px-4 py-2 border border-gray-700 text-sm text-gray-300 rounded hover:border-amber-500 hover:text-amber-500 transition-all">
-              VIEW ALL <ChevronRight className="w-4 h-4" />
+              VIEW ALL
             </a>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             {RELEASES.map((r, i) => (
               <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="group">
                 <div className="relative overflow-hidden rounded-lg aspect-square mb-2">
-                  <img src={r.image} alt={r.subtitle} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  <img src={r.image} alt={r.engTitle} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <Play className="w-10 h-10 text-white fill-white" />
                   </div>
                 </div>
-                <h3 className="text-sm font-semibold text-white truncate">{r.title}</h3>
-                <p className="text-xs text-gray-500 truncate">{r.subtitle}</p>
-                <p className="text-xs text-gray-600">{r.artist}</p>
+                <h3 className="text-sm font-bold text-amber-500 truncate">{r.hindiTitle}</h3>
+                <p className="text-xs text-gray-400 truncate">{r.engTitle}</p>
+                <p className="text-[10px] text-gray-600">{r.label}</p>
               </a>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ───── OUR ARTISTS ───── */}
-      <section id="artists" className="py-16 md:py-24 bg-[#0d0d0d]">
+      {/* ═══════ OUR ARTISTS — circular photos like reference ═══════ */}
+      <section id="artists" className="py-16 md:py-24 bg-[#0a0a0a]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-10">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-[2px] bg-amber-500" />
-              <h2 className="text-2xl md:text-3xl font-bold tracking-wider">OUR ARTISTS</h2>
-              <div className="w-8 h-[2px] bg-amber-500" />
-            </div>
+            <SectionHeading>OUR ARTISTS</SectionHeading>
             <Link href="#artists" className="hidden md:inline-flex items-center gap-2 px-4 py-2 border border-gray-700 text-sm text-gray-300 rounded hover:border-amber-500 hover:text-amber-500 transition-all">
-              VIEW ALL ARTISTS <ChevronRight className="w-4 h-4" />
+              VIEW ALL ARTISTS
             </Link>
           </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-8">
             {ARTISTS.map((a, i) => (
               <div key={i} className="text-center group">
-                <div className="w-28 h-28 md:w-36 md:h-36 mx-auto rounded-full overflow-hidden mb-3 border-2 border-gray-700 group-hover:border-amber-500 transition-colors">
+                <div className="w-28 h-28 md:w-36 md:h-36 mx-auto rounded-full overflow-hidden mb-3 border-2 border-gray-700 group-hover:border-amber-500 transition-colors duration-500">
                   <img src={a.image} alt={a.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                 </div>
-                <h4 className="font-semibold text-sm md:text-base text-white">{a.name}</h4>
+                <h4 className="font-bold text-sm md:text-base text-white">{a.name}</h4>
                 <p className="text-xs text-gray-500">{a.role}</p>
               </div>
             ))}
+            {/* Join Our Team */}
             <div className="text-center group cursor-pointer">
               <div className="w-28 h-28 md:w-36 md:h-36 mx-auto rounded-full overflow-hidden mb-3 border-2 border-dashed border-gray-600 group-hover:border-amber-500 transition-colors flex items-center justify-center bg-gray-900/50">
-                <Mic2 className="w-12 h-12 text-amber-500/50 group-hover:text-amber-500 transition-colors" />
+                <Mic2 className="w-12 h-12 text-amber-500/40 group-hover:text-amber-500 transition-colors" />
               </div>
-              <h4 className="font-semibold text-sm md:text-base text-white">Join Our Team</h4>
+              <h4 className="font-bold text-sm md:text-base text-white">Join Our Team</h4>
               <p className="text-xs text-gray-500">Artist / Singer</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ───── QUICK LINKS ───── */}
-      <section className="py-16 bg-[#0a0a0a]">
+      {/* ═══════ QUICK LINKS — 4 cards exactly like reference ═══════ */}
+      <section className="py-12 bg-[#0d0d0d]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {QUICK_LINKS_CARDS.map((card, i) => (
-              <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-6 hover:border-amber-500/30 transition-all group">
-                <card.icon className="w-10 h-10 text-amber-500 mb-4" />
-                <h3 className="font-bold text-sm tracking-wider text-amber-500 mb-2">{card.title}</h3>
+              <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-5 hover:border-amber-500/30 transition-all group">
+                <card.icon className="w-8 h-8 text-amber-500 mb-3" />
+                <h3 className="font-extrabold text-xs tracking-wider text-amber-500 mb-2">{card.title}</h3>
                 <p className="text-xs text-gray-400 mb-4 leading-relaxed">{card.desc}</p>
-                <a href={card.href} className="inline-flex items-center gap-1 text-xs font-semibold border border-gray-700 px-4 py-2 rounded hover:border-amber-500 hover:text-amber-500 transition-all text-gray-300">
+                <a href={card.href} className="inline-flex items-center gap-1 text-[11px] font-semibold border border-gray-700 px-4 py-2 rounded hover:border-amber-500 hover:text-amber-500 transition-all text-gray-300">
                   {card.btn}
                 </a>
               </div>
@@ -358,41 +432,88 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ───── LATEST VIDEOS ───── */}
-      <section id="videos" className="py-16 md:py-24 bg-[#0d0d0d]">
+      {/* ═══════ LATEST VIDEOS — 3 or 6 cards with thumbnails ═══════ */}
+      <section id="videos" className="py-16 md:py-24 bg-[#0a0a0a]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-10">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-[2px] bg-amber-500" />
-              <h2 className="text-2xl md:text-3xl font-bold tracking-wider">LATEST VIDEOS</h2>
-              <div className="w-8 h-[2px] bg-amber-500" />
-            </div>
+            <SectionHeading>LATEST VIDEOS</SectionHeading>
             <a href="https://www.youtube.com/@bainslaofficial" target="_blank" rel="noopener noreferrer" className="hidden md:inline-flex items-center gap-2 px-4 py-2 border border-gray-700 text-sm text-gray-300 rounded hover:border-amber-500 hover:text-amber-500 transition-all">
-              VIEW ALL <ChevronRight className="w-4 h-4" />
+              VIEW ALL
             </a>
           </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {VIDEOS.map((v, i) => (
+            {VIDEOS.slice(0, 3).map((v, i) => (
               <a key={i} href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="group">
                 <div className="relative overflow-hidden rounded-xl aspect-video mb-3">
-                  <img src={`https://img.youtube.com/vi/${v.id}/hqdefault.jpg`} alt={v.subtitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <img src={`https://img.youtube.com/vi/${v.id}/hqdefault.jpg`} alt={v.engTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center">
                     <div className="w-14 h-14 rounded-full bg-amber-500/80 flex items-center justify-center group-hover:scale-110 transition-transform">
                       <Play className="w-6 h-6 text-black fill-black ml-1" />
                     </div>
                   </div>
-                  <span className="absolute bottom-2 right-2 bg-black/80 text-xs px-2 py-0.5 rounded">{v.duration}</span>
+                  <span className="absolute bottom-2 right-2 bg-black/80 text-xs px-2 py-0.5 rounded font-semibold">{v.duration}</span>
+                  <span className="absolute bottom-2 left-2 bg-black/80 text-xs px-2 py-0.5 rounded">{v.views} views</span>
                 </div>
-                <h3 className="font-semibold text-sm text-white">{v.title}</h3>
-                <p className="text-xs text-gray-500">{v.subtitle}</p>
-                <p className="text-xs text-gray-600 mt-1">{v.views} views • Bainsla Music</p>
+                <h3 className="font-bold text-sm text-white group-hover:text-amber-500 transition-colors">{v.hindiTitle}</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{v.engTitle}</p>
+                <p className="text-[11px] text-gray-600 mt-0.5">Bainsla Music</p>
+              </a>
+            ))}
+          </div>
+
+          {/* Additional videos row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+            {VIDEOS.slice(3).map((v, i) => (
+              <a key={i} href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="group">
+                <div className="relative overflow-hidden rounded-xl aspect-video mb-3">
+                  <img src={`https://img.youtube.com/vi/${v.id}/hqdefault.jpg`} alt={v.engTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-full bg-amber-500/80 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Play className="w-6 h-6 text-black fill-black ml-1" />
+                    </div>
+                  </div>
+                  <span className="absolute bottom-2 right-2 bg-black/80 text-xs px-2 py-0.5 rounded font-semibold">{v.duration}</span>
+                  <span className="absolute bottom-2 left-2 bg-black/80 text-xs px-2 py-0.5 rounded">{v.views} views</span>
+                </div>
+                <h3 className="font-bold text-sm text-white group-hover:text-amber-500 transition-colors">{v.hindiTitle}</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{v.engTitle}</p>
+                <p className="text-[11px] text-gray-600 mt-0.5">Bainsla Music</p>
               </a>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ───── ABOUT SECTION ───── */}
+      {/* ═══════ MUSIC CATALOGUE — 8 categories like admin reference ═══════ */}
+      <section id="catalogue" className="py-16 md:py-24 bg-[#0d0d0d]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <SectionHeading>MUSIC CATALOGUE</SectionHeading>
+          <p className="text-center text-gray-500 text-sm mb-10 -mt-4">Browse our extensive collection of 725+ songs across 8 categories</p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {CATALOGUE_CATEGORIES.map((cat, i) => (
+              <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-5 hover:border-amber-500/30 transition-all group cursor-pointer">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                    <Music className="w-5 h-5 text-amber-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white group-hover:text-amber-500 transition-colors">{cat.name}</h3>
+                    <p className="text-[10px] text-gray-600">{cat.hindi}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-amber-500 font-bold text-lg">{cat.count}</span>
+                  <span className="text-[10px] text-gray-500">Songs</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════ ABOUT SECTION ═══════ */}
       <section id="about" className="py-16 md:py-24 bg-[#0a0a0a]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-12 items-center">
@@ -417,7 +538,7 @@ export default function HomePage() {
                 ].map((s) => (
                   <div key={s.l} className="text-center p-3 bg-[#111] rounded-lg border border-gray-800">
                     <div className="text-xl md:text-2xl font-bold text-amber-500">{s.n}</div>
-                    <div className="text-xs text-gray-500">{s.l}</div>
+                    <div className="text-[10px] text-gray-500">{s.l}</div>
                   </div>
                 ))}
               </div>
@@ -434,11 +555,11 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ───── LICENSING SECTION ───── */}
+      {/* ═══════ LICENSING SECTION — 6 cards exactly like reference ═══════ */}
       <section id="licensing" className="py-16 md:py-24 bg-[#0d0d0d]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <p className="text-amber-500 text-sm tracking-widest mb-2">LICENSING & COPYRIGHT</p>
+            <p className="text-amber-500 text-sm tracking-widest mb-2">LICENSING &amp; COPYRIGHT</p>
             <h2 className="text-3xl md:text-4xl font-bold">Music <span className="text-amber-500">Licensing</span></h2>
             <p className="text-gray-400 mt-3 max-w-2xl mx-auto text-sm">For music licensing, copyright claims, YouTube CMS and other business inquiries.</p>
           </div>
@@ -455,35 +576,38 @@ export default function HomePage() {
                 <item.icon className="w-8 h-8 text-amber-500 mb-4" />
                 <h3 className="font-bold text-base mb-2">{item.title}</h3>
                 <p className="text-xs text-gray-400 leading-relaxed mb-4">{item.desc}</p>
-                <a href="#contact" className="text-amber-500 text-xs font-semibold hover:underline">INQUIRE NOW →</a>
+                <a href="#contact" className="text-amber-500 text-xs font-semibold hover:underline inline-flex items-center gap-1">INQUIRE NOW <ArrowRight className="w-3 h-3" /></a>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ───── DISTRIBUTION PARTNERS ───── */}
+      {/* ═══════ DISTRIBUTION + LICENSING + STAY CONNECTED row ═══════ */}
       <section className="py-12 bg-[#0a0a0a] border-y border-gray-800/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-3 gap-8 items-center">
+          <div className="grid md:grid-cols-3 gap-8 items-start">
+            {/* Licensing & Inquiries */}
             <div>
-              <p className="text-amber-500 text-sm tracking-widest mb-1">LICENSING & INQUIRIES</p>
+              <p className="text-amber-500 text-sm tracking-widest font-bold mb-2">LICENSING &amp; INQUIRIES</p>
               <p className="text-xs text-gray-400 mb-3">For music licensing, copyright, YouTube CMS claims and business inquiries.</p>
               <a href="#contact" className="inline-flex items-center gap-2 text-xs font-semibold border border-amber-500 text-amber-500 px-4 py-2 rounded hover:bg-amber-500 hover:text-black transition-all">
                 SUBMIT INQUIRY
               </a>
             </div>
+            {/* Distribution Partners */}
             <div>
-              <p className="text-amber-500 text-sm tracking-widest mb-2">DISTRIBUTION PARTNERS</p>
-              <div className="flex flex-wrap gap-3">
-                {["Spotify", "Apple Music", "JioSaavn", "YouTube", "Hungama", "Wynk Music", "Resso", "Gaana"].map((p) => (
+              <p className="text-amber-500 text-sm tracking-widest font-bold mb-2">DISTRIBUTION PARTNERS</p>
+              <div className="flex flex-wrap gap-2">
+                {DISTRIBUTION_PLATFORMS.map((p) => (
                   <span key={p} className="text-[10px] text-gray-400 bg-gray-800/50 px-2 py-1 rounded">{p}</span>
                 ))}
-                <span className="text-[10px] text-amber-500 bg-gray-800/50 px-2 py-1 rounded">••• More</span>
+                <span className="text-[10px] text-amber-500 bg-gray-800/50 px-2 py-1 rounded font-bold">••• More</span>
               </div>
             </div>
+            {/* Stay Connected */}
             <div>
-              <p className="text-amber-500 text-sm tracking-widest mb-2">STAY CONNECTED</p>
+              <p className="text-amber-500 text-sm tracking-widest font-bold mb-2">STAY CONNECTED</p>
               <p className="text-xs text-gray-400 mb-3">Subscribe to get the latest updates on new releases and exclusive content.</p>
               <div className="flex gap-2">
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500" />
@@ -496,7 +620,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ───── CONTACT SECTION ───── */}
+      {/* ═══════ CONTACT SECTION ═══════ */}
       <section id="contact" className="py-16 md:py-24 bg-[#0d0d0d]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
@@ -558,10 +682,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ───── FOOTER ───── */}
+      {/* ═══════ FOOTER — exactly like reference photo ═══════ */}
       <footer className="bg-[#050505] border-t border-gray-800/50 pt-16 pb-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
             {/* Logo */}
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-4">
@@ -579,27 +703,27 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* Quick Links */}
+            {/* Quick Links Col 1 */}
             <div>
               <h4 className="text-amber-500 font-bold text-sm tracking-wider mb-4">QUICK LINKS</h4>
               <ul className="space-y-2">
-                {["Home", "About Us", "Artists", "Releases", "Videos", "Contact"].map((l) => (
+                {["Home", "About Us", "Artists", "Releases"].map((l) => (
                   <li key={l}><Link href={`#${l.toLowerCase().replace(" ", "")}`} className="text-xs text-gray-400 hover:text-amber-500 transition-colors">{l}</Link></li>
                 ))}
               </ul>
             </div>
 
-            {/* Company */}
+            {/* Quick Links Col 2 */}
             <div>
-              <h4 className="text-amber-500 font-bold text-sm tracking-wider mb-4">COMPANY</h4>
+              <h4 className="text-amber-500 font-bold text-sm tracking-wider mb-4">&nbsp;</h4>
               <ul className="space-y-2">
-                {["About Bainsla Music", "Our Mission", "Privacy Policy", "Terms & Conditions"].map((l) => (
-                  <li key={l}><Link href="#" className="text-xs text-gray-400 hover:text-amber-500 transition-colors">{l}</Link></li>
+                {["Videos", "Catalogue", "Licensing", "Distribution", "Contact"].map((l) => (
+                  <li key={l}><Link href={`#${l.toLowerCase()}`} className="text-xs text-gray-400 hover:text-amber-500 transition-colors">{l}</Link></li>
                 ))}
               </ul>
             </div>
 
-            {/* Contact */}
+            {/* Contact Us */}
             <div>
               <h4 className="text-amber-500 font-bold text-sm tracking-wider mb-4">CONTACT US</h4>
               <ul className="space-y-3">
@@ -616,11 +740,16 @@ export default function HomePage() {
                   bainslamusiccompany@gmail.com
                 </li>
               </ul>
-              <div className="flex gap-2 mt-4">
-                <a href="https://www.youtube.com/@bainslaofficial" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center hover:scale-110 transition-transform"><YoutubeIcon className="w-4 h-4" /></a>
-                <a href="https://www.instagram.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center hover:scale-110 transition-transform"><InstagramIcon className="w-4 h-4" /></a>
-                <a href="https://facebook.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center hover:scale-110 transition-transform"><FacebookIcon className="w-4 h-4" /></a>
-                <a href="https://wa.me/917297897628" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center hover:scale-110 transition-transform"><WhatsAppIcon className="w-4 h-4" /></a>
+            </div>
+
+            {/* Follow Us */}
+            <div>
+              <h4 className="text-amber-500 font-bold text-sm tracking-wider mb-4">FOLLOW US</h4>
+              <div className="flex gap-2">
+                <a href="https://www.youtube.com/@bainslaofficial" target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-red-600 flex items-center justify-center hover:scale-110 transition-transform"><YoutubeIcon className="w-4 h-4" /></a>
+                <a href="https://www.instagram.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center hover:scale-110 transition-transform"><InstagramIcon className="w-4 h-4" /></a>
+                <a href="https://facebook.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center hover:scale-110 transition-transform"><FacebookIcon className="w-4 h-4" /></a>
+                <a href="https://wa.me/917297897628" target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center hover:scale-110 transition-transform"><WhatsAppIcon className="w-4 h-4" /></a>
               </div>
             </div>
           </div>
@@ -631,7 +760,7 @@ export default function HomePage() {
         </div>
       </footer>
 
-      {/* ───── WHATSAPP FAB ───── */}
+      {/* ═══════ WHATSAPP FAB ═══════ */}
       <a href="https://wa.me/917297897628?text=Hi%2C%20I%20want%20to%20know%20about%20your%20services" target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30 hover:scale-110 transition-transform" aria-label="Chat on WhatsApp">
         <WhatsAppIcon className="w-7 h-7 text-white" />
       </a>
