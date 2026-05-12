@@ -31,10 +31,10 @@
     {"id": "r6", "hindi_title": "डीजे रसिया 2024", "eng_title": "DJ Rasiya 2024", "artist": "DJ Rasiya 2024", "label": "Bainsla Music", "image": "/images/songs/dj-rasiya.jpg", "url": "https://www.youtube.com/watch?v=GwQnIPL68y8", "created_at": "2024-01-01"}
   ],
   "artists": [
-    {"id": "a1", "name": "Bhumika Sharma", "role": "Singer", "genre": "Devotional, Folk", "image": "/images/artists/bhumika-sharma.jpg", "created_at": "2024-01-01"},
-    {"id": "a2", "name": "DG Mawai", "role": "Singer", "genre": "Rasiya, Folk", "image": "/images/artists/dg-mawai.jpg", "created_at": "2024-01-01"},
-    {"id": "a3", "name": "Rashmi Nishad", "role": "Singer", "genre": "Devotional, Bhajan", "image": "/images/artists/rashmi-nishad.jpg", "created_at": "2024-01-01"},
-    {"id": "a4", "name": "Ajeet Bainsla", "role": "Producer", "genre": "Music Producer", "image": "/images/artists/ajeet-bainsla.jpg", "created_at": "2024-01-01"}
+    {"id": "a1", "name": "Bhumika Sharma", "role": "Singer", "genre": "Devotional, Folk", "image": "/images/artists/bhumika-sharma.jpg", "youtube_url": "", "instagram_url": "", "facebook_url": "", "spotify_url": "", "created_at": "2024-01-01"},
+    {"id": "a2", "name": "DG Mawai", "role": "Singer", "genre": "Rasiya, Folk", "image": "/images/artists/dg-mawai.jpg", "youtube_url": "", "instagram_url": "", "facebook_url": "", "spotify_url": "", "created_at": "2024-01-01"},
+    {"id": "a3", "name": "Rashmi Nishad", "role": "Singer", "genre": "Devotional, Bhajan", "image": "/images/artists/rashmi-nishad.jpg", "youtube_url": "", "instagram_url": "", "facebook_url": "", "spotify_url": "", "created_at": "2024-01-01"},
+    {"id": "a4", "name": "Ajeet Bainsla", "role": "Producer", "genre": "Music Producer", "image": "/images/artists/ajeet-bainsla.jpg", "youtube_url": "", "instagram_url": "", "facebook_url": "", "spotify_url": "", "created_at": "2024-01-01"}
   ],
   "videos": [
     {"id": "v1", "hindi_title": "श्याम तेरी बंसी", "eng_title": "Shyam Teri Bansi Pagaal Kar Jaati Hai", "category": "Krishna Bhajan", "duration": "04:35", "views": "1.2M", "youtube_id": "mu8M7Nk8ywU", "thumbnail": "/images/songs/shyam-teri-bansi.jpg", "created_at": "2024-01-01"},

@@ -19,7 +19,7 @@ if (!in_array($ext, $allowed)) {
     jsonResponse(['error' => 'Invalid file type. Allowed: ' . implode(', ', $allowed)], 400);
 }
 
-$uploadDir = __DIR__ . '/../../public/images/' . $folder . '/';
+$uploadDir = __DIR__ . '/../images/' . $folder . '/';
 if (!is_dir($uploadDir)) {
     mkdir($uploadDir, 0755, true);
 }
