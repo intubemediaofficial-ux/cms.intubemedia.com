@@ -14,15 +14,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bainsla Music - Rajasthan's No.1 Music Production Company",
+  title: "Bainsla Music Private Limited | India's Devotional, Folk & Rasiya Music Label",
   description:
-    "Bainsla Music is a distinguished music production company rooted in Rajasthan, India. YouTube CMS/MCN, Music Distribution, Channel Promotion & Management.",
+    "Bainsla Music Private Limited — India's leading Devotional, Folk & Rasiya music label. Listen to the latest Bhajans, Gurjar Rasiya & Folk Songs. Digital Music Distribution.",
   keywords:
-    "Bainsla Music, Rajasthani Music, Rasiya Songs, YouTube CMS, Music Distribution, Channel Management, Jaipur",
+    "bainsla music, bhajan, rasiya, folk songs, devotional music, Krishna bhajan, Hanuman Chalisa, Radha bhajan, Gurjar Rasiya, DJ Rasiya, music distribution, YouTube CMS",
   openGraph: {
-    title: "Bainsla Music - Rajasthan's No.1 Music Production Company",
+    title: "Bainsla Music Private Limited | India's Devotional, Folk & Rasiya Music Label",
     description:
-      "Music Production, YouTube CMS/MCN, Audio Video Distribution & Channel Management. 9+ Years, 500+ Videos, 50+ Artists.",
+      "India's Devotional, Folk & Rasiya Music Label. Devotional Bhajans, Gurjar Rasiya, Folk Songs and Digital Music Distribution.",
     type: "website",
     url: "https://bainslamusic.com",
   },
