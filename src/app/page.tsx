@@ -267,7 +267,7 @@ export default function HomePage() {
 
             {/* Dashboard Button + Mobile Menu */}
             <div className="flex items-center gap-3">
-              <a href="/admin/" className="hidden md:inline-flex items-center gap-2 px-4 py-2 bg-amber-500 text-black text-xs font-bold tracking-wider rounded-lg hover:bg-amber-600 transition-all">
+              <a href="/admin" className="hidden md:inline-flex items-center gap-2 px-4 py-2 bg-amber-500 text-black text-xs font-bold tracking-wider rounded-lg hover:bg-amber-600 transition-all">
                 DASHBOARD
               </a>
               <button
@@ -295,7 +295,7 @@ export default function HomePage() {
                     {link.label}
                   </Link>
                 ))}
-                <a href="/admin/" className="block py-2.5 px-4 text-sm font-bold text-amber-500 hover:text-amber-400 transition-colors">
+                <a href="/admin" className="block py-2.5 px-4 text-sm font-bold text-amber-500 hover:text-amber-400 transition-colors">
                   DASHBOARD
                 </a>
               </div>
