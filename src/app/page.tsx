@@ -265,13 +265,11 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* Social Icons + Mobile Menu */}
+            {/* Dashboard Button + Mobile Menu */}
             <div className="flex items-center gap-3">
-              <div className="hidden md:flex items-center gap-2">
-                <a href="https://www.youtube.com/@bainslaofficial" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center hover:scale-110 transition-transform"><YoutubeIcon className="w-3.5 h-3.5" /></a>
-                <a href="https://www.instagram.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center hover:scale-110 transition-transform"><InstagramIcon className="w-3.5 h-3.5" /></a>
-                <a href="https://facebook.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center hover:scale-110 transition-transform"><FacebookIcon className="w-3.5 h-3.5" /></a>
-              </div>
+              <a href="/admin/" className="hidden md:inline-flex items-center gap-2 px-4 py-2 bg-amber-500 text-black text-xs font-bold tracking-wider rounded-lg hover:bg-amber-600 transition-all">
+                DASHBOARD
+              </a>
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="lg:hidden w-10 h-10 flex items-center justify-center"
@@ -297,6 +295,9 @@ export default function HomePage() {
                     {link.label}
                   </Link>
                 ))}
+                <a href="/admin/" className="block py-2.5 px-4 text-sm font-bold text-amber-500 hover:text-amber-400 transition-colors">
+                  DASHBOARD
+                </a>
               </div>
             </motion.div>
           )}
@@ -828,7 +829,14 @@ export default function HomePage() {
         </div>
       </footer>
 
-      {/* ═══════ WHATSAPP FAB ═══════ */}
+      {/* ═══════ SOCIAL ICONS — fixed bottom-left ═══════ */}
+      <div className="fixed bottom-6 left-6 z-50 flex flex-col gap-2">
+        <a href="https://www.youtube.com/@bainslaofficial" target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full bg-red-600 flex items-center justify-center shadow-lg hover:scale-110 transition-transform" aria-label="YouTube"><YoutubeIcon className="w-5 h-5 text-white" /></a>
+        <a href="https://www.instagram.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center shadow-lg hover:scale-110 transition-transform" aria-label="Instagram"><InstagramIcon className="w-5 h-5 text-white" /></a>
+        <a href="https://facebook.com/bainslamusic" target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full bg-blue-600 flex items-center justify-center shadow-lg hover:scale-110 transition-transform" aria-label="Facebook"><FacebookIcon className="w-5 h-5 text-white" /></a>
+      </div>
+
+      {/* ═══════ WHATSAPP FAB — fixed bottom-right ═══════ */}
       <a href="https://wa.me/917297897628?text=Hi%2C%20I%20want%20to%20know%20about%20your%20services" target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30 hover:scale-110 transition-transform" aria-label="Chat on WhatsApp">
         <WhatsAppIcon className="w-7 h-7 text-white" />
       </a>

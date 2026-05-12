@@ -1,505 +1,149 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bainsla Music Private Limited - Admin Dashboard</title>
-  <link rel="stylesheet" href="dashboard.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bainsla Music — Admin Dashboard</title>
+<link rel="stylesheet" href="dashboard.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- Login Screen -->
-  <div id="loginScreen" class="login-screen">
-    <div class="login-box">
-      <div class="login-logo">
-        <svg viewBox="0 0 24 24" fill="currentColor" class="logo-icon"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-        <div class="logo-text">
-          <span class="logo-brand">BAINSLA</span>
-          <span class="logo-sub">MUSIC <small>PRIVATE LIMITED</small></span>
-        </div>
+
+<!-- ═══════ LOGIN PAGE ═══════ -->
+<div id="loginPage" class="login-page">
+  <div class="login-card">
+    <div class="login-logo-img">♪</div>
+    <div class="login-brand">BAINSLA MUSIC</div>
+    <div class="login-brand-sub">PRIVATE LIMITED</div>
+    <p class="login-sub">Admin Dashboard</p>
+    <form id="loginForm">
+      <div class="login-field">
+        <label>Username</label>
+        <input type="text" id="loginUser" placeholder="Enter username" required>
       </div>
-      <h2>Admin Dashboard</h2>
-      <p class="login-desc">Sign in to manage your website content</p>
-      <form id="loginForm">
-        <div class="form-group">
-          <label>Username</label>
-          <input type="text" id="loginUser" placeholder="Enter username" required>
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="loginPass" placeholder="Enter password" required>
-        </div>
-        <button type="submit" class="btn-primary btn-full">Sign In</button>
-        <p id="loginError" class="error-msg"></p>
-      </form>
+      <div class="login-field">
+        <label>Password</label>
+        <input type="password" id="loginPass" placeholder="Enter password" required>
+      </div>
+      <button type="submit" class="login-btn">LOGIN</button>
+      <p id="loginError" class="error"></p>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════ DASHBOARD ═══════ -->
+<div id="dashboard" class="dashboard" style="display:none">
+
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">♪</div>
+      <div class="logo-info">
+        <div class="logo-text">BAINSLA</div>
+        <div class="logo-text2">MUSIC</div>
+        <div class="logo-sub">PRIVATE LIMITED</div>
+      </div>
     </div>
-  </div>
 
-  <!-- Dashboard -->
-  <div id="dashboard" class="dashboard" style="display:none">
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-logo">
-        <svg viewBox="0 0 24 24" fill="currentColor" class="logo-icon-sm"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-        <div class="logo-text-sm">
-          <span class="brand-sm">BAINSLA</span>
-          <span class="sub-sm">MUSIC <small>PRIVATE LIMITED</small></span>
+    <ul class="nav-list">
+      <li class="nav-item active" data-section="overview">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">Dashboard</span>
+      </li>
+      <li class="nav-item" data-section="banners">
+        <span class="nav-icon">🖼️</span>
+        <span class="nav-label">Home Banner</span>
+      </li>
+      <li class="nav-item" data-section="artists">
+        <span class="nav-icon">👤</span>
+        <span class="nav-label">Artists</span>
+      </li>
+      <li class="nav-item" data-section="releases">
+        <span class="nav-icon">🎵</span>
+        <span class="nav-label">Releases</span>
+      </li>
+      <li class="nav-item" data-section="videos">
+        <span class="nav-icon">📹</span>
+        <span class="nav-label">Videos</span>
+      </li>
+      <li class="nav-item" data-section="catalogue">
+        <span class="nav-icon">📁</span>
+        <span class="nav-label">Music Catalogue</span>
+      </li>
+      <li class="nav-item" data-section="licensing">
+        <span class="nav-icon">©️</span>
+        <span class="nav-label">Licensing</span>
+      </li>
+      <li class="nav-item" data-section="distribution">
+        <span class="nav-icon">🌐</span>
+        <span class="nav-label">Distribution</span>
+      </li>
+      <li class="nav-item" data-section="inquiries">
+        <span class="nav-icon">💬</span>
+        <span class="nav-label">Contact Inquiries</span>
+        <span class="nav-badge" id="inquiryBadge"></span>
+      </li>
+      <li class="nav-item" data-section="analytics">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Analytics</span>
+      </li>
+      <li class="nav-item" data-section="settings">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">Settings</span>
+      </li>
+    </ul>
+
+    <div class="sidebar-profile">
+      <div class="profile-avatar">🎧</div>
+      <div class="profile-info">
+        <div class="profile-name">Welcome Admin</div>
+        <div class="profile-role">Bainsla Music</div>
+      </div>
+      <button class="profile-btn" onclick="window.open('/', '_blank')">VIEW PROFILE</button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="top-left">
+        <button class="hamburger" id="hamburgerBtn">☰</button>
+        <div class="top-title-wrap">
+          <h1 id="pageTitle">Dashboard</h1>
+          <p id="pageSubtitle" class="page-subtitle">Welcome back, Admin! Here's what's happening with Bainsla Music.</p>
         </div>
       </div>
-      <nav class="sidebar-nav">
-        <a href="#" class="nav-item active" data-section="overview">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          <span>Dashboard</span>
-        </a>
-        <a href="#" class="nav-item" data-section="banners">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          <span>Home Banner</span>
-        </a>
-        <a href="#" class="nav-item" data-section="artists">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-          <span>Artists</span>
-        </a>
-        <a href="#" class="nav-item" data-section="releases">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
-          <span>Releases</span>
-        </a>
-        <a href="#" class="nav-item" data-section="videos">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          <span>Videos</span>
-        </a>
-        <a href="#" class="nav-item" data-section="catalogue">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-          <span>Music Catalogue</span>
-        </a>
-        <a href="#" class="nav-item" data-section="licensing">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span>Licensing</span>
-        </a>
-        <a href="#" class="nav-item" data-section="distribution">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-          <span>Distribution</span>
-        </a>
-        <a href="#" class="nav-item" data-section="inquiries">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          <span>Contact Inquiries</span>
-        </a>
-        <a href="#" class="nav-item" data-section="analytics">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-          <span>Analytics</span>
-        </a>
-        <a href="#" class="nav-item" data-section="settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-          <span>Settings</span>
-        </a>
-      </nav>
-      <div class="sidebar-profile">
-        <div class="profile-avatar">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+      <div class="top-right">
+        <button class="top-icon-btn" title="Notifications">🔔<span class="notif-dot">5</span></button>
+        <div class="admin-profile">
+          <div class="admin-avatar">👤</div>
+          <div class="admin-info">
+            <span class="admin-name">Admin</span>
+            <span class="admin-role">Super Admin</span>
+          </div>
+          <button class="admin-dropdown" id="adminDropdown">▾</button>
         </div>
-        <div class="profile-info">
-          <span class="profile-name">Welcome Admin</span>
-          <span class="profile-role">Bainsla Music</span>
-        </div>
-        <a href="#" class="profile-btn" onclick="logout()">VIEW PROFILE</a>
       </div>
-      <a href="#" class="nav-item logout-btn" onclick="logout()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        <span>Logout</span>
-      </a>
-    </aside>
+    </header>
 
-    <!-- Main Content -->
-    <main class="main-content">
-      <!-- Top Navbar -->
-      <header class="top-nav">
-        <div class="top-nav-left">
-          <button class="menu-toggle" onclick="toggleSidebar()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-          </button>
-          <div class="nav-links">
-            <a href="/" target="_blank">HOME</a>
-            <a href="#" data-section="artists">ARTISTS</a>
-            <a href="#" data-section="releases">RELEASES</a>
-            <a href="#" data-section="videos">VIDEOS</a>
-            <a href="#" data-section="catalogue">CATALOGUE</a>
-            <a href="#" data-section="licensing">LICENSING</a>
-            <a href="#" data-section="distribution">DISTRIBUTION</a>
-            <a href="#" class="nav-dash-btn" data-section="overview">DASHBOARD</a>
-            <a href="#" data-section="inquiries">CONTACT</a>
-          </div>
-        </div>
-        <div class="top-nav-right">
-          <div class="social-icons">
-            <a href="https://www.youtube.com/@bainslaofficial" target="_blank" class="social-yt"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
-            <a href="https://instagram.com/bainslamusic" target="_blank" class="social-ig"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
-            <a href="https://facebook.com/bainslamusic" target="_blank" class="social-fb"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
-            <a href="https://wa.me/917297897628" target="_blank" class="social-wa"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a>
-          </div>
-          <div class="admin-user">
-            <span>Welcome Admin</span>
-            <span class="admin-role">Bainsla Music</span>
-          </div>
-        </div>
-      </header>
+    <!-- Dynamic Content Area -->
+    <div id="contentArea" class="content-area"></div>
 
-      <!-- Content Sections -->
-      <div class="content-area">
-        <!-- OVERVIEW -->
-        <section id="sec-overview" class="section active">
-          <div class="section-header">
-            <h1>Dashboard</h1>
-            <p>Welcome back, Admin! Here&apos;s what&apos;s happening with Bainsla Music.</p>
-          </div>
-          <div class="stats-grid">
-            <div class="stat-card"><div class="stat-icon songs"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div><div class="stat-info"><span class="stat-label">Total Songs</span><span class="stat-value">256</span><span class="stat-change up">+18 this month ↑</span></div></div>
-            <div class="stat-card"><div class="stat-icon artists"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div><div class="stat-info"><span class="stat-label">Total Artists</span><span class="stat-value">42</span><span class="stat-change up">+5 this month ↑</span></div></div>
-            <div class="stat-card"><div class="stat-icon videos"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></div><div class="stat-info"><span class="stat-label">YouTube Videos</span><span class="stat-value">178</span><span class="stat-change up">+14 this month ↑</span></div></div>
-            <div class="stat-card"><div class="stat-icon leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div><div class="stat-info"><span class="stat-label">Contact Leads</span><span class="stat-value">89</span><span class="stat-change up">+21 this month ↑</span></div></div>
-          </div>
+    <!-- Footer -->
+    <footer class="admin-footer">
+      <p>&copy; 2024 Bainsla Music Private Limited. All Rights Reserved.</p>
+      <p class="footer-right">Made with ❤️ for Devotional Music</p>
+    </footer>
+  </main>
+</div>
 
-          <div class="grid-2">
-            <div class="card">
-              <div class="card-header"><h3>🎵 Recent Releases</h3><a href="#" class="view-all" data-section="releases">View All</a></div>
-              <table class="data-table">
-                <thead><tr><th>#</th><th>Title</th><th>Artist</th><th>Date</th><th>Status</th><th>Platform</th></tr></thead>
-                <tbody id="recentReleases"></tbody>
-              </table>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>🎤 Upload New Release</h3></div>
-              <form id="quickReleaseForm" class="form-compact">
-                <div class="form-group"><label>Release Title</label><input type="text" placeholder="Enter release title"></div>
-                <div class="form-group"><label>Artist</label><select><option>Select Artist</option><option>Bhumika Sharma</option><option>DG Mawai</option><option>Rashmi Nishad</option><option>Ajeet Bainsla</option></select></div>
-                <div class="form-row">
-                  <div class="form-group"><label>Release Type</label><select><option>Select Type</option><option>Single</option><option>Album</option><option>EP</option></select></div>
-                  <div class="form-group"><label>Audio File</label><div class="file-upload-btn">Choose File<input type="file" accept="audio/*"></div></div>
-                </div>
-                <div class="form-group"><label>Cover Image</label><div class="file-upload-btn">Choose File<input type="file" accept="image/*"></div></div>
-                <button type="button" class="btn-primary btn-full">Upload Release</button>
-              </form>
-            </div>
-          </div>
+<!-- Admin Dropdown Menu -->
+<div class="dropdown-menu" id="dropdownMenu" style="display:none">
+  <a href="/" target="_blank">🌐 View Website</a>
+  <a href="#" id="logoutBtn">🚪 Logout</a>
+</div>
 
-          <div class="grid-3">
-            <div class="card">
-              <div class="card-header"><h3>👥 Artist Management</h3><a href="#" class="view-all" data-section="artists">View All Artists</a></div>
-              <div class="artist-grid-sm" id="dashArtists"></div>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>📊 Video Performance (YouTube)</h3><a href="#" class="view-all" data-section="analytics">View Analytics</a></div>
-              <div class="mini-stats">
-                <div><span class="ms-val">2.45M</span><span class="ms-label">Total Views</span><span class="ms-change up">+12.5%</span></div>
-                <div><span class="ms-val">145.8K</span><span class="ms-label">Watch Time (hrs)</span><span class="ms-change up">+9.4%</span></div>
-                <div><span class="ms-val">98.6K</span><span class="ms-label">Likes</span><span class="ms-change up">+8.1%</span></div>
-                <div><span class="ms-val">52.3K</span><span class="ms-label">Subscribers</span><span class="ms-change up">+11.7%</span></div>
-              </div>
-              <div class="chart-placeholder">
-                <div class="chart-bar" style="height:30%"></div>
-                <div class="chart-bar" style="height:50%"></div>
-                <div class="chart-bar" style="height:70%"></div>
-                <div class="chart-bar" style="height:45%"></div>
-                <div class="chart-bar" style="height:80%"></div>
-                <div class="chart-bar" style="height:65%"></div>
-                <div class="chart-bar" style="height:90%"></div>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>📩 Recent Inquiries</h3><a href="#" class="view-all" data-section="inquiries">View All</a></div>
-              <div class="inquiry-list" id="dashInquiries"></div>
-            </div>
-          </div>
-        </section>
-
-        <!-- BANNERS -->
-        <section id="sec-banners" class="section">
-          <div class="section-header"><div><span class="breadcrumb">Dashboard &gt; Home Banner</span><h1>Home Banner</h1><p>Manage homepage hero banners for the website.</p></div></div>
-          <div class="grid-2">
-            <div class="card">
-              <div class="card-header"><h3>LIVE PREVIEW</h3><div class="toggle-group"><button class="toggle-btn active">Desktop</button><button class="toggle-btn">Mobile</button></div></div>
-              <div class="banner-preview" id="bannerPreview">
-                <div class="banner-overlay">
-                  <h2 id="prevTitle">BAINSLA MUSIC PRIVATE LIMITED</h2>
-                  <p id="prevSub" class="banner-sub">India's Devotional, Folk & Rasiya Music Label</p>
-                  <p id="prevDesc" class="banner-desc">Devotional Bhajans, Gurjar Rasiya, Folk Songs and Digital Music Distribution.</p>
-                  <button class="btn-outline-sm">▶ LISTEN NOW</button>
-                  <div class="platform-icons"><span>YouTube</span><span>Spotify</span><span>JioSaavn</span><span>Apple Music</span><span>Wynk Music</span></div>
-                </div>
-              </div>
-              <div class="card-header mt"><h3>BANNERS</h3><button class="btn-outline" onclick="addBanner()">+ ADD NEW BANNER</button></div>
-              <table class="data-table">
-                <thead><tr><th>#</th><th>BANNER</th><th>TITLE</th><th>STATUS</th><th>SCHEDULE</th><th>ACTIONS</th></tr></thead>
-                <tbody id="bannerTable"></tbody>
-              </table>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>BANNER SETTINGS</h3></div>
-              <form id="bannerForm" class="form-compact">
-                <div class="form-group"><label>Banner Image</label><div class="image-upload" id="bannerImgUpload"><span>Click to upload or drag & drop</span><small>JPG, PNG or WebP. Max size 5MB.</small><input type="file" accept="image/*"></div><button type="button" class="btn-outline btn-sm mt">Upload Image</button></div>
-                <div class="form-group"><label>Banner Title</label><input type="text" id="bannerTitle" value="BAINSLA MUSIC PRIVATE LIMITED" maxlength="100"><small class="char-count">30/100</small></div>
-                <div class="form-group"><label>Banner Subtitle</label><input type="text" id="bannerSubtitle" value="India's Devotional, Folk & Rasiya Music Label" maxlength="100"><small class="char-count">45/100</small></div>
-                <div class="form-group"><label>Description</label><textarea id="bannerDesc" rows="3" maxlength="150">Devotional Bhajans, Gurjar Rasiya, Folk Songs and Digital Music Distribution.</textarea><small class="char-count">74/150</small></div>
-                <div class="form-group"><label>CTA Button Text</label><input type="text" id="bannerCTA" value="LISTEN NOW" maxlength="30"></div>
-                <div class="form-group"><label>CTA Button Link</label><input type="url" id="bannerLink" value="https://bainslamusic.com/releases"></div>
-                <div class="form-row"><div class="form-group"><label>Start Date</label><input type="date" value="2024-05-01"></div><div class="form-group"><label>End Date</label><input type="date" value="2024-12-31"></div></div>
-                <div class="form-group toggle-row"><label>Banner Status</label><label class="switch"><input type="checkbox" checked><span class="slider"></span></label><span>Active</span></div>
-                <div class="form-actions"><button type="button" class="btn-outline">CANCEL</button><button type="button" class="btn-primary" onclick="saveBanner()">SAVE CHANGES</button></div>
-              </form>
-            </div>
-          </div>
-        </section>
-
-        <!-- ARTISTS -->
-        <section id="sec-artists" class="section">
-          <div class="section-header">
-            <div><h1>Artists</h1><p>Manage and explore all artists associated with Bainsla Music Private Limited.</p></div>
-            <button class="btn-primary" onclick="showAddArtist()">+ ADD NEW ARTIST</button>
-          </div>
-          <div class="stats-grid stats-sm">
-            <div class="stat-card"><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div class="stat-info"><span class="stat-label">Total Artists</span><span class="stat-value">24</span></div></div>
-            <div class="stat-card"><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div><div class="stat-info"><span class="stat-label">Featured Artists</span><span class="stat-value">12</span></div></div>
-            <div class="stat-card"><div class="stat-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div><div class="stat-info"><span class="stat-label">Total Songs</span><span class="stat-value">128</span></div></div>
-            <div class="stat-card"><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div><div class="stat-info"><span class="stat-label">Active This Month</span><span class="stat-value">8</span></div></div>
-          </div>
-          <div class="card">
-            <div class="card-header">
-              <div class="search-bar"><input type="text" placeholder="Search artists by name, role, or genre..." id="artistSearch"><button class="btn-outline btn-sm">Search</button></div>
-              <div class="filter-group">
-                <select><option>All Roles</option><option>Singer</option><option>Producer</option><option>Lyricist</option><option>Composer</option></select>
-                <select><option>All Genres</option><option>Devotional</option><option>Rasiya</option><option>Folk</option><option>Bhajan</option></select>
-                <select><option>All Status</option><option>Active</option><option>Featured</option></select>
-              </div>
-            </div>
-            <div class="artists-grid" id="artistsGrid"></div>
-          </div>
-        </section>
-
-        <!-- RELEASES -->
-        <section id="sec-releases" class="section">
-          <div class="section-header"><div><h1>Releases</h1><p>Manage and upload your music releases.</p></div></div>
-          <div class="grid-2">
-            <div class="card">
-              <div class="card-header"><h3>ADD NEW RELEASE</h3></div>
-              <form class="form-compact" id="releaseForm">
-                <div class="form-group"><label>Release Title *</label><input type="text" placeholder="Enter release title" required></div>
-                <div class="form-group"><label>Artist *</label><select><option>Select or enter artist name</option><option>Bhumika Sharma</option><option>DG Mawai</option><option>Rashmi Nishad</option><option>Ajeet Bainsla</option></select></div>
-                <div class="form-group"><label>Singer *</label><input type="text" placeholder="Select or enter singer name"></div>
-                <div class="form-group"><label>Genre / Category *</label><select><option>Select genre or category</option><option>Krishna Bhajan</option><option>Radha Bhajan</option><option>Hanuman Bhajan</option><option>Ram Bhajan</option><option>Shiv Bhajan</option><option>Gurjar Rasiya</option><option>DJ Rasiya</option><option>Folk Songs</option></select></div>
-                <div class="form-group"><label>Release Date *</label><input type="date"></div>
-                <div class="form-row"><div class="form-group"><label>Cover Image *</label><div class="image-upload"><span>Upload Cover Image</span><small>JPG, PNG. Max. 5MB</small><input type="file" accept="image/*"></div></div><div class="form-group"><label>Audio File *</label><div class="image-upload"><span>Upload Audio File</span><small>MP3, WAV. Max. 50MB</small><input type="file" accept="audio/*"></div></div></div>
-                <div class="form-group"><label>Lyrics</label><textarea rows="3" placeholder="Enter lyrics here..." maxlength="5000"></textarea></div>
-                <div class="form-group"><label>ISRC / Catalogue Number</label><input type="text" placeholder="Enter ISRC or catalogue number"></div>
-                <div class="form-group"><label>Platform Links (Optional)</label><div class="platform-inputs"><input type="url" placeholder="YouTube link"><input type="url" placeholder="Spotify link"><input type="url" placeholder="Apple Music link"><input type="url" placeholder="JioSaavn link"><input type="url" placeholder="Wynk Music link"></div></div>
-                <div class="form-group"><label>Publish Status</label><div class="radio-group"><label><input type="radio" name="status" value="draft" checked> Draft</label><label><input type="radio" name="status" value="scheduled"> Scheduled</label><label><input type="radio" name="status" value="published"> Published</label></div></div>
-                <div class="form-actions"><button type="button" class="btn-outline">SAVE AS DRAFT</button><button type="button" class="btn-outline">SCHEDULE RELEASE</button><button type="button" class="btn-primary">PUBLISH NOW</button></div>
-              </form>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>RECENT RELEASES</h3><div class="search-bar sm"><input type="text" placeholder="Search releases..."></div></div>
-              <table class="data-table">
-                <thead><tr><th>COVER</th><th>TITLE</th><th>ARTIST</th><th>RELEASE DATE</th><th>STATUS</th><th>PLATFORMS</th><th>ACTIONS</th></tr></thead>
-                <tbody id="releasesTable"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- VIDEOS -->
-        <section id="sec-videos" class="section">
-          <div class="section-header"><div><h1>Videos</h1><p>Upload, manage and publish devotional music videos.</p></div><button class="btn-primary">+ UPLOAD NEW VIDEO</button></div>
-          <div class="card">
-            <div class="card-header"><h3>UPLOAD / PUBLISH NEW VIDEO</h3></div>
-            <div class="grid-3 form-grid">
-              <div class="form-group"><label>VIDEO THUMBNAIL *</label><div class="image-upload tall"><span>Click to upload thumbnail</span><small>Recommended: 1280x720px (16:9)<br>Max size: 2MB (JPG, PNG)</small><input type="file" accept="image/*"></div><div class="yt-notice"><svg viewBox="0 0 24 24" fill="currentColor" class="yt-icon"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg><span>Video will be published on YouTube.<br>Make sure video is already uploaded to your YouTube channel.</span></div></div>
-              <div><div class="form-group"><label>VIDEO TITLE *</label><input type="text" placeholder="Enter video title"></div><div class="form-group"><label>YOUTUBE VIDEO URL *</label><input type="url" placeholder="https://www.youtube.com/watch?v=xxxxxxxxx"><small>Paste the public YouTube video URL.</small></div><div class="form-group"><label>CATEGORY *</label><select><option>Select Category</option><option>Krishna Bhajan</option><option>Radha Bhajan</option><option>Hanuman Bhajan</option><option>Guru Bhajan</option><option>Gurjar Rasiya</option><option>DJ Rasiya</option></select></div><div class="form-group"><label>PLAYLIST</label><select><option>Select Playlist (Optional)</option></select></div></div>
-              <div><div class="form-group"><label>DESCRIPTION</label><textarea rows="4" placeholder="Enter video description..."></textarea></div><div class="form-group"><label>TAGS</label><input type="text" placeholder="Enter tags and press Enter"><div class="tag-list"><span class="tag">devotional ×</span><span class="tag">bhajan ×</span><span class="tag">krishna ×</span><span class="tag">radha ×</span></div></div><div class="form-group"><label>SCHEDULE PUBLISH</label><input type="datetime-local"></div><div class="form-group toggle-row"><label>FEATURED VIDEO</label><label class="switch"><input type="checkbox"><span class="slider"></span></label></div><div class="form-group"><label>STATUS</label><select><option>Draft</option><option>Published</option><option>Scheduled</option></select></div><div class="form-actions"><button type="button" class="btn-outline">RESET</button><button type="button" class="btn-primary">PUBLISH VIDEO</button></div></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><h3>VIDEO LIBRARY</h3><p class="sub">Manage and monitor all your uploaded videos.</p><div class="search-bar sm"><input type="text" placeholder="Search videos..."><button class="btn-outline btn-sm">FILTER</button></div></div>
-            <table class="data-table">
-              <thead><tr><th>#</th><th>THUMBNAIL</th><th>TITLE</th><th>CATEGORY</th><th>DURATION</th><th>VIEWS</th><th>PUBLISHED ON</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
-              <tbody id="videoTable"></tbody>
-            </table>
-            <div class="stats-grid stats-bottom">
-              <div class="stat-card sm"><div class="stat-info"><span class="stat-label">TOTAL VIDEOS</span><span class="stat-value sm">24</span><span class="stat-desc">All uploaded videos</span></div></div>
-              <div class="stat-card sm"><div class="stat-info"><span class="stat-label">PUBLISHED</span><span class="stat-value sm green">18</span><span class="stat-desc">Live on website</span></div></div>
-              <div class="stat-card sm"><div class="stat-info"><span class="stat-label">DRAFTS</span><span class="stat-value sm yellow">3</span><span class="stat-desc">Saved as draft</span></div></div>
-              <div class="stat-card sm"><div class="stat-info"><span class="stat-label">SCHEDULED</span><span class="stat-value sm blue">2</span><span class="stat-desc">Scheduled to publish</span></div></div>
-              <div class="stat-card sm"><div class="stat-info"><span class="stat-label">TOTAL VIEWS</span><span class="stat-value sm">8.2M</span><span class="stat-desc">Across all videos</span></div></div>
-            </div>
-          </div>
-        </section>
-
-        <!-- CATALOGUE -->
-        <section id="sec-catalogue" class="section">
-          <div class="section-header"><div><h1>🎵 Music Catalogue</h1><p>Dashboard &gt; Music Catalogue</p></div><button class="btn-primary">+ Add New Song</button></div>
-          <div class="grid-3">
-            <div class="card"><div class="card-header"><h3>BULK UPLOAD / IMPORT</h3></div><p class="card-desc">Upload multiple songs, or import from external sources.</p><div class="image-upload"><span>Drag & Drop files here<br>or click to browse</span><small>Supports: MP3, WAV, FLAC | Max 2GB per file</small><input type="file" accept="audio/*" multiple></div><div class="form-actions mt"><button class="btn-primary">UPLOAD FILES</button><button class="btn-outline">IMPORT CSV</button></div><a href="#" class="link-sm">Download Sample CSV</a></div>
-            <div class="card"><div class="card-header"><h3>CATEGORIES</h3></div><div class="category-grid" id="categoryGrid"></div><a href="#" class="link-sm">View All Categories</a></div>
-            <div class="card"><div class="card-header"><h3>PLAYLISTS / COLLECTIONS</h3><button class="btn-outline btn-sm">Manage Collections</button></div><div id="playlistList" class="playlist-list"></div><a href="#" class="link-sm">+ Create New Collection</a></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="search-bar"><input type="text" placeholder="Search songs..."></div><div class="filter-group"><select><option>All Categories</option></select><select><option>All Artists</option></select><select><option>All Status</option></select><button class="btn-outline btn-sm">FILTERS</button><button class="btn-outline btn-sm">RESET</button></div></div>
-            <table class="data-table">
-              <thead><tr><th>#</th><th>SONG TITLE</th><th>ARTIST</th><th>ALBUM</th><th>DURATION</th><th>PLATFORMS</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
-              <tbody id="catalogueTable"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- LICENSING -->
-        <section id="sec-licensing" class="section">
-          <div class="section-header"><div><h1>LICENSING MANAGEMENT</h1><p>Manage licensing inquiries, copyright requests, and content usage permissions.</p></div></div>
-          <div class="stats-grid stats-sm">
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">Total Inquiries</span><span class="stat-value">128</span><span class="stat-change up">+18% this month</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">Active Requests</span><span class="stat-value">42</span><span class="stat-change up">+12% this month</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">Approved Licenses</span><span class="stat-value">76</span><span class="stat-change up">+22% this month</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">Copyright Claims</span><span class="stat-value">14</span><span class="stat-change up">+7% this month</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">Revenue (YTD)</span><span class="stat-value">₹18.75L</span><span class="stat-change up">+28% this year</span></div></div>
-          </div>
-          <div class="card">
-            <div class="tabs"><button class="tab active">LICENSING INQUIRY</button><button class="tab">COPYRIGHT CLAIMS</button><button class="tab">PERMISSIONS</button><button class="tab">LICENSE HISTORY</button><button class="tab">REPORTS</button></div>
-            <div class="grid-2">
-              <form class="form-compact">
-                <h3>CLIENT / COMPANY DETAILS</h3>
-                <div class="form-group"><label>Full Name / Company *</label><input type="text" placeholder="Enter name or company"></div>
-                <div class="form-group"><label>Contact Person *</label><input type="text" placeholder="Enter contact person name"></div>
-                <div class="form-group"><label>Email Address *</label><input type="email" placeholder="Enter email address"></div>
-                <div class="form-group"><label>Phone Number *</label><input type="tel" placeholder="Enter phone number"></div>
-                <div class="form-group"><label>Company / Organization</label><input type="text" placeholder="Enter company / organization"></div>
-                <div class="form-group"><label>Country *</label><select><option>Select Country</option><option>India</option></select></div>
-              </form>
-              <div>
-                <h3>CONTENT & USAGE DETAILS</h3>
-                <form class="form-compact">
-                  <div class="form-group"><label>Select Song / Content *</label><select><option>Select Song</option></select></div>
-                  <div class="form-group"><label>License Type *</label><select><option>Select License Type</option><option>Synchronization</option><option>Broadcast</option><option>Digital</option><option>Mechanical</option></select></div>
-                  <div class="form-group"><label>Usage Type *</label><select><option>Select Usage Type</option><option>Music Video</option><option>TV Program</option><option>Film</option><option>YouTube</option><option>Commercial</option></select></div>
-                  <div class="form-group"><label>Planned Start Date *</label><input type="date"></div>
-                  <div class="form-group"><label>Project / Purpose *</label><textarea rows="3" placeholder="Enter project or purpose details"></textarea></div>
-                  <button type="button" class="btn-primary">SUBMIT INQUIRY</button>
-                </form>
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><h3>RECENT LICENSING REQUESTS</h3></div>
-            <table class="data-table">
-              <thead><tr><th>ID</th><th>Client / Company</th><th>Content / Song</th><th>License Type</th><th>Usage</th><th>Territory</th><th>Status</th><th>Assigned To</th><th>Date</th><th>Action</th></tr></thead>
-              <tbody id="licensingTable"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- DISTRIBUTION -->
-        <section id="sec-distribution" class="section">
-          <div class="section-header"><div><h1>Distribution Overview</h1><p>Manage and monitor your music distribution across all platforms.</p></div></div>
-          <div class="stats-grid stats-sm">
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">TOTAL RELEASES DISTRIBUTED</span><span class="stat-value">128</span><span class="stat-change up">+18 this month</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">TOTAL PLATFORMS</span><span class="stat-value">12</span><span class="stat-desc">Active Platforms</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">TOTAL TRACKS DELIVERED</span><span class="stat-value">546</span><span class="stat-change up">+72 this month</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">SUCCESSFUL DELIVERIES</span><span class="stat-value">512</span><span class="stat-desc">93.77% Success Rate</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">PENDING DELIVERIES</span><span class="stat-value">34</span><span class="stat-desc">In Progress</span></div></div>
-          </div>
-          <div class="grid-3">
-            <div class="card"><div class="card-header"><h3>PLATFORM DELIVERY STATUS</h3></div><div id="platformStatus"></div></div>
-            <div class="card"><div class="card-header"><h3>RELEASE QUEUE</h3></div><div id="releaseQueue"></div></div>
-            <div class="card"><div class="card-header"><h3>UPLOAD PACKAGE CHECKLIST</h3></div><div id="uploadChecklist"></div></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><h3>DISTRIBUTION HISTORY</h3><div class="search-bar sm"><input type="text" placeholder="Search releases..."></div></div>
-            <table class="data-table">
-              <thead><tr><th>#</th><th>RELEASE TITLE</th><th>ARTIST</th><th>PLATFORMS</th><th>RELEASE DATE</th><th>STATUS</th><th>DELIVERY %</th><th>EARNINGS</th><th>ACTIONS</th></tr></thead>
-              <tbody id="distTable"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- INQUIRIES -->
-        <section id="sec-inquiries" class="section">
-          <div class="section-header"><div><h1>CONTACT INQUIRIES</h1><p>Manage and respond to all contact inquiries from artists, collaborators, and businesses.</p></div></div>
-          <div class="tabs">
-            <button class="tab active">All Inquiries <span class="badge">128</span></button>
-            <button class="tab">Licensing <span class="badge">42</span></button>
-            <button class="tab">Collaboration <span class="badge">31</span></button>
-            <button class="tab">CMS / Distribution <span class="badge">27</span></button>
-            <button class="tab">General Contact <span class="badge">28</span></button>
-          </div>
-          <div class="grid-inquiry">
-            <div class="card">
-              <div class="card-header"><h3>INQUIRY LIST</h3></div>
-              <table class="data-table">
-                <thead><tr><th>NAME</th><th>EMAIL</th><th>INQUIRY TYPE</th><th>MESSAGE PREVIEW</th><th>ASSIGNED TO</th><th>STATUS</th><th>DATE</th><th>ACTION</th></tr></thead>
-                <tbody id="inquiryTable"></tbody>
-              </table>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>INQUIRY DETAILS & REPLY</h3></div>
-              <div id="inquiryDetail">
-                <p class="no-data">Select an inquiry to view details</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ANALYTICS -->
-        <section id="sec-analytics" class="section">
-          <div class="section-header"><div><h1>Analytics Overview</h1><p>Track performance, audience insights and content growth across all platforms.</p></div></div>
-          <div class="stats-grid stats-sm">
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">Total Views</span><span class="stat-value">12.84M</span><span class="stat-change up">↑ 18.6%</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">Subscribers</span><span class="stat-value">256K</span><span class="stat-change up">↑ 14.2%</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">Watch Time (Hours)</span><span class="stat-value">1.92M</span><span class="stat-change up">↑ 22.7%</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">Total Releases</span><span class="stat-value">48</span><span class="stat-change up">↑ 9.1%</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">Engagement Rate</span><span class="stat-value">6.74%</span><span class="stat-change up">↑ 8.3%</span></div></div>
-            <div class="stat-card"><div class="stat-info"><span class="stat-label">Total Revenue</span><span class="stat-value">₹18.7L</span><span class="stat-change up">↑ 16.5%</span></div></div>
-          </div>
-          <div class="grid-3">
-            <div class="card"><div class="card-header"><h3>YouTube Views</h3></div><div class="big-stat">8.65M<span class="stat-change up">↑ 17.4%</span></div><div class="chart-placeholder lg"><div class="chart-bar" style="height:40%"></div><div class="chart-bar" style="height:55%"></div><div class="chart-bar" style="height:70%"></div><div class="chart-bar" style="height:50%"></div><div class="chart-bar" style="height:85%"></div><div class="chart-bar" style="height:65%"></div><div class="chart-bar" style="height:95%"></div></div></div>
-            <div class="card"><div class="card-header"><h3>Subscribers Growth</h3></div><div class="big-stat">256K<span class="stat-change up">↑ 14.2%</span></div><div class="chart-placeholder lg"><div class="chart-bar" style="height:30%"></div><div class="chart-bar" style="height:45%"></div><div class="chart-bar" style="height:55%"></div><div class="chart-bar" style="height:60%"></div><div class="chart-bar" style="height:70%"></div><div class="chart-bar" style="height:75%"></div><div class="chart-bar" style="height:85%"></div></div></div>
-            <div class="card"><div class="card-header"><h3>Watch Time (Hours)</h3></div><div class="big-stat">1.92M<span class="stat-change up">↑ 22.7%</span></div><div class="chart-placeholder lg"><div class="chart-bar" style="height:50%"></div><div class="chart-bar" style="height:60%"></div><div class="chart-bar" style="height:45%"></div><div class="chart-bar" style="height:75%"></div><div class="chart-bar" style="height:90%"></div><div class="chart-bar" style="height:70%"></div><div class="chart-bar" style="height:80%"></div></div></div>
-          </div>
-          <div class="grid-3">
-            <div class="card"><div class="card-header"><h3>Top Performing Songs</h3></div><div class="top-list" id="topSongs"></div></div>
-            <div class="card"><div class="card-header"><h3>Top Videos</h3></div><div class="top-list" id="topVideos"></div></div>
-            <div class="card"><div class="card-header"><h3>Top Locations</h3></div><div class="top-list" id="topLocations"></div></div>
-          </div>
-        </section>
-
-        <!-- SETTINGS -->
-        <section id="sec-settings" class="section">
-          <div class="section-header"><div><h1 class="text-gold">Settings</h1><p>Manage your website, system preferences and security settings.</p></div><button class="btn-primary" onclick="saveAllSettings()">SAVE ALL CHANGES</button></div>
-          <div class="grid-3">
-            <div class="card"><div class="card-header"><h3>📋 Company Profile</h3></div><form class="form-compact"><div class="form-group"><label>Company Name</label><input type="text" id="setCompany" value="Bainsla Music Private Limited"></div><div class="form-group"><label>Tagline</label><input type="text" id="setTagline" value="India's Devotional, Folk & Rasiya Music Label"></div><div class="form-group"><label>Description</label><textarea id="setDesc" rows="3">Devotional Bhajans, Gurjar Rasiya, Folk Songs and Digital Music Distribution.</textarea></div><button type="button" class="btn-primary" onclick="saveSettings()">SAVE CHANGES</button></form></div>
-            <div class="card"><div class="card-header"><h3>📞 Contact Details</h3></div><form class="form-compact"><div class="form-group"><label>Address</label><input type="text" id="setAddress" value="Jaipur, Rajasthan, India"></div><div class="form-group"><label>Phone</label><input type="tel" id="setPhone" value="+91 72978 97628"></div><div class="form-group"><label>Email</label><input type="email" id="setEmail" value="bainslamusiccompany@gmail.com"></div><button type="button" class="btn-primary" onclick="saveSettings()">SAVE CHANGES</button></form></div>
-            <div class="card"><div class="card-header"><h3>🖼 Logo & Brand</h3></div><div class="logo-preview"><div class="current-logo"><svg viewBox="0 0 24 24" fill="currentColor" class="logo-icon-lg"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg><div>BAINSLA<br>MUSIC<br><small>PRIVATE LIMITED</small></div></div><div class="image-upload"><span>Upload New Logo</span><small>PNG, JPG, or SVG (Max. 2MB)</small><input type="file" accept="image/*"></div><button type="button" class="btn-primary">SAVE CHANGES</button></div></div>
-          </div>
-          <div class="grid-3">
-            <div class="card"><div class="card-header"><h3>🔗 Social Media Links</h3></div><form class="form-compact"><div class="social-input"><span class="si-icon yt">YT</span><input type="url" id="setYoutube" value="https://youtube.com/@bainslamusic"></div><div class="social-input"><span class="si-icon ig">IG</span><input type="url" id="setInsta" value="https://instagram.com/bainslamusic"></div><div class="social-input"><span class="si-icon fb">FB</span><input type="url" id="setFb" value="https://facebook.com/bainslamusic"></div><div class="social-input"><span class="si-icon wa">WA</span><input type="url" id="setWhatsapp" value="https://wa.me/917297897628"></div><button type="button" class="btn-primary" onclick="saveSettings()">SAVE CHANGES</button></form></div>
-            <div class="card"><div class="card-header"><h3>🔍 SEO Settings</h3></div><form class="form-compact"><div class="form-group"><label>Site Title</label><input type="text" value="Bainsla Music Private Limited"></div><div class="form-group"><label>Meta Description</label><textarea rows="2">India's Devotional, Folk & Rasiya Music Label. Listen to the latest Bhajans, Gurjar Rasiya & Folk Songs.</textarea></div><div class="form-group"><label>Keywords</label><input type="text" value="bainsla music, bhajan, rasiya, folk songs, devotional music"></div><button type="button" class="btn-primary" onclick="saveSettings()">SAVE CHANGES</button></form></div>
-            <div class="card"><div class="card-header"><h3>🔒 Password / Security Settings</h3></div><form class="form-compact"><div class="form-group"><label>Current Password</label><input type="password" placeholder="Enter current password"></div><div class="form-group"><label>New Password</label><input type="password" placeholder="Enter new password"></div><div class="form-group"><label>Confirm Password</label><input type="password" placeholder="Confirm new password"></div><button type="button" class="btn-primary">UPDATE PASSWORD</button></form></div>
-          </div>
-          <div class="grid-3">
-            <div class="card"><div class="card-header"><h3>📝 Website Footer Details</h3></div><form class="form-compact"><div class="form-group"><label>Footer About Text</label><textarea rows="3">Bainsla Music Private Limited is India's leading Devotional, Folk & Rasiya music label dedicated to preserving and promoting Indian cultural music.</textarea></div><div class="form-group"><label>Footer Copyright Text</label><input type="text" value="© 2024 Bainsla Music Private Limited. All Rights Reserved."></div><button type="button" class="btn-primary" onclick="saveSettings()">SAVE CHANGES</button></form></div>
-            <div class="card"><div class="card-header"><h3>👥 User Roles & Permissions</h3></div><table class="data-table sm"><thead><tr><th>Role</th><th>Permissions</th><th></th></tr></thead><tbody><tr><td>Administrator</td><td>Full Access</td><td><button class="btn-icon">✏️</button></td></tr><tr><td>Editor</td><td>Content Management</td><td><button class="btn-icon">✏️</button></td></tr><tr><td>Artist Manager</td><td>Manage Artists & Releases</td><td><button class="btn-icon">✏️</button></td></tr><tr><td>Viewer</td><td>View Only</td><td><button class="btn-icon">✏️</button></td></tr></tbody></table><button class="btn-outline btn-sm mt">+ ADD NEW ROLE</button></div>
-            <div class="card security-info"><div class="security-item"><span class="sec-icon">🔐</span><div><strong>Security Tip</strong><p>Keep your password strong and change it regularly to protect your account.</p></div></div><div class="security-item"><span class="sec-icon">🕐</span><div><strong>Last Login</strong><p>May 21, 2024 10:30 AM<br>IP: 103.245.*****</p></div></div><div class="security-item"><span class="sec-icon">📅</span><div><strong>Account Created</strong><p>January 15, 2024</p></div></div></div>
-          </div>
-        </section>
-      </div>
-
-      <!-- Footer -->
-      <footer class="dash-footer">
-        <div class="footer-grid">
-          <div class="footer-col"><div class="footer-logo"><svg viewBox="0 0 24 24" fill="currentColor" class="logo-icon-sm"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg><div><span class="brand-sm">BAINSLA</span><span class="sub-sm">MUSIC <small>PRIVATE LIMITED</small></span></div></div></div>
-          <div class="footer-col"><h4>QUICK LINKS</h4><div class="footer-links"><a href="/">Home</a><a href="#" data-section="artists">Artists</a><a href="#" data-section="releases">Releases</a><a href="#" data-section="videos">Videos</a><a href="#" data-section="catalogue">Catalogue</a><a href="#" data-section="licensing">Licensing</a><a href="#" data-section="inquiries">Contact</a></div></div>
-          <div class="footer-col"><h4>COMPANY</h4><div class="footer-links"><a href="#">About Bainsla Music</a><a href="#">Our Mission</a><a href="#">Privacy Policy</a><a href="#">Terms & Conditions</a></div></div>
-          <div class="footer-col"><h4>CONTACT US</h4><p>Jaipur, Rajasthan, India</p><p>+91 72978 97628</p><p>bainslamusiccompany@gmail.com</p><div class="footer-social"><a href="https://youtube.com/@bainslaofficial" target="_blank" class="social-yt-sm">YT</a><a href="https://instagram.com/bainslamusic" target="_blank" class="social-ig-sm">IG</a><a href="https://facebook.com/bainslamusic" target="_blank" class="social-fb-sm">FB</a><a href="https://wa.me/917297897628" target="_blank" class="social-wa-sm">WA</a></div></div>
-          <div class="footer-col"><h4>FOLLOW US</h4><div class="footer-social lg"><a href="https://youtube.com/@bainslaofficial" target="_blank" class="social-yt">YT</a><a href="https://instagram.com/bainslamusic" target="_blank" class="social-ig">IG</a><a href="https://facebook.com/bainslamusic" target="_blank" class="social-fb">FB</a><a href="https://wa.me/917297897628" target="_blank" class="social-wa">WA</a></div></div>
-        </div>
-        <div class="footer-bottom">&copy; 2024 Bainsla Music Private Limited. All Rights Reserved.</div>
-      </footer>
-    </main>
-  </div>
-
-  <script src="dashboard.js"></script>
+<script src="dashboard.js"></script>
 </body>
 </html>
