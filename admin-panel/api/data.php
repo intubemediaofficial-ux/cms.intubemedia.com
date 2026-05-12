@@ -1,87 +1,76 @@
 <?php
 require_once 'config.php';
 
-$method = $_SERVER['REQUEST_METHOD'];
-$section = $_GET['section'] ?? null;
-$id = $_GET['id'] ?? null;
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit; }
 
-if ($method === 'GET') {
-    $data = getData();
-    if ($section && isset($data[$section])) {
-        jsonResponse($data[$section]);
-    } elseif ($section) {
-        jsonResponse(['error' => 'Section not found'], 404);
-    } else {
-        jsonResponse($data);
-    }
+$method = $_SERVER['REQUEST_METHOD'];
+$section = $_GET['section'] ?? '';
+
+if ($method === 'GET' && $section === 'public') {
+    $data = readData();
+    jsonResponse($data);
 }
 
 requireAuth();
 
-if ($method === 'PUT' || $method === 'POST') {
-    $input = json_decode(file_get_contents('php://input'), true);
-    $data = getData();
-
-    if (!$section) {
-        jsonResponse(['error' => 'Section parameter required'], 400);
-    }
-
-    if ($section === 'settings' || $section === 'stats') {
-        $data[$section] = $input;
-        saveData($data);
-        jsonResponse(['success' => true, 'message' => ucfirst($section) . ' updated']);
-    }
-
-    if (!isset($data[$section])) {
-        $data[$section] = [];
-    }
-
-    if ($method === 'POST') {
-        $maxId = 0;
-        foreach ($data[$section] as $item) {
-            if (isset($item['id']) && $item['id'] > $maxId) {
-                $maxId = $item['id'];
-            }
+switch ($method) {
+    case 'GET':
+        $data = readData();
+        if ($section && isset($data[$section])) {
+            jsonResponse($data[$section]);
         }
-        $input['id'] = $maxId + 1;
-        $data[$section][] = $input;
-        saveData($data);
-        jsonResponse(['success' => true, 'message' => 'Item added', 'id' => $input['id']], 201);
-    }
+        jsonResponse($data);
+        break;
 
-    if ($method === 'PUT' && $id) {
-        foreach ($data[$section] as &$item) {
-            if (isset($item['id']) && $item['id'] == $id) {
-                $input['id'] = (int)$id;
-                $item = $input;
-                saveData($data);
-                jsonResponse(['success' => true, 'message' => 'Item updated']);
+    case 'POST':
+        $data = readData();
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!$section || !$input) {
+            jsonResponse(['error' => 'Missing section or data'], 400);
+        }
+        if (!isset($data[$section])) $data[$section] = [];
+        $input['id'] = uniqid();
+        $input['created_at'] = date('Y-m-d H:i:s');
+        $data[$section][] = $input;
+        writeData($data);
+        jsonResponse(['success' => true, 'id' => $input['id']]);
+        break;
+
+    case 'PUT':
+        $data = readData();
+        $input = json_decode(file_get_contents('php://input'), true);
+        $id = $_GET['id'] ?? '';
+        if (!$section || !$input || !$id) {
+            jsonResponse(['error' => 'Missing section, id or data'], 400);
+        }
+        if (isset($data[$section])) {
+            foreach ($data[$section] as $i => $item) {
+                if (($item['id'] ?? '') === $id) {
+                    $data[$section][$i] = array_merge($item, $input);
+                    writeData($data);
+                    jsonResponse(['success' => true]);
+                }
             }
         }
         jsonResponse(['error' => 'Item not found'], 404);
-    }
+        break;
 
-    if ($method === 'PUT' && !$id) {
-        $data[$section] = $input;
-        saveData($data);
-        jsonResponse(['success' => true, 'message' => ucfirst($section) . ' updated']);
-    }
-}
-
-if ($method === 'DELETE') {
-    requireAuth();
-    if (!$section || !$id) {
-        jsonResponse(['error' => 'Section and ID required'], 400);
-    }
-    $data = getData();
-    if (!isset($data[$section])) {
+    case 'DELETE':
+        $data = readData();
+        $id = $_GET['id'] ?? '';
+        if (!$section || !$id) {
+            jsonResponse(['error' => 'Missing section or id'], 400);
+        }
+        if (isset($data[$section])) {
+            $data[$section] = array_values(array_filter($data[$section], function($item) use ($id) {
+                return ($item['id'] ?? '') !== $id;
+            }));
+            writeData($data);
+            jsonResponse(['success' => true]);
+        }
         jsonResponse(['error' => 'Section not found'], 404);
-    }
-    $data[$section] = array_values(array_filter($data[$section], function($item) use ($id) {
-        return !isset($item['id']) || $item['id'] != $id;
-    }));
-    saveData($data);
-    jsonResponse(['success' => true, 'message' => 'Item deleted']);
-}
+        break;
 
-jsonResponse(['error' => 'Method not allowed'], 405);
+    default:
+        jsonResponse(['error' => 'Method not allowed'], 405);
+}

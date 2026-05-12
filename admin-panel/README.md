@@ -1,63 +1,47 @@
-# Bainsla Music - Admin Panel
+# Bainsla Music Admin Panel
 
-PHP-based admin panel for managing the Bainsla Music website content.
+Admin dashboard for managing the Bainsla Music Private Limited website.
 
-## Login Credentials
+## Access
 
-- **URL:** https://bainslamusic.com/admin/
+- **URL:** `https://bainslamusic.com/admin/`
 - **Username:** `admin`
 - **Password:** `Bainsla@2024`
 
 ## Features
 
-- **Hero Slides** - Add/Edit/Delete hero slideshow videos
-- **Videos** - Manage trending videos (YouTube links)
-- **Services** - Add/Edit/Delete services
-- **Partner Channels** - Manage YouTube channel list
-- **Directors** - Manage team members
-- **Testimonials** - Manage artist reviews
-- **Stats** - Update website statistics (Years, Videos, Artists, Views)
-- **Settings** - Update company info, phone, email, address, social links
+- **Dashboard** — Overview with stats, recent releases, artist management, video performance, inquiries
+- **Home Banner** — Manage homepage hero banners with live preview
+- **Artists** — Add/edit/delete artists with profiles, social links, top songs
+- **Releases** — Upload new releases with cover images, platform links, ISRC codes
+- **Videos** — Manage YouTube videos with thumbnails, categories, scheduling
+- **Music Catalogue** — Category-wise song management, bulk upload, playlists
+- **Licensing** — Manage licensing inquiries, copyright claims, permissions
+- **Distribution** — Monitor platform delivery status, release queue, checklists
+- **Contact Inquiries** — View and reply to contact form submissions
+- **Analytics** — YouTube views, subscribers, watch time, top songs/videos/locations
+- **Settings** — Company profile, contact details, logo, social media, SEO, security
 
-## Folder Structure
+## Deployment
 
-```
-admin-panel/
-├── admin/          # Admin panel UI
-│   ├── index.html  # Admin dashboard
-│   ├── admin.css   # Styles
-│   └── admin.js    # Admin logic
-├── api/            # PHP API endpoints
-│   ├── config.php  # Configuration & auth
-│   ├── login.php   # Login/session check
-│   ├── logout.php  # Logout
-│   ├── data.php    # CRUD operations
-│   └── frontend-data.php  # Public data endpoint
-├── data/           # Data storage
-│   └── content.json  # Website content
-├── dynamic-loader.js  # Frontend content loader
-└── README.md
-```
+Upload the `admin-panel` contents to Hostinger `public_html`:
 
-## Deployment to Hostinger
-
-Upload the following to `public_html/`:
 ```
 public_html/
-├── admin/       ← from admin-panel/admin/
-├── api/         ← from admin-panel/api/
-├── data/        ← from admin-panel/data/
-├── dynamic-loader.js  ← from admin-panel/
-├── index.html   ← (existing website)
-├── _next/       ← (existing assets)
-└── favicon.ico  ← (existing)
+├── admin/
+│   ├── index.html
+│   ├── dashboard.css
+│   └── dashboard.js
+├── api/
+│   ├── config.php
+│   ├── data.php
+│   ├── frontend-data.php
+│   ├── login.php
+│   └── logout.php
+├── data/
+│   ├── .htaccess
+│   └── content.json
+└── dynamic-loader.js
 ```
 
-Make sure `data/` folder has write permissions (chmod 755 or 775).
-
-## Changing Admin Password
-
-Edit `api/config.php` and change:
-```php
-define('ADMIN_PASSWORD', 'YourNewPassword');
-```
+Set `data/` folder permissions to 755.
