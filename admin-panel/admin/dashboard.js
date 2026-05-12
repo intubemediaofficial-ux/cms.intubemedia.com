@@ -108,7 +108,8 @@ const SECTION_META = {
   distribution: { title: 'Distribution Overview', subtitle: 'Manage and monitor your music distribution across all platforms.' },
   inquiries: { title: 'Contact Inquiries', subtitle: 'View and manage contact form submissions.' },
   analytics: { title: 'Analytics Overview', subtitle: 'Track performance, audience insights and content growth across all platforms.' },
-  settings: { title: '⚙️ Settings', subtitle: 'Manage company information, contact details, and social links.' }
+  settings: { title: '⚙️ Settings', subtitle: 'Manage company information, contact details, and social links.' },
+  directors: { title: 'Directors & Team', subtitle: 'Manage company directors, leadership team and their profiles.' }
 };
 
 function showSection(s) {
@@ -128,6 +129,7 @@ function showSection(s) {
     case 'inquiries': renderInquiries(area); break;
     case 'analytics': renderAnalytics(area); break;
     case 'settings': renderSettings(area); break;
+    case 'directors': renderDirectors(area); break;
   }
 }
 
@@ -1673,6 +1675,7 @@ function renderSettings(area) {
           <div class="panel-body">
             ${field('Phone', 'phone', s.phone, 'tel')}
             ${field('Email', 'email', s.email, 'email')}
+            ${field('Support Email', 'support_email', s.support_email, 'email')}
             ${field('WhatsApp (without +)', 'whatsapp', s.whatsapp)}
             ${textareaField('Address', 'address', s.address, 'Enter address...')}
           </div>
@@ -1714,5 +1717,103 @@ function renderSettings(area) {
     await api('POST', 'settings', obj);
     toast('Settings saved');
     await loadData();
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   12. DIRECTORS & TEAM
+   ═══════════════════════════════════════════════ */
+function renderDirectors(area) {
+  const directors = DATA.directors || [];
+  area.innerHTML = `
+    <div class="grid-2" style="margin-bottom:20px">
+      <div class="panel" style="grid-column:1/-1">
+        <div class="panel-header"><h2>Company Directors & Leadership</h2><button class="btn btn-primary btn-sm" id="addDirectorBtn">+ Add Director</button></div>
+        <div class="panel-body">
+          <div class="grid-3">
+            ${directors.map(d => `
+              <div class="artist-card" style="position:relative">
+                <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:2">
+                  <button class="btn btn-outline btn-sm edit-director-btn" data-id="${d.id}" style="padding:4px 8px;font-size:10px">✏ Edit</button>
+                  <button class="btn btn-outline btn-sm delete-director-btn" data-id="${d.id}" style="padding:4px 8px;font-size:10px;border-color:#ef4444;color:#ef4444">✕ Delete</button>
+                </div>
+                ${d.image ? `<img src="${d.image}" class="artist-img" alt="${d.name}">` : '<div class="artist-img" style="background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:32px">👤</div>'}
+                <div class="artist-name">${d.name || ''}</div>
+                <div class="artist-role">${d.role || ''}</div>
+                <div style="font-size:11px;color:#888;margin-top:6px;padding:0 12px">${d.description || ''}</div>
+                <div class="artist-social" style="margin-top:8px">
+                  ${d.youtube_url ? `<a href="${d.youtube_url}" target="_blank" class="platform-icon pi-yt">▶</a>` : ''}
+                  ${d.instagram_url ? `<a href="${d.instagram_url}" target="_blank" class="platform-icon" style="background:#e1306c">📷</a>` : ''}
+                  ${d.facebook_url ? `<a href="${d.facebook_url}" target="_blank" class="platform-icon" style="background:#1877f2">f</a>` : ''}
+                  ${d.linkedin_url ? `<a href="${d.linkedin_url}" target="_blank" class="platform-icon" style="background:#0077b5">in</a>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          ${directors.length === 0 ? '<p style="color:#666;text-align:center;padding:40px">No directors added yet. Click "+ Add Director" to add your first director.</p>' : ''}
+        </div>
+      </div>
+    </div>`;
+
+  // Add Director
+  document.getElementById('addDirectorBtn').addEventListener('click', () => {
+    showModal('Add Director', `<form>
+      ${imageUploadField('Director Photo', 'image', '', 'artists')}
+      ${field('Full Name', 'name', '', 'text', true)}
+      ${field('Designation / Role', 'role', '', 'text', true)}
+      ${textareaField('Bio / Description', 'description', '', 'Write a short bio...')}
+      ${field('Phone', 'phone', '', 'tel')}
+      ${field('Email', 'email', '', 'email')}
+      <div class="form-group"><label style="color:#f59e0b;font-weight:700">Social Media Links</label></div>
+      ${field('YouTube URL', 'youtube_url', '', 'url')}
+      ${field('Instagram URL', 'instagram_url', '', 'url')}
+      ${field('Facebook URL', 'facebook_url', '', 'url')}
+      ${field('LinkedIn URL', 'linkedin_url', '', 'url')}
+      ${formActions()}
+    </form>`, async (obj) => {
+      await api('POST', 'directors', obj);
+      toast('Director added');
+      await loadData();
+      showSection('directors');
+    });
+  });
+
+  // Edit Director
+  document.querySelectorAll('.edit-director-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const d = (DATA.directors || []).find(x => x.id === id);
+      if (!d) return;
+      showModal('Edit Director', `<form>
+        ${imageUploadField('Director Photo', 'image', d.image || '', 'artists')}
+        ${field('Full Name', 'name', d.name, 'text', true)}
+        ${field('Designation / Role', 'role', d.role, 'text', true)}
+        ${textareaField('Bio / Description', 'description', d.description || '', 'Write a short bio...')}
+        ${field('Phone', 'phone', d.phone || '', 'tel')}
+        ${field('Email', 'email', d.email || '', 'email')}
+        <div class="form-group"><label style="color:#f59e0b;font-weight:700">Social Media Links</label></div>
+        ${field('YouTube URL', 'youtube_url', d.youtube_url || '', 'url')}
+        ${field('Instagram URL', 'instagram_url', d.instagram_url || '', 'url')}
+        ${field('Facebook URL', 'facebook_url', d.facebook_url || '', 'url')}
+        ${field('LinkedIn URL', 'linkedin_url', d.linkedin_url || '', 'url')}
+        ${formActions()}
+      </form>`, async (obj) => {
+        await api('PUT', 'directors', obj, id);
+        toast('Director updated');
+        await loadData();
+        showSection('directors');
+      });
+    });
+  });
+
+  // Delete Director
+  document.querySelectorAll('.delete-director-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to delete this director?')) return;
+      await api('DELETE', 'directors', null, btn.dataset.id);
+      toast('Director deleted', 'error');
+      await loadData();
+      showSection('directors');
+    });
   });
 }

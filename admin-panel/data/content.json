@@ -9,8 +9,9 @@
     "address": "Bainsla Music Private Limited\nJaipur, Rajasthan, India",
     "whatsapp": "917297897628",
     "youtube_url": "https://www.youtube.com/@bainslaofficial",
-    "instagram_url": "https://www.instagram.com/bainslamusic",
+    "instagram_url": "https://www.instagram.com/bainsla_music_company",
     "facebook_url": "https://facebook.com/bainslamusic",
+    "support_email": "support@bainslamusic.com",
     "stats_songs": "256+",
     "stats_artists": "42+",
     "stats_videos": "178+",
@@ -23,12 +24,12 @@
     {"id": "b4", "image": "/images/songs/hanuman-chalisa.jpg", "title": "Hanuman Chalisa", "created_at": "2024-01-01"}
   ],
   "releases": [
-    {"id": "r1", "hindi_title": "श्याम तेरी बंसी पागल कर जाती है", "eng_title": "Shyam Teri Bansi Pagaal Kar Jaati Hai", "artist": "Bhumika Sharma", "label": "Bainsla Music", "image": "/images/songs/shyam-teri-bansi.jpg", "url": "https://www.youtube.com/watch?v=mu8M7Nk8ywU", "created_at": "2024-01-01"},
-    {"id": "r2", "hindi_title": "राधा रानी मेरी है", "eng_title": "Radha Rani Meri Hai", "artist": "Rashmi Nishad", "label": "Bainsla Music", "image": "/images/songs/radha-rani.jpg", "url": "https://www.youtube.com/watch?v=S7VZLHubP4c", "created_at": "2024-01-01"},
-    {"id": "r3", "hindi_title": "हनुमान चालीसा", "eng_title": "Hanuman Chalisa", "artist": "Bainsla Music", "label": "Bainsla Music", "image": "/images/songs/hanuman-chalisa.jpg", "url": "https://www.youtube.com/watch?v=3ELgvab96VQ", "created_at": "2024-01-01"},
-    {"id": "r4", "hindi_title": "राम नाम की महिमा", "eng_title": "Ram Naam Ki Mahima", "artist": "DG Mawai", "label": "Bainsla Music", "image": "/images/songs/ram-naam.jpg", "url": "https://www.youtube.com/watch?v=8XKjIjWs6Ak", "created_at": "2024-01-01"},
-    {"id": "r5", "hindi_title": "गुर्जर रसिया", "eng_title": "Gurjar Rasiya", "artist": "Gurjar Rasiya", "label": "Bainsla Music", "image": "/images/songs/gurjar-rasiya.jpg", "url": "https://www.youtube.com/watch?v=DFJYVn39dHE", "created_at": "2024-01-01"},
-    {"id": "r6", "hindi_title": "डीजे रसिया 2024", "eng_title": "DJ Rasiya 2024", "artist": "DJ Rasiya 2024", "label": "Bainsla Music", "image": "/images/songs/dj-rasiya.jpg", "url": "https://www.youtube.com/watch?v=GwQnIPL68y8", "created_at": "2024-01-01"}
+    {"id": "r1", "hindi_title": "ओ बालमा तू होगो शराबी", "eng_title": "O Balma Tu Hogo Sarabi", "artist": "DG Mawai & Rashmi Nishad", "label": "Bainsla Music", "image": "https://img.youtube.com/vi/baRaqb4H85s/hqdefault.jpg", "url": "https://www.youtube.com/watch?v=baRaqb4H85s", "created_at": "2026-01-01"},
+    {"id": "r2", "hindi_title": "तेरे यार पे कृपा है पूरी सांवरिया सेठ की", "eng_title": "Tere Yaar Pe Kripa Hai Sawariya Seth Ki", "artist": "DG Mawai", "label": "Bainsla Music", "image": "https://img.youtube.com/vi/L3rw1AwSQeg/hqdefault.jpg", "url": "https://www.youtube.com/watch?v=L3rw1AwSQeg", "created_at": "2026-01-01"},
+    {"id": "r3", "hindi_title": "मेरो बालम थानेदार राखे हाथन में", "eng_title": "Mero Balam Thanedar Rakhe Haathan Mein", "artist": "DG Mawai", "label": "Bainsla Music", "image": "https://img.youtube.com/vi/GwQnIPL68y8/hqdefault.jpg", "url": "https://www.youtube.com/watch?v=GwQnIPL68y8", "created_at": "2026-01-01"},
+    {"id": "r4", "hindi_title": "देसी छोरे कलर ब्राउन गाड़ी घूमे मॉडल टाउन", "eng_title": "Desi Chore Colour Brown", "artist": "DG Mawai", "label": "Bainsla Music", "image": "https://img.youtube.com/vi/JnY9Cfbvl48/hqdefault.jpg", "url": "https://www.youtube.com/watch?v=JnY9Cfbvl48", "created_at": "2026-01-01"},
+    {"id": "r5", "hindi_title": "गुर्जर के छोरा को जिगरी लंबो पूरो जाट", "eng_title": "Gurjar Ke Chora Ko Jigri Lambo Puro Jat", "artist": "DG Mawai", "label": "Bainsla Music", "image": "https://img.youtube.com/vi/RR4g8GPVDPk/hqdefault.jpg", "url": "https://www.youtube.com/watch?v=RR4g8GPVDPk", "created_at": "2026-01-01"},
+    {"id": "r6", "hindi_title": "मर जागो आशिक़ तेरो चम्बल में लास मिलेगी", "eng_title": "Mar Jago Aashiq Tero Chambal Me Lass Milegi", "artist": "DG Mawai", "label": "Bainsla Music", "image": "https://img.youtube.com/vi/vFnv9DvIJ5w/hqdefault.jpg", "url": "https://www.youtube.com/watch?v=vFnv9DvIJ5w", "created_at": "2026-01-01"}
   ],
   "artists": [
     {"id": "a1", "name": "Bhumika Sharma", "role": "Singer", "genre": "Devotional, Folk", "image": "/images/artists/bhumika-sharma.jpg", "youtube_url": "", "instagram_url": "", "facebook_url": "", "spotify_url": "", "created_at": "2024-01-01"},
@@ -37,12 +38,14 @@
     {"id": "a4", "name": "Ajeet Bainsla", "role": "Producer", "genre": "Music Producer", "image": "/images/artists/ajeet-bainsla.jpg", "youtube_url": "", "instagram_url": "", "facebook_url": "", "spotify_url": "", "created_at": "2024-01-01"}
   ],
   "videos": [
-    {"id": "v1", "hindi_title": "श्याम तेरी बंसी", "eng_title": "Shyam Teri Bansi Pagaal Kar Jaati Hai", "category": "Krishna Bhajan", "duration": "04:35", "views": "1.2M", "youtube_id": "mu8M7Nk8ywU", "thumbnail": "/images/songs/shyam-teri-bansi.jpg", "created_at": "2024-01-01"},
-    {"id": "v2", "hindi_title": "राधा रानी मेरी है", "eng_title": "Radha Rani Meri Hai", "category": "Radha Bhajan", "duration": "04:12", "views": "856K", "youtube_id": "S7VZLHubP4c", "thumbnail": "/images/songs/radha-rani.jpg", "created_at": "2024-01-01"},
-    {"id": "v3", "hindi_title": "हनुमान चालीसा", "eng_title": "Hanuman Chalisa", "category": "Hanuman Bhajan", "duration": "06:21", "views": "2.4M", "youtube_id": "3ELgvab96VQ", "thumbnail": "/images/songs/hanuman-chalisa.jpg", "created_at": "2024-01-01"},
-    {"id": "v4", "hindi_title": "गुरु चरणों में", "eng_title": "Guru Charno Mein", "category": "Guru Bhajan", "duration": "05:08", "views": "452K", "youtube_id": "8XKjIjWs6Ak", "thumbnail": "/images/songs/guru-charno.jpg", "created_at": "2024-01-01"},
-    {"id": "v5", "hindi_title": "मेरे बांके बिहारी", "eng_title": "Mere Banke Bihari", "category": "Krishna Bhajan", "duration": "04:50", "views": "789K", "youtube_id": "DFJYVn39dHE", "thumbnail": "/images/songs/banke-bihari.jpg", "created_at": "2024-01-01"},
-    {"id": "v6", "hindi_title": "जय श्री राम", "eng_title": "Jai Shri Ram", "category": "Ram Bhajan", "duration": "03:58", "views": "1.5M", "youtube_id": "GwQnIPL68y8", "thumbnail": "/images/songs/jai-shri-ram.jpg", "created_at": "2024-01-01"}
+    {"id": "v1", "hindi_title": "ओ बालमा तू होगो शराबी", "eng_title": "O Balma Tu Hogo Sarabi", "category": "DJ Rasiya", "duration": "04:35", "views": "New", "youtube_id": "baRaqb4H85s", "thumbnail": "https://img.youtube.com/vi/baRaqb4H85s/hqdefault.jpg", "created_at": "2026-01-01"},
+    {"id": "v2", "hindi_title": "तेरे यार पे कृपा है पूरी सांवरिया सेठ की", "eng_title": "Tere Yaar Pe Kripa Hai Sawariya Seth Ki", "category": "Gurjar Rasiya", "duration": "04:12", "views": "New", "youtube_id": "L3rw1AwSQeg", "thumbnail": "https://img.youtube.com/vi/L3rw1AwSQeg/hqdefault.jpg", "created_at": "2026-01-01"},
+    {"id": "v3", "hindi_title": "मेरो बालम थानेदार राखे हाथन में", "eng_title": "Mero Balam Thanedar Rakhe Haathan Mein", "category": "DJ Rasiya", "duration": "04:21", "views": "New", "youtube_id": "GwQnIPL68y8", "thumbnail": "https://img.youtube.com/vi/GwQnIPL68y8/hqdefault.jpg", "created_at": "2026-01-01"},
+    {"id": "v4", "hindi_title": "देसी छोरे कलर ब्राउन गाड़ी घूमे मॉडल टाउन", "eng_title": "Desi Chore Colour Brown", "category": "DJ Rasiya", "duration": "04:08", "views": "New", "youtube_id": "JnY9Cfbvl48", "thumbnail": "https://img.youtube.com/vi/JnY9Cfbvl48/hqdefault.jpg", "created_at": "2026-01-01"},
+    {"id": "v5", "hindi_title": "गुर्जर के छोरा को जिगरी लंबो पूरो जाट", "eng_title": "Gurjar Ke Chora Ko Jigri Lambo Puro Jat", "category": "Gurjar Rasiya", "duration": "04:50", "views": "New", "youtube_id": "RR4g8GPVDPk", "thumbnail": "https://img.youtube.com/vi/RR4g8GPVDPk/hqdefault.jpg", "created_at": "2026-01-01"},
+    {"id": "v6", "hindi_title": "मर जागो आशिक़ तेरो चम्बल में लास मिलेगी", "eng_title": "Mar Jago Aashiq Tero Chambal Me Lass Milegi", "category": "Gurjar Rasiya", "duration": "03:58", "views": "New", "youtube_id": "vFnv9DvIJ5w", "thumbnail": "https://img.youtube.com/vi/vFnv9DvIJ5w/hqdefault.jpg", "created_at": "2026-01-01"},
+    {"id": "v7", "hindi_title": "मोटी तोसू भी ज़्यादा पसंद हैं या तेरी नाक की बाली", "eng_title": "Moti Tosu Bhi Jyada Pasand Hai", "category": "Gurjar Rasiya", "duration": "04:22", "views": "New", "youtube_id": "8XKjIjWs6Ak", "thumbnail": "https://img.youtube.com/vi/8XKjIjWs6Ak/hqdefault.jpg", "created_at": "2026-01-01"},
+    {"id": "v8", "hindi_title": "मेरे हाथों में रेखा नहीं प्यार की", "eng_title": "Mere Hatho Me Rekha Nahi Pyar Ki", "category": "DJ Rasiya", "duration": "04:15", "views": "New", "youtube_id": "jkbxHu8-yLs", "thumbnail": "https://img.youtube.com/vi/jkbxHu8-yLs/hqdefault.jpg", "created_at": "2026-01-01"}
   ],
   "catalogue": [
     {"id": "c1", "name": "Krishna Bhajan", "hindi": "कृष्ण भजन", "count": 128, "created_at": "2024-01-01"},
@@ -61,6 +64,9 @@
     {"id": "l4", "title": "Business Collaboration", "description": "Partner with us for music production, distribution and brand collaborations.", "created_at": "2024-01-01"},
     {"id": "l5", "title": "CMS / Distribution", "description": "YouTube CMS services and digital music distribution across 150+ platforms.", "created_at": "2024-01-01"},
     {"id": "l6", "title": "Submit Your Song", "description": "Independent artist? Submit your song to be released under Bainsla Music.", "created_at": "2024-01-01"}
+  ],
+  "directors": [
+    {"id": "d1", "name": "Ajeet Bainsla", "role": "Founder & CEO", "image": "/images/artists/ajeet-bainsla.jpg", "description": "Visionary leader and founder of Bainsla Music Private Limited. Managing all operations, artist relations, and business strategy.", "youtube_url": "", "instagram_url": "", "facebook_url": "", "linkedin_url": "", "created_at": "2024-01-01"}
   ],
   "inquiries": []
 }
