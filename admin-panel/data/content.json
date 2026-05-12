@@ -1,0 +1,215 @@
+{
+  "settings": {
+    "company_name": "Bainsla Music",
+    "tagline": "Rajasthan's No.1 Music Production Company",
+    "description": "Preserving & promoting Rasiya folk music since 2016.",
+    "phone": "+91-8696761606",
+    "phone2": "+91-8690761006",
+    "email": "ajeet@bainslamusic.com",
+    "email2": "agent@bainslamusic.com",
+    "address": "59A Chanchan Nagar, Gokulpura, Jhotwara, Jaipur-302012, Rajasthan, India",
+    "youtube": "https://www.youtube.com/@bainslaofficial",
+    "instagram": "https://www.instagram.com/bainslamusic",
+    "whatsapp": "918696761606"
+  },
+  "stats": {
+    "years": "9",
+    "videos": "669",
+    "artists": "50",
+    "views": "150"
+  },
+  "hero_slides": [
+    {
+      "id": 1,
+      "video_id": "mu8M7Nk8ywU",
+      "title": "Rajasthan's No.1 Music Production Company",
+      "subtitle": "10,000+ Songs | 1.5M+ Subscribers | 150M+ Views",
+      "active": true
+    },
+    {
+      "id": 2,
+      "video_id": "S7VZLHubP4c",
+      "title": "Rajasthan's No.1 Music Production Company",
+      "subtitle": "10,000+ Songs | 1.5M+ Subscribers | 150M+ Views",
+      "active": true
+    },
+    {
+      "id": 3,
+      "video_id": "3ELgvab96VQ",
+      "title": "Rajasthan's No.1 Music Production Company",
+      "subtitle": "10,000+ Songs | 1.5M+ Subscribers | 150M+ Views",
+      "active": true
+    }
+  ],
+  "services": [
+    {
+      "id": 1,
+      "icon": "youtube",
+      "title": "YouTube CMS/MCN",
+      "description": "Complete channel management, content ID, monetization & rights management."
+    },
+    {
+      "id": 2,
+      "icon": "promotion",
+      "title": "Channel Promotion",
+      "description": "Strategic growth, audience engagement & brand building for maximum reach."
+    },
+    {
+      "id": 3,
+      "icon": "distribution",
+      "title": "Audio Video Distribution",
+      "description": "Distribute across 150+ platforms — Spotify, JioSaavn, Gaana, Wynk & more."
+    },
+    {
+      "id": 4,
+      "icon": "social",
+      "title": "Social Media Management",
+      "description": "Professional strategy & content management across Instagram, Facebook & more."
+    },
+    {
+      "id": 5,
+      "icon": "callertune",
+      "title": "Caller Tunes & CRBT",
+      "description": "Set up caller tunes across Jio, Airtel, Vi & BSNL. Maximize catalog revenue."
+    },
+    {
+      "id": 6,
+      "icon": "production",
+      "title": "Music Production",
+      "description": "End-to-end production from recording & mixing to mastering. Studio quality."
+    }
+  ],
+  "videos": [
+    {
+      "id": 1,
+      "video_id": "mu8M7Nk8ywU",
+      "title": "कबूतर बोले गुटर गू | Kabutar Bole Gutar Gu",
+      "artist": "DG Mawai",
+      "views": "20M+"
+    },
+    {
+      "id": 2,
+      "video_id": "S7VZLHubP4c",
+      "title": "इन दोनों कहनी ने DJ के आगे धूम मचा दी",
+      "artist": "Ajeet Katara, Balli",
+      "views": "18M+"
+    },
+    {
+      "id": 3,
+      "video_id": "3ELgvab96VQ",
+      "title": "छोरी तेरी चाल मोरनी की ढाल",
+      "artist": "DG Mawai",
+      "views": "16M+"
+    },
+    {
+      "id": 4,
+      "video_id": "8XKjIjWs6Ak",
+      "title": "अलवर की इस मुस्कान नाम की डांसर",
+      "artist": "DG Mawai",
+      "views": "15M+"
+    },
+    {
+      "id": 5,
+      "video_id": "DFJYVn39dHE",
+      "title": "New Rajasthani DJ Song 2025",
+      "artist": "Bainsla Music",
+      "views": "12M+"
+    },
+    {
+      "id": 6,
+      "video_id": "GwQnIPL68y8",
+      "title": "Desi Chore Dance Video",
+      "artist": "Bainsla Music",
+      "views": "10M+"
+    }
+  ],
+  "channels": [
+    {
+      "id": 1,
+      "name": "Bainsla Music",
+      "url": "https://www.youtube.com/@bainslaofficial",
+      "subscribers": "1.51M"
+    },
+    {
+      "id": 2,
+      "name": "Bainsla Studio",
+      "url": "https://www.youtube.com/@bainslastudio",
+      "subscribers": "500K+"
+    },
+    {
+      "id": 3,
+      "name": "Buteri Music",
+      "url": "https://www.youtube.com/@buterimusic",
+      "subscribers": "300K+"
+    },
+    {
+      "id": 4,
+      "name": "Godwad Music",
+      "url": "https://www.youtube.com/@godwadmusic",
+      "subscribers": "200K+"
+    },
+    {
+      "id": 5,
+      "name": "Panghat",
+      "url": "https://www.youtube.com/@panghat",
+      "subscribers": "150K+"
+    }
+  ],
+  "directors": [
+    {
+      "id": 1,
+      "name": "Ajeet Bainsla",
+      "role": "Founder & Director",
+      "description": "Born in Soorgarh, Sawai Madhopur. Passionate advocate for Rajasthani folk music since 2016.",
+      "initials": "AB"
+    },
+    {
+      "id": 2,
+      "name": "Shivlal Bainsla",
+      "role": "Director",
+      "description": "Driving business growth and artist partnerships across Rajasthan and beyond.",
+      "initials": "SB"
+    },
+    {
+      "id": 3,
+      "name": "Aman Bainsla",
+      "role": "Director",
+      "description": "Co-founder managing operations, technology and digital distribution.",
+      "initials": "AB"
+    }
+  ],
+  "testimonials": [
+    {
+      "id": 1,
+      "name": "Rakesh Meena",
+      "role": "YouTube Artist",
+      "quote": "Bainsla Music ने मेरे channel को एक नई ऊँचाई दी। उनकी team बहुत professional है। मेरे subscribers 10x बढ़ गए!",
+      "rating": 5,
+      "initials": "R"
+    },
+    {
+      "id": 2,
+      "name": "Sunita Khatana",
+      "role": "Folk Singer",
+      "quote": "Music distribution में Bainsla Music सबसे बेहतर है। मेरे गाने अब Spotify, JioSaavn सब पर available हैं!",
+      "rating": 5,
+      "initials": "S"
+    },
+    {
+      "id": 3,
+      "name": "Mahendra Gurjar",
+      "role": "Channel Owner",
+      "quote": "CMS service बहुत शानदार है। Copyright issues solve हो गए और revenue भी बढ़ गया। Highly recommended!",
+      "rating": 5,
+      "initials": "M"
+    },
+    {
+      "id": 4,
+      "name": "DG Mawai",
+      "role": "Rasiya Singer",
+      "quote": "Bainsla Music ke saath kaam karke 20M+ views aaye mere gaano pe. Best music company in Rajasthan!",
+      "rating": 5,
+      "initials": "D"
+    }
+  ]
+}
