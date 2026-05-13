@@ -123,10 +123,21 @@ export default function Sidebar() {
         </div>
         {!collapsed && (
           <div className="overflow-hidden">
-            <h1 className="text-lg font-bold leading-tight bg-gradient-to-r from-red-400 to-red-500 bg-clip-text text-transparent">YouTube</h1>
-            <p className="text-[10px] font-bold tracking-[0.25em] text-white/60 uppercase">
-              Studio
-            </p>
+            {isAdmin ? (
+              <>
+                <h1 className="text-lg font-bold leading-tight text-white">Bainsla</h1>
+                <p className="text-[10px] font-bold tracking-[0.25em] text-amber-400 uppercase">
+                  Music
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-lg font-bold leading-tight bg-gradient-to-r from-red-400 to-red-500 bg-clip-text text-transparent">YouTube</h1>
+                <p className="text-[10px] font-bold tracking-[0.25em] text-white/60 uppercase">
+                  Studio
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>
