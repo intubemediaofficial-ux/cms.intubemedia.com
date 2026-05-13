@@ -14,17 +14,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bainsla Music Private Limited | India's Devotional, Folk & Rasiya Music Label",
+  title: "Bainsla Music - YouTube CMS",
   description:
-    "Bainsla Music Private Limited — India's leading Devotional, Folk & Rasiya music label. Listen to the latest Bhajans, Gurjar Rasiya & Folk Songs. Digital Music Distribution.",
+    "YouTube Channel Management System — Manage channels, revenue, videos and payments.",
   keywords:
-    "bainsla music, bhajan, rasiya, folk songs, devotional music, Krishna bhajan, Hanuman Chalisa, Radha bhajan, Gurjar Rasiya, DJ Rasiya, music distribution, YouTube CMS",
+    "youtube cms, channel management, revenue tracking, video management, music distribution",
   openGraph: {
-    title: "Bainsla Music Private Limited | India's Devotional, Folk & Rasiya Music Label",
+    title: "Bainsla Music - YouTube CMS",
     description:
-      "India's Devotional, Folk & Rasiya Music Label. Devotional Bhajans, Gurjar Rasiya, Folk Songs and Digital Music Distribution.",
+      "YouTube Channel Management System — Manage channels, revenue, videos and payments.",
     type: "website",
-    url: "https://bainslamusic.com",
   },
   icons: {
     icon: "/favicon.ico",

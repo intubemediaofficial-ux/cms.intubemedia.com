@@ -52,13 +52,13 @@ export async function POST(request: Request) {
     const fromEmail = process.env.OTP_FROM_EMAIL || "onboarding@resend.dev";
 
     await resend.emails.send({
-      from: `Bainsla Music <${fromEmail}>`,
+      from: `Bainsla CMS <${fromEmail}>`,
       to: normalizedEmail,
-      subject: "Your Bainsla Music CMS Login OTP",
+      subject: "Your Bainsla CMS Login OTP",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #1a1a1a; margin: 0;">Bainsla Music CMS</h2>
+            <h2 style="color: #1a1a1a; margin: 0;">Bainsla CMS</h2>
             <p style="color: #666; font-size: 14px;">Login Verification</p>
           </div>
           <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 20px;">
