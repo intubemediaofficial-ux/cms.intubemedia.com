@@ -166,9 +166,36 @@ export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
 
+  const [serverChannelIds, setServerChannelIds] = useState<string[]>([]);
+
   useEffect(() => {
     setActiveChannelIds(getActiveChannelIds());
   }, []);
+
+  // Fetch channel IDs from server-side cached data (more reliable than localStorage alone)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetch("/api/client-data?action=getAllCachedData")
+      .then((r) => r.json())
+      .then((j) => {
+        const ids: string[] = [];
+        for (const cd of (j.data || [])) {
+          for (const ch of (cd.channels || [])) {
+            if (ch.channelId && !ch.channelId.startsWith("UCtest")) {
+              ids.push(ch.channelId);
+            }
+          }
+        }
+        setServerChannelIds(ids);
+      })
+      .catch(() => {});
+  }, [isAuthenticated]);
+
+  // Merge localStorage + server channel IDs
+  const allChannelIds = useMemo(() => {
+    const set = new Set([...activeChannelIds, ...serverChannelIds].filter((id) => !id.startsWith("UCtest") && id !== "test"));
+    return Array.from(set);
+  }, [activeChannelIds, serverChannelIds]);
 
   // Sync localStorage channels to KV on dashboard load (so admin sees real channel IDs)
   useEffect(() => {
@@ -187,8 +214,8 @@ export default function DashboardPage() {
     endDate: dateRange.endDate,
     prevStartDate: dateRange.prevStartDate,
     prevEndDate: dateRange.prevEndDate,
-    ...(activeChannelIds.length > 0 ? { channelIds: activeChannelIds.join(",") } : {}),
-  }), [dateRange, activeChannelIds]);
+    ...(allChannelIds.length > 0 ? { channelIds: allChannelIds.join(",") } : {}),
+  }), [dateRange, allChannelIds]);
 
   const { data: dashData, isReal, error, loading } = useYouTubeData<DashboardFullData>(
     "dashboardFull",
@@ -197,7 +224,7 @@ export default function DashboardPage() {
   );
 
   const channels = dashData?.channels || [];
-  const hasNoChannelsAdded = activeChannelIds.length === 0;
+  const hasNoChannelsAdded = allChannelIds.length === 0;
 
   // Cumulative metrics — aggregate across ALL added channels
   const totalViews = channels.reduce((sum, ch) => sum + Number(ch?.statistics?.viewCount || 0), 0);
@@ -513,13 +540,23 @@ export default function DashboardPage() {
           <div className="text-center">
             <WifiOff className="w-10 h-10 text-red-400 mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-foreground mb-1">Could Not Load Data</h3>
-            <p className="text-sm text-muted mb-4">{error || "YouTube API returned no data. Try re-authenticating."}</p>
-            <button
-              onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-            >
-              Re-authenticate
-            </button>
+            <p className="text-sm text-muted mb-4">{error || "YouTube API returned no data. Please try again."}</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Retry
+              </button>
+              {hasAccessToken && (
+                <button
+                  onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-300 transition-colors"
+                >
+                  Re-authenticate with Google
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

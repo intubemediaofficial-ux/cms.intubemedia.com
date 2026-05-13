@@ -19,8 +19,9 @@ export function useYouTubeData<T>(
   useEffect(() => {
     if (status === "loading") return;
 
-    const isAdminCredentials = !session?.accessToken && session?.user?.role === "admin";
-    if (!session?.accessToken && !isAdminCredentials) {
+    // Allow both OAuth users (have accessToken) and credentials users (admin or client with email/password)
+    const isCredentialsLogin = !session?.accessToken && !!session?.user?.email;
+    if (!session?.accessToken && !isCredentialsLogin) {
       setLoading(false);
       return;
     }
@@ -51,7 +52,7 @@ export function useYouTubeData<T>(
     };
 
     fetchData();
-  }, [session?.accessToken, session?.user?.role, status, action, paramsKey]);
+  }, [session?.accessToken, session?.user?.role, session?.user?.email, status, action, paramsKey]);
 
   return { data, loading, error, isReal };
 }

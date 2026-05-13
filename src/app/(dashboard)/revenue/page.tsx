@@ -136,10 +136,10 @@ export default function RevenuePage() {
               {error || "Channel may not be monetized, or revenue data is not available."}
             </p>
             <button
-              onClick={() => signIn("google", { callbackUrl: "/revenue" })}
+              onClick={() => window.location.reload()}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
             >
-              Re-authenticate
+              Retry
             </button>
           </div>
         </div>
