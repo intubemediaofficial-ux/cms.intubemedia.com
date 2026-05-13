@@ -14,13 +14,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bainsla Music - YouTube CMS",
+  title: "YouTube Studio",
   description:
     "YouTube Channel Management System — Manage channels, revenue, videos and payments.",
   keywords:
     "youtube cms, channel management, revenue tracking, video management, music distribution",
   openGraph: {
-    title: "Bainsla Music - YouTube CMS",
+    title: "YouTube Studio",
     description:
       "YouTube Channel Management System — Manage channels, revenue, videos and payments.",
     type: "website",
