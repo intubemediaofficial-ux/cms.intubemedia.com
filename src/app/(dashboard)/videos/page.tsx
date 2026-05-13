@@ -446,15 +446,8 @@ export default function VideosPage() {
       {!isAuthenticated && (
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
-            <WifiOff className="w-10 h-10 text-muted mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-foreground mb-1">No Data</h3>
-            <p className="text-sm text-muted mb-4">Sign in with Google to see your videos</p>
-            <button
-              onClick={() => signIn("google", { callbackUrl: "/videos" })}
-              className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
-            >
-              Sign in with Google
-            </button>
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
+            <p className="text-sm text-muted">Loading videos...</p>
           </div>
         </div>
       )}
