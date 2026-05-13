@@ -61,6 +61,7 @@ interface VideoItem {
     privacyStatus?: string | null;
     license?: string | null;
     madeForKids?: boolean | null;
+    rejectionReason?: string | null;
   } | null;
 }
 
@@ -112,7 +113,6 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
   );
   const hasActiveClaim = activeClaims.length > 0;
   const isLicensed = video.contentDetails?.licensedContent === true;
-  const isMonetized = isLicensed || !hasActiveClaim;
 
   if (hasActiveClaim) {
     const claim = activeClaims[0];
@@ -124,6 +124,19 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
       claimType: claim.claimType,
       claimant: claim.claimant,
       label: typeLabel,
+      color: "bg-red-100 text-red-700",
+    };
+  }
+
+  // Auto-detect copyright issues from YouTube API status
+  const rejectionReason = video.status?.rejectionReason;
+  if (rejectionReason === "copyright" || rejectionReason === "duplicate") {
+    return {
+      isMonetized: false,
+      hasActiveClaim: true,
+      claimType: "copyright",
+      claimant: "YouTube Auto-Detected",
+      label: "Copyright Claim (Auto)",
       color: "bg-red-100 text-red-700",
     };
   }
@@ -190,15 +203,41 @@ export default function VideosPage() {
     }
   }, []);
 
+  // Also fetch channel IDs from server-side cached data (more reliable than localStorage alone)
+  const [serverChannelIds, setServerChannelIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetch("/api/client-data?action=getAllCachedData")
+      .then((r) => r.json())
+      .then((j) => {
+        const ids: string[] = [];
+        for (const cd of (j.data || [])) {
+          for (const ch of (cd.channels || [])) {
+            if (ch.channelId && !ch.channelId.startsWith("UCtest")) {
+              ids.push(ch.channelId);
+            }
+          }
+        }
+        setServerChannelIds(ids);
+      })
+      .catch(() => {});
+  }, [isAuthenticated]);
+
+  // Merge localStorage + server channel IDs
+  const allChannelIds = useMemo(() => {
+    const set = new Set([...activeChannelIds, ...serverChannelIds].filter((id) => !id.startsWith("UCtest") && id !== "test"));
+    return Array.from(set);
+  }, [activeChannelIds, serverChannelIds]);
+
   const fetchVideos = useCallback(async () => {
-    if (!isAuthenticated || activeChannelIds.length === 0) {
+    if (!isAuthenticated || allChannelIds.length === 0) {
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
     const allVideos: VideoItem[] = [];
-    for (const channelId of activeChannelIds) {
+    for (const channelId of allChannelIds) {
       try {
         const res = await fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`);
         const json = await res.json();
@@ -216,14 +255,14 @@ export default function VideosPage() {
       setError("No videos found for added channels");
     }
     setLoading(false);
-  }, [isAuthenticated, activeChannelIds]);
+  }, [isAuthenticated, allChannelIds]);
 
   useEffect(() => {
     fetchVideos();
     if (isAuthenticated) fetchClaims();
   }, [fetchVideos, fetchClaims, isAuthenticated]);
 
-  const hasNoChannelsAdded = activeChannelIds.length === 0;
+  const hasNoChannelsAdded = allChannelIds.length === 0;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "public" | "private" | "unlisted">("all");
@@ -442,7 +481,7 @@ export default function VideosPage() {
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
-            <p className="text-sm text-muted">Loading videos from {activeChannelIds.length} channel{activeChannelIds.length !== 1 ? "s" : ""}...</p>
+            <p className="text-sm text-muted">Loading videos from {allChannelIds.length} channel{allChannelIds.length !== 1 ? "s" : ""}...</p>
           </div>
         </div>
       )}
