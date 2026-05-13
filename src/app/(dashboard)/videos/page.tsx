@@ -491,12 +491,12 @@ export default function VideosPage() {
           <div className="text-center">
             <WifiOff className="w-10 h-10 text-red-400 mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-foreground mb-1">Could Not Load Videos</h3>
-            <p className="text-sm text-muted mb-4">{error || "Try re-authenticating."}</p>
+            <p className="text-sm text-muted mb-4">{error || "Please try again."}</p>
             <button
-              onClick={() => signIn("google", { callbackUrl: "/videos" })}
+              onClick={() => window.location.reload()}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
             >
-              Re-authenticate
+              Retry
             </button>
           </div>
         </div>
