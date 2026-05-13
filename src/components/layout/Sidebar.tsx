@@ -14,7 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  Music2,
+
 
   Users,
   LinkIcon,
@@ -116,13 +116,15 @@ export default function Sidebar() {
       )}
     >
       <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-        <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center shrink-0">
-          <Music2 className="w-5 h-5 text-white" />
+        <div className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-700 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
         </div>
         {!collapsed && (
           <div className="overflow-hidden">
-            <h1 className="text-lg font-bold leading-tight">YouTube</h1>
-            <p className="text-[10px] font-semibold tracking-[0.25em] text-primary uppercase">
+            <h1 className="text-lg font-bold leading-tight bg-gradient-to-r from-red-400 to-red-500 bg-clip-text text-transparent">YouTube</h1>
+            <p className="text-[10px] font-bold tracking-[0.25em] text-white/60 uppercase">
               Studio
             </p>
           </div>
