@@ -123,7 +123,7 @@ export default function Sidebar() {
           <div className="overflow-hidden">
             <h1 className="text-lg font-bold leading-tight">Bainsla</h1>
             <p className="text-[10px] font-semibold tracking-[0.25em] text-primary uppercase">
-              Music
+              CMS
             </p>
           </div>
         )}

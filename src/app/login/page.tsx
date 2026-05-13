@@ -61,7 +61,7 @@ export default function LoginPage() {
                 Bainsla
               </h1>
               <p className="text-xs font-semibold tracking-[0.3em] text-primary uppercase">
-                Music
+                CMS
               </p>
             </div>
           </div>

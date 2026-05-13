@@ -274,7 +274,7 @@ export default function AdminNetworksPage() {
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  placeholder="e.g. Bainsla Music"
+                  placeholder="e.g. Network Name"
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
               </div>

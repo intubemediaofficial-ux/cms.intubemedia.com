@@ -92,7 +92,7 @@ export default function CmsSidebar() {
           </svg>
         </div>
         {!collapsed && (
-          <p className="mt-3 text-[14px] text-[#282828] font-normal">Bainsla Music001</p>
+          <p className="mt-3 text-[14px] text-[#282828] font-normal">Bainsla CMS</p>
         )}
       </div>
 

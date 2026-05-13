@@ -20,7 +20,7 @@ export default function TopBar() {
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const userName = session?.user?.name || "Bainsla Music";
+  const userName = session?.user?.name || "User";
   const userRole = session?.user?.role === "admin" ? "Admin" : "Client";
   const initials = userName.charAt(0).toUpperCase();
 
