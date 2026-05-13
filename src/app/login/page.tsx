@@ -50,42 +50,159 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#0f0f0f] via-[#1a1a2e] to-[#16213e]">
-        {/* Floating orbs */}
-        <div className="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] rounded-full bg-red-600/20 blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-5%] w-[400px] h-[400px] rounded-full bg-blue-600/15 blur-[100px] animate-pulse" style={{ animationDelay: "1s" }} />
-        <div className="absolute top-[40%] left-[60%] w-[300px] h-[300px] rounded-full bg-purple-600/10 blur-[80px] animate-pulse" style={{ animationDelay: "2s" }} />
-        
-        {/* Grid pattern */}
-        <div className="absolute inset-0 opacity-[0.03]" style={{
-          backgroundImage: "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)",
-          backgroundSize: "60px 60px"
-        }} />
+      {/* CSS Animations */}
+      <style jsx>{`
+        @keyframes float1 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+          25% { transform: translate(100px, -80px) rotate(90deg) scale(1.1); }
+          50% { transform: translate(200px, 50px) rotate(180deg) scale(0.9); }
+          75% { transform: translate(-50px, 100px) rotate(270deg) scale(1.05); }
+        }
+        @keyframes float2 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg); }
+          33% { transform: translate(-120px, 80px) rotate(120deg); }
+          66% { transform: translate(80px, -60px) rotate(240deg); }
+        }
+        @keyframes float3 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+          20% { transform: translate(60px, -100px) rotate(72deg) scale(1.15); }
+          40% { transform: translate(-80px, -40px) rotate(144deg) scale(0.85); }
+          60% { transform: translate(100px, 80px) rotate(216deg) scale(1.1); }
+          80% { transform: translate(-40px, 60px) rotate(288deg) scale(0.95); }
+        }
+        @keyframes float4 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg); }
+          50% { transform: translate(-150px, -100px) rotate(180deg); }
+        }
+        @keyframes orbMove1 {
+          0%, 100% { transform: translate(0, 0); }
+          25% { transform: translate(80px, -60px); }
+          50% { transform: translate(-40px, 80px); }
+          75% { transform: translate(60px, 40px); }
+        }
+        @keyframes orbMove2 {
+          0%, 100% { transform: translate(0, 0); }
+          33% { transform: translate(-100px, 60px); }
+          66% { transform: translate(50px, -80px); }
+        }
+        @keyframes orbMove3 {
+          0%, 100% { transform: translate(0, 0); }
+          50% { transform: translate(120px, -40px); }
+        }
+        @keyframes slideRight {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100vw); }
+        }
+        @keyframes spinSlow {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes gradientShift {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        @keyframes waveMove {
+          0% { transform: translateX(0) scaleY(1); }
+          50% { transform: translateX(-25%) scaleY(0.8); }
+          100% { transform: translateX(-50%) scaleY(1); }
+        }
+      `}</style>
 
-        {/* Floating YouTube-style elements */}
-        <div className="absolute top-[15%] left-[8%] opacity-10 animate-bounce" style={{ animationDuration: "3s" }}>
-          <svg width="60" height="42" viewBox="0 0 24 17" fill="white">
+      {/* Animated Background */}
+      <div className="absolute inset-0" style={{
+        background: "linear-gradient(135deg, #0a0a0a 0%, #1a0a1e 25%, #0d1b2a 50%, #1a0a1e 75%, #0a0a0a 100%)",
+        backgroundSize: "400% 400%",
+        animation: "gradientShift 15s ease infinite"
+      }}>
+
+        {/* Moving Gradient Orbs */}
+        <div className="absolute top-[10%] left-[10%] w-[600px] h-[600px] rounded-full bg-red-600/15 blur-[150px]" style={{ animation: "orbMove1 20s ease-in-out infinite" }} />
+        <div className="absolute bottom-[10%] right-[10%] w-[500px] h-[500px] rounded-full bg-blue-500/12 blur-[130px]" style={{ animation: "orbMove2 25s ease-in-out infinite" }} />
+        <div className="absolute top-[50%] left-[40%] w-[400px] h-[400px] rounded-full bg-purple-500/10 blur-[120px]" style={{ animation: "orbMove3 18s ease-in-out infinite" }} />
+        <div className="absolute top-[20%] right-[30%] w-[350px] h-[350px] rounded-full bg-pink-500/8 blur-[100px]" style={{ animation: "orbMove1 22s ease-in-out infinite reverse" }} />
+
+        {/* Animated Wave Lines at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 h-[200px] overflow-hidden opacity-[0.06]">
+          <svg className="absolute bottom-0 w-[200%]" style={{ animation: "waveMove 8s linear infinite" }} height="200" viewBox="0 0 2880 200" fill="none">
+            <path d="M0 80C480 20 960 140 1440 80C1920 20 2400 140 2880 80V200H0Z" fill="url(#wave1)"/>
+            <defs><linearGradient id="wave1" x1="0" y1="0" x2="2880" y2="0"><stop stopColor="#ff0000"/><stop offset="0.5" stopColor="#ff4444"/><stop offset="1" stopColor="#ff0000"/></linearGradient></defs>
+          </svg>
+          <svg className="absolute bottom-0 w-[200%]" style={{ animation: "waveMove 12s linear infinite", animationDelay: "-3s" }} height="200" viewBox="0 0 2880 200" fill="none">
+            <path d="M0 120C480 60 960 180 1440 120C1920 60 2400 180 2880 120V200H0Z" fill="url(#wave2)" opacity="0.5"/>
+            <defs><linearGradient id="wave2" x1="0" y1="0" x2="2880" y2="0"><stop stopColor="#4444ff"/><stop offset="0.5" stopColor="#6666ff"/><stop offset="1" stopColor="#4444ff"/></linearGradient></defs>
+          </svg>
+        </div>
+
+        {/* Rotating Ring */}
+        <div className="absolute top-[15%] right-[15%] w-[200px] h-[200px] opacity-[0.04]" style={{ animation: "spinSlow 30s linear infinite" }}>
+          <svg viewBox="0 0 200 200" fill="none" stroke="white" strokeWidth="1">
+            <circle cx="100" cy="100" r="90"/><circle cx="100" cy="100" r="70"/><circle cx="100" cy="100" r="50"/>
+          </svg>
+        </div>
+        <div className="absolute bottom-[25%] left-[10%] w-[160px] h-[160px] opacity-[0.04]" style={{ animation: "spinSlow 25s linear infinite reverse" }}>
+          <svg viewBox="0 0 200 200" fill="none" stroke="white" strokeWidth="1">
+            <circle cx="100" cy="100" r="90"/><circle cx="100" cy="100" r="60"/><circle cx="100" cy="100" r="30"/>
+          </svg>
+        </div>
+
+        {/* Floating YouTube Icons — continuously moving & rotating */}
+        <div className="absolute top-[10%] left-[5%] opacity-[0.08]" style={{ animation: "float1 18s ease-in-out infinite" }}>
+          <svg width="70" height="49" viewBox="0 0 24 17" fill="white">
             <path d="M23.5 4.7s-.2-1.7-.9-2.4c-.9-.9-1.8-.9-2.3-1C17 1 12 1 12 1s-5 0-8.3.3c-.5.1-1.4.1-2.3 1-.7.7-.9 2.4-.9 2.4S0 6.7 0 8.6v1.8c0 2 .5 3.9.5 3.9s.2 1.7.9 2.4c.9.9 2 .9 2.5 1 1.8.2 7.1.2 7.1.2s5 0 8.3-.3c.5-.1 1.4-.1 2.3-1 .7-.7.9-2.4.9-2.4s.5-2 .5-3.9V8.6c0-2-.5-3.9-.5-3.9z"/>
             <path d="M9.5 12V5.5l6.5 3.3L9.5 12z" fill="#0f0f0f"/>
           </svg>
         </div>
-        <div className="absolute top-[60%] right-[10%] opacity-10 animate-bounce" style={{ animationDuration: "4s", animationDelay: "1s" }}>
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+        <div className="absolute top-[55%] right-[8%] opacity-[0.07]" style={{ animation: "float2 22s ease-in-out infinite" }}>
+          <svg width="55" height="55" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
             <path d="M9 18V5l12-2v13"/>
             <circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
           </svg>
         </div>
-        <div className="absolute bottom-[20%] left-[15%] opacity-10 animate-bounce" style={{ animationDuration: "5s", animationDelay: "0.5s" }}>
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+        <div className="absolute bottom-[15%] left-[20%] opacity-[0.06]" style={{ animation: "float3 16s ease-in-out infinite" }}>
+          <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
             <polygon points="5 3 19 12 5 21 5 3"/>
           </svg>
         </div>
-        <div className="absolute top-[30%] right-[25%] opacity-8 animate-bounce" style={{ animationDuration: "6s", animationDelay: "2s" }}>
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" opacity="0.08">
-            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/>
+        <div className="absolute top-[35%] right-[35%] opacity-[0.05]" style={{ animation: "float4 20s ease-in-out infinite" }}>
+          <svg width="45" height="45" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/>
           </svg>
         </div>
+        <div className="absolute top-[70%] left-[60%] opacity-[0.06]" style={{ animation: "float1 24s ease-in-out infinite reverse" }}>
+          <svg width="40" height="28" viewBox="0 0 24 17" fill="white">
+            <path d="M23.5 4.7s-.2-1.7-.9-2.4c-.9-.9-1.8-.9-2.3-1C17 1 12 1 12 1s-5 0-8.3.3c-.5.1-1.4.1-2.3 1-.7.7-.9 2.4-.9 2.4S0 6.7 0 8.6v1.8c0 2 .5 3.9.5 3.9s.2 1.7.9 2.4c.9.9 2 .9 2.5 1 1.8.2 7.1.2 7.1.2s5 0 8.3-.3c.5-.1 1.4-.1 2.3-1 .7-.7.9-2.4.9-2.4s.5-2 .5-3.9V8.6c0-2-.5-3.9-.5-3.9z"/>
+            <path d="M9.5 12V5.5l6.5 3.3L9.5 12z" fill="#0f0f0f"/>
+          </svg>
+        </div>
+        <div className="absolute top-[5%] left-[55%] opacity-[0.05]" style={{ animation: "float3 28s ease-in-out infinite" }}>
+          <svg width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
+          </svg>
+        </div>
+        <div className="absolute bottom-[35%] right-[20%] opacity-[0.04]" style={{ animation: "float2 15s ease-in-out infinite reverse" }}>
+          <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+
+        {/* Sliding light streaks */}
+        <div className="absolute top-[30%] h-[1px] w-[300px] bg-gradient-to-r from-transparent via-red-500/30 to-transparent" style={{ animation: "slideRight 8s linear infinite" }} />
+        <div className="absolute top-[50%] h-[1px] w-[200px] bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" style={{ animation: "slideRight 12s linear infinite", animationDelay: "-4s" }} />
+        <div className="absolute top-[70%] h-[1px] w-[250px] bg-gradient-to-r from-transparent via-purple-500/25 to-transparent" style={{ animation: "slideRight 10s linear infinite", animationDelay: "-7s" }} />
+
+        {/* Particle dots */}
+        {[...Array(12)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute w-1 h-1 rounded-full bg-white/20"
+            style={{
+              top: `${10 + (i * 7) % 80}%`,
+              left: `${5 + (i * 11) % 90}%`,
+              animation: `float${(i % 4) + 1} ${15 + i * 2}s ease-in-out infinite`,
+              animationDelay: `${i * -1.5}s`,
+            }}
+          />
+        ))}
       </div>
 
       {/* Left Side — Branding */}
@@ -94,12 +211,12 @@ export default function LoginPage() {
           {/* YouTube Play Button Logo */}
           <div className="mb-8 flex justify-center">
             <div className="relative">
-              <div className="w-28 h-28 bg-gradient-to-br from-red-500 to-red-700 rounded-3xl flex items-center justify-center shadow-2xl shadow-red-500/30 transform hover:scale-105 transition-transform duration-300">
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="white">
+              <div className="w-28 h-28 bg-gradient-to-br from-red-500 to-red-700 rounded-3xl flex items-center justify-center shadow-2xl shadow-red-500/30 transform hover:scale-105 transition-transform duration-300" style={{ animation: "spinSlow 60s linear infinite" }}>
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="white" style={{ animation: "spinSlow 60s linear infinite reverse" }}>
                   <path d="M8 5v14l11-7z"/>
                 </svg>
               </div>
-              <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full border-2 border-[#1a1a2e] animate-pulse" />
+              <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full border-2 border-[#1a0a1e] animate-pulse" />
             </div>
           </div>
 
