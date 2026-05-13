@@ -78,7 +78,7 @@ export default function CmsSettingsPage() {
             <div className="space-y-4 max-w-lg">
               <div>
                 <label className="block text-sm font-medium text-[#282828] mb-1">Content Manager name</label>
-                <input type="text" defaultValue="Bainsla CMS" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <input type="text" defaultValue="YouTube Studio" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-[#282828] mb-1">Contact email</label>

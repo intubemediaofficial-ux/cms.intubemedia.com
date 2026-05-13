@@ -58,10 +58,10 @@ export default function LoginPage() {
             </div>
             <div className="text-left">
               <h1 className="text-2xl font-bold text-foreground tracking-tight">
-                Bainsla
+                YouTube
               </h1>
               <p className="text-xs font-semibold tracking-[0.3em] text-primary uppercase">
-                CMS
+                Studio
               </p>
             </div>
           </div>

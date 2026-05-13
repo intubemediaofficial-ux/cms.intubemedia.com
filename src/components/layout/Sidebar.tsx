@@ -121,9 +121,9 @@ export default function Sidebar() {
         </div>
         {!collapsed && (
           <div className="overflow-hidden">
-            <h1 className="text-lg font-bold leading-tight">Bainsla</h1>
+            <h1 className="text-lg font-bold leading-tight">YouTube</h1>
             <p className="text-[10px] font-semibold tracking-[0.25em] text-primary uppercase">
-              CMS
+              Studio
             </p>
           </div>
         )}
