@@ -311,8 +311,8 @@ export default function AdminClientsPage() {
       setShowModal(false);
       resetForm();
       fetchClients();
-    } catch {
-      setFormError("Failed to save client. Please try again.");
+    } catch (err) {
+      setFormError(`Failed to save client: ${err instanceof Error ? err.message : "Network error. Please try again."}`);
     } finally {
       setSaving(false);
     }

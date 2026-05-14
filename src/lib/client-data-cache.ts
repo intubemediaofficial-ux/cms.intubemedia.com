@@ -48,6 +48,22 @@ export async function getCachedClientData(userId: string): Promise<CachedClientD
   }
 }
 
+export async function removeChannelFromAllCaches(channelId: string): Promise<void> {
+  if (!isKVAvailable()) return;
+  try {
+    const keys = await kv.keys(`${CACHE_PREFIX}*`);
+    for (const key of keys) {
+      const data = await kv.get<CachedClientData>(key);
+      if (data && data.channels?.some((ch) => ch.channelId === channelId)) {
+        data.channels = data.channels.filter((ch) => ch.channelId !== channelId);
+        await kv.set(key, data);
+      }
+    }
+  } catch (error) {
+    console.error(`[Cache] Failed to remove channel ${channelId} from caches:`, error);
+  }
+}
+
 export async function getAllCachedClientData(): Promise<CachedClientData[]> {
   if (!isKVAvailable()) return [];
   try {
