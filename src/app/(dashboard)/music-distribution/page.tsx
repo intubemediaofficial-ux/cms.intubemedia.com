@@ -17,6 +17,7 @@ import {
   ImageIcon,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { usePendingGuard } from "@/components/ReadOnlyBanner";
 
 interface Distribution {
   id: string;
@@ -57,6 +58,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 
 export default function MusicDistributionPage() {
   const { status: authStatus } = useSession();
+  const guardPending = usePendingGuard();
 
   const [distributions, setDistributions] = useState<Distribution[]>([]);
   const [loading, setLoading] = useState(true);
@@ -149,6 +151,7 @@ export default function MusicDistributionPage() {
   };
 
   const handleSave = async () => {
+    if (guardPending()) return;
     if (!formData.songTitle.trim() || !formData.songFileLink.trim() || !formData.singerName.trim()) {
       setFormError("Song Title, Song File Link, and Singer Name are required");
       return;
@@ -186,6 +189,7 @@ export default function MusicDistributionPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (guardPending()) return;
     if (!confirm("Are you sure you want to delete this submission?")) return;
 
     try {

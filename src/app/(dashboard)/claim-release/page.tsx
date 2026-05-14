@@ -17,6 +17,7 @@ import {
   Link2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { usePendingGuard } from "@/components/ReadOnlyBanner";
 
 interface ClaimRelease {
   id: string;
@@ -56,6 +57,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 
 export default function ClaimReleasePage() {
   const { status: authStatus } = useSession();
+  const guardPending = usePendingGuard();
 
   const [claims, setClaims] = useState<ClaimRelease[]>([]);
   const [distributions, setDistributions] = useState<Distribution[]>([]);
@@ -140,6 +142,7 @@ export default function ClaimReleasePage() {
   };
 
   const handleSave = async () => {
+    if (guardPending()) return;
     if (!formData.videoLink.trim() || !formData.songTitle.trim()) {
       setFormError("Video Link and Song Title are required");
       return;
@@ -177,6 +180,7 @@ export default function ClaimReleasePage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (guardPending()) return;
     if (!confirm("Are you sure you want to delete this claim request?")) return;
 
     try {

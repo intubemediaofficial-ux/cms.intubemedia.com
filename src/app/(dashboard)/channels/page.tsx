@@ -30,6 +30,7 @@ import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import { downloadCSV } from "@/lib/csv-export";
+import { usePendingGuard } from "@/components/ReadOnlyBanner";
 
 interface YouTubeChannel {
   id?: string | null;
@@ -120,6 +121,7 @@ export default function ChannelsPage() {
   const hasAccessToken = !!session?.accessToken;
   const isAdmin = session?.user?.role === "admin";
   const isAuthenticated = status === "authenticated";
+  const guardPending = usePendingGuard();
 
   const { data: myChannels, isReal, loading } = useYouTubeData<YouTubeChannel[]>(
     "channels",
@@ -266,6 +268,7 @@ export default function ChannelsPage() {
   const [inviteError, setInviteError] = useState("");
 
   const handleGenerateInviteLink = useCallback((channelId: string, channelTitle: string) => {
+    if (guardPending()) return;
     setGeneratingLink(true);
     setInviteChannelId(channelId);
     setInviteChannelTitle(channelTitle || channelId);
@@ -330,6 +333,7 @@ export default function ChannelsPage() {
   }, [inviteEmails, inviteOAuthUrl]);
 
   const handleAddChannel = useCallback(async () => {
+    if (guardPending()) return;
     const id = channelIdInput.trim();
     if (!id || !categoryInput) {
       setAddError("Please enter Channel ID and select Category");
@@ -424,6 +428,7 @@ export default function ChannelsPage() {
   };
 
   const handleDeleteChannel = (channelId: string) => {
+    if (guardPending()) return;
     const updated = storedChannels.filter((c) => c.id !== channelId);
     saveStoredChannels(updated);
     setStoredChannels(updated);
@@ -461,6 +466,7 @@ export default function ChannelsPage() {
   };
 
   const handleBulkAdd = useCallback(async () => {
+    if (guardPending()) return;
     const ids = bulkInput
       .split(/[\n,;]+/)
       .map((s) => s.trim())

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Save, Key, Bell, Globe, Shield, Landmark, FileText, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { usePendingGuard } from "@/components/ReadOnlyBanner";
 
 interface BankDetails {
   accountHolderName: string;
@@ -35,6 +36,7 @@ const emptyBankDetails: BankDetails = {
 
 export default function SettingsPage() {
   const { data: session } = useSession();
+  const guardPending = usePendingGuard();
   const [activeSection, setActiveSection] = useState("bank");
   const [bankDetails, setBankDetails] = useState<BankDetails>(emptyBankDetails);
   const [agreements, setAgreements] = useState<Agreement[]>([]);
@@ -75,6 +77,7 @@ export default function SettingsPage() {
   }, [fetchBankDetails, fetchAgreements]);
 
   const saveBankDetails = async () => {
+    if (guardPending()) return;
     setBankSaving(true);
     setBankError("");
     setBankSaved(false);

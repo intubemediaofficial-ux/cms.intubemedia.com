@@ -1,5 +1,6 @@
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
+import ReadOnlyBanner from "@/components/ReadOnlyBanner";
 
 export default function DashboardLayout({
   children,
@@ -11,6 +12,7 @@ export default function DashboardLayout({
       <Sidebar />
       <div className="flex-1 ml-[250px] transition-all duration-300">
         <TopBar />
+        <ReadOnlyBanner />
         <main className="p-6 bg-slate-50 min-h-[calc(100vh-64px)]">
           {children}
         </main>

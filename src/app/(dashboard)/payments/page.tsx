@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { usePendingGuard } from "@/components/ReadOnlyBanner";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 
@@ -119,6 +120,7 @@ function getMonthOptions() {
 
 export default function PaymentsPage() {
   const { data: session, status: sessionStatus } = useSession();
+  const guardPending = usePendingGuard();
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -227,6 +229,7 @@ export default function PaymentsPage() {
   });
 
   const handleWithdraw = async () => {
+    if (guardPending()) return;
     const amt = Number(withdrawAmount);
     if (!amt || amt <= 0) {
       setWithdrawError("Valid amount enter karo");
