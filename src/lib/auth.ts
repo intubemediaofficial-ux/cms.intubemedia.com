@@ -193,14 +193,7 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope: [
-            "openid",
-            "email",
-            "profile",
-            "https://www.googleapis.com/auth/youtube.readonly",
-            "https://www.googleapis.com/auth/yt-analytics.readonly",
-            "https://www.googleapis.com/auth/yt-analytics-monetary.readonly",
-          ].join(" "),
+          scope: "openid email profile",
           access_type: "offline",
           prompt: "consent",
         },
