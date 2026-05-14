@@ -432,116 +432,65 @@ function renderBanners(area) {
   const banners = DATA.banners || [];
   area.innerHTML = `
     <!-- Live Preview -->
-    <div class="grid-2-1">
-      <div>
-        <div class="panel">
-          <div class="panel-header">
-            <h2>LIVE PREVIEW</h2>
-            <div class="panel-actions">
-              <button class="btn btn-secondary btn-sm">🖥 Desktop</button>
-              <button class="btn btn-secondary btn-sm">📱 Mobile</button>
-            </div>
-          </div>
-          <div class="panel-body">
-            <div class="banner-preview" id="bannerPreview">
-              ${banners.length > 0 && banners[0].image ? `<img src="${banners[0].image}" alt="">` : ''}
-              <div class="banner-overlay">
-                <div class="banner-title">BAINSLA MUSIC PRIVATE LIMITED</div>
-                <div class="banner-subtitle">India's Devotional, Folk & Rasiya Music Label</div>
-                <p class="text-xs text-muted" style="margin-top:8px">Devotional Bhajans, Gurjar Rasiya, Folk Songs<br>and Digital Music Distribution.</p>
-                <button class="btn btn-primary" style="margin-top:12px">▶ LISTEN NOW</button>
-                <div style="display:flex;gap:8px;margin-top:12px">${['YouTube','Spotify','JioSaavn','Apple Music','Wynk Music'].map(p => `<span class="text-xs" style="color:var(--text2)">● ${p}</span>`).join('')}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Banners Table -->
-        <div class="panel" style="margin-top:20px">
-          <div class="panel-header">
-            <h2>BANNERS</h2>
-            <button class="btn btn-primary btn-sm" id="addBannerBtn">+ ADD NEW BANNER</button>
-          </div>
-          <div class="panel-body no-pad">
-            <table class="data-table">
-              <thead><tr><th>#</th><th>BANNER</th><th>TITLE</th><th>STATUS</th><th>SCHEDULE</th><th>ACTIONS</th></tr></thead>
-              <tbody>
-                ${banners.map((b, i) => `<tr>
-                  <td>${i + 1}</td>
-                  <td>${b.image ? `<img src="${b.image}" alt="" style="width:80px;height:45px;border-radius:4px">` : '-'}</td>
-                  <td>${b.title || '-'}</td>
-                  <td><span class="badge ${i === 0 ? 'badge-green' : i === 1 ? 'badge-amber' : 'badge-gray'}">${i === 0 ? 'Active' : i === 1 ? 'Scheduled' : 'Inactive'}</span></td>
-                  <td class="text-xs text-muted">${b.schedule || '-'}</td>
-                  <td class="actions">
-                    <button class="action-btn edit-banner" data-id="${b.id}" title="Edit">✏</button>
-                    <button class="action-btn" title="Duplicate">📋</button>
-                    <button class="action-btn" title="Preview">👁</button>
-                    <button class="action-btn danger del-banner" data-id="${b.id}" title="Delete">🗑</button>
-                  </td>
-                </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>
+    <div class="panel mb-20">
+      <div class="panel-header"><h2>LIVE PREVIEW</h2></div>
+      <div class="panel-body">
+        <div class="banner-preview" id="bannerPreview" style="display:flex;gap:12px;overflow-x:auto;padding:8px 0">
+          ${banners.map((b, i) => b.image ? `<div style="position:relative;flex-shrink:0"><img src="${b.image}" alt="" style="height:180px;border-radius:8px;border:${i===0?'2px solid #f59e0b':'1px solid #333'}"><div style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.7);color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">${b.title || 'Banner '+(i+1)}</div></div>` : '').join('')}
+          ${banners.length === 0 ? '<div style="color:#666;text-align:center;padding:40px;width:100%">No banners added yet. Drag & drop photos below to add banners.</div>' : ''}
         </div>
       </div>
+    </div>
 
-      <!-- Banner Settings Sidebar -->
-      <div>
-        <div class="panel">
-          <div class="panel-header"><h2>BANNER SETTINGS</h2></div>
-          <div class="panel-body">
-            <form id="bannerSettingsForm">
-              ${imageUploadField('Banner Image', 'image', banners[0]?.image || '', 'hero')}
-              ${field('Banner Title', 'title', banners[0]?.title || 'BAINSLA MUSIC PRIVATE LIMITED')}
-              ${field('Banner Subtitle', 'subtitle', banners[0]?.subtitle || "India's Devotional, Folk & Rasiya Music Label")}
-              ${textareaField('Description', 'description', banners[0]?.description || 'Devotional Bhajans, Gurjar Rasiya, Folk Songs and Digital Music Distribution.')}
-              ${field('CTA Button Text', 'cta_text', banners[0]?.cta_text || 'LISTEN NOW')}
-              ${field('CTA Button Link', 'cta_link', banners[0]?.cta_link || '')}
-              <div class="form-row">
-                ${field('Start Date', 'start_date', '', 'date')}
-                ${field('End Date', 'end_date', '', 'date')}
+    <!-- Add New Banner (Drag & Drop Only) -->
+    <div class="panel mb-20">
+      <div class="panel-header"><h2>ADD NEW BANNER (Drag & Drop)</h2><span style="color:#888;font-size:12px">${banners.length} banner(s) added — add unlimited</span></div>
+      <div class="panel-body">
+        ${imageUploadField('Drop banner photo here', 'new_banner_image', '', 'hero')}
+        ${field('Banner Title (optional)', 'new_banner_title', '')}
+        <button class="btn btn-primary" id="addBannerBtn" style="margin-top:12px">+ ADD THIS BANNER</button>
+      </div>
+    </div>
+
+    <!-- All Banners Grid -->
+    <div class="panel">
+      <div class="panel-header"><h2>ALL BANNERS (${banners.length})</h2></div>
+      <div class="panel-body">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">
+          ${banners.map((b, i) => `
+            <div style="position:relative;border:1px solid #333;border-radius:8px;overflow:hidden;background:#111">
+              ${b.image ? `<img src="${b.image}" alt="" style="width:100%;height:140px;object-fit:cover">` : '<div style="height:140px;display:flex;align-items:center;justify-content:center;color:#666">No image</div>'}
+              <div style="padding:8px">
+                <div style="font-size:12px;color:#fff;font-weight:600">${b.title || 'Banner '+(i+1)}</div>
+                <div style="display:flex;gap:4px;margin-top:6px">
+                  <button class="btn btn-outline btn-sm edit-banner" data-id="${b.id}" style="padding:3px 8px;font-size:10px">✏ Edit</button>
+                  <button class="btn btn-outline btn-sm del-banner" data-id="${b.id}" style="padding:3px 8px;font-size:10px;border-color:#ef4444;color:#ef4444">🗑 Delete</button>
+                </div>
               </div>
-              <div class="flex-between" style="margin-top:12px">
-                <label class="text-sm">Banner Status</label>
-                <div class="toggle active" id="bannerToggle"></div>
-              </div>
-              <div class="form-actions" style="margin-top:20px">
-                <button type="button" class="btn btn-secondary">CANCEL</button>
-                <button type="submit" class="btn btn-primary">SAVE CHANGES</button>
-              </div>
-            </form>
-          </div>
+            </div>
+          `).join('')}
         </div>
+        ${banners.length === 0 ? '<p style="color:#666;text-align:center;padding:20px">No banners yet. Use the drag & drop area above to add photos.</p>' : ''}
       </div>
     </div>`;
 
-  // Event listeners
-  document.getElementById('addBannerBtn')?.addEventListener('click', () => {
-    showModal('Add New Banner', `<form>
-      ${imageUploadField('Banner Image', 'image', '', 'hero')}
-      ${field('Title', 'title', '')}
-      ${field('Subtitle', 'subtitle', '')}
-      ${textareaField('Description', 'description', '')}
-      ${field('CTA Text', 'cta_text', 'LISTEN NOW')}
-      ${field('CTA Link', 'cta_link', '')}
-      ${formActions()}
-    </form>`, async (obj) => {
-      await api('POST', 'banners', obj);
-      toast('Banner added');
-      await loadData();
-      showSection('banners');
-    });
+  // Add banner
+  document.getElementById('addBannerBtn')?.addEventListener('click', async () => {
+    const img = area.querySelector('input[name="new_banner_image"]')?.value;
+    const title = area.querySelector('input[name="new_banner_title"]')?.value || '';
+    if (!img) { toast('Please drag & drop a photo first', 'error'); return; }
+    await api('POST', 'banners', { image: img, title: title });
+    toast('Banner added!');
+    await loadData();
+    showSection('banners');
   });
+  // Edit banner
   area.querySelectorAll('.edit-banner').forEach(b => {
     b.addEventListener('click', () => {
       const item = banners.find(x => x.id === b.dataset.id);
       showModal('Edit Banner', `<form>
-        ${imageUploadField('Banner Image', 'image', item?.image || '', 'hero')}
+        ${imageUploadField('Banner Photo (drag & drop)', 'image', item?.image || '', 'hero')}
         ${field('Title', 'title', item?.title)}
-        ${field('Subtitle', 'subtitle', item?.subtitle)}
-        ${textareaField('Description', 'description', item?.description)}
-        ${field('CTA Text', 'cta_text', item?.cta_text)}
-        ${field('CTA Link', 'cta_link', item?.cta_link)}
         ${formActions()}
       </form>`, async (obj) => {
         await api('PUT', 'banners', obj, item.id);
@@ -551,6 +500,7 @@ function renderBanners(area) {
       });
     });
   });
+  // Delete banner
   area.querySelectorAll('.del-banner').forEach(b => {
     b.addEventListener('click', async () => {
       if (!confirm('Delete this banner?')) return;
@@ -559,19 +509,6 @@ function renderBanners(area) {
       await loadData();
       showSection('banners');
     });
-  });
-  document.getElementById('bannerSettingsForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const obj = Object.fromEntries(fd.entries());
-    if (banners.length > 0) {
-      await api('PUT', 'banners', obj, banners[0].id);
-    } else {
-      await api('POST', 'banners', obj);
-    }
-    toast('Banner settings saved');
-    await loadData();
-    showSection('banners');
   });
 }
 
@@ -620,6 +557,8 @@ function renderArtists(area) {
               <div class="artist-contact">
                 ${a.phone ? `<div>📞 ${a.phone}</div>` : ''}
                 ${a.email ? `<div>✉ ${a.email}</div>` : ''}
+                ${a.address ? `<div>📍 ${a.address}</div>` : ''}
+                ${a.profile_url ? `<div><a href="${a.profile_url}" target="_blank" style="color:#f59e0b;text-decoration:none">🔗 Profile</a></div>` : ''}
               </div>
               <div class="artist-social">
                 ${a.youtube_url ? `<a href="${a.youtube_url}" target="_blank" class="platform-icon pi-yt">▶</a>` : ''}
@@ -653,6 +592,8 @@ function renderArtists(area) {
               ${textareaField('Short Biography', 'description', '', 'Write a short biography about the artist...')}
               ${field('Contact Number', 'phone', '', 'tel')}
               ${field('Email Address', 'email', '', 'email')}
+              ${field('Address', 'address', '')}
+              ${field('Profile Link (Website)', 'profile_url', '', 'url')}
               <div class="form-group"><label style="color:#f59e0b;font-weight:700">Social Media Links</label></div>
               ${field('YouTube URL', 'youtube_url', '', 'url')}
               ${field('Instagram URL', 'instagram_url', '', 'url')}
@@ -695,6 +636,8 @@ function renderArtists(area) {
         ${textareaField('Short Biography', 'description', a.description || '', 'Write a short biography...')}
         ${field('Contact Number', 'phone', a.phone || '', 'tel')}
         ${field('Email Address', 'email', a.email || '', 'email')}
+        ${field('Address', 'address', a.address || '')}
+        ${field('Profile Link (Website)', 'profile_url', a.profile_url || '', 'url')}
         <div class="form-group"><label style="color:#f59e0b;font-weight:700">Social Media Links</label></div>
         ${field('YouTube URL', 'youtube_url', a.youtube_url || '', 'url')}
         ${field('Instagram URL', 'instagram_url', a.instagram_url || '', 'url')}
@@ -884,9 +827,10 @@ function renderVideos(area) {
 
           <!-- Title & URL -->
           <div>
+            ${field('YOUTUBE VIDEO URL', 'youtube_url_input', '', 'text', true)}
+            <div class="text-xs text-muted" style="margin-top:-10px;margin-bottom:12px">Paste YouTube URL \u2014 thumbnail & ID auto-fetch!</div>
+            <button type="button" class="btn btn-secondary btn-sm" id="fetchYtBtn" style="margin-bottom:12px">\ud83d\udd04 Auto-Fetch from YouTube</button>
             ${field('VIDEO TITLE', 'hindi_title', '', 'text', true)}
-            ${field('YOUTUBE VIDEO URL', 'youtube_id', '', 'text', true)}
-            <div class="text-xs text-muted" style="margin-top:-10px;margin-bottom:12px">Paste the public YouTube video URL.</div>
             ${selectField('CATEGORY', 'category', ['Select Category', 'Krishna Bhajan', 'Radha Bhajan', 'Hanuman Bhajan', 'Ram Bhajan', 'Shiv Bhajan', 'Gurjar Rasiya', 'DJ Rasiya', 'Folk Song'], '')}
             ${selectField('PLAYLIST', 'playlist', ['Select Playlist (Optional)', 'Top Krishna Bhajans', 'Radha Rani Special', 'Hanuman Chalisa Collection', 'Gurjar Rasiya Hits'], '')}
           </div>
@@ -970,12 +914,43 @@ function renderVideos(area) {
       <div class="stat-card" style="text-align:center"><div style="font-size:24px;margin-bottom:4px">📊</div><div class="stat-number text-amber" style="font-size:24px">8.2M</div><div class="stat-label">TOTAL VIEWS</div><div class="text-xs text-muted">Across all videos</div></div>
     </div>`;
 
+  // YouTube Auto-Fetch
+  document.getElementById('fetchYtBtn')?.addEventListener('click', () => {
+    const urlInput = area.querySelector('input[name="youtube_url_input"]');
+    const url = urlInput?.value || '';
+    let videoId = '';
+    const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
+    if (m) videoId = m[1];
+    else if (url.length === 11) videoId = url;
+    if (!videoId) { toast('Invalid YouTube URL', 'error'); return; }
+    // Set thumbnail preview
+    const thumbInput = area.querySelector('input[name="thumbnail"]');
+    if (thumbInput) thumbInput.value = 'https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg';
+    const prevEl = area.querySelector('#preview_' + (area.querySelector('.upload-drop-zone')?.id?.replace('drop_','') || ''));
+    if (prevEl) prevEl.innerHTML = '<img src="https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg" style="max-height:100px;border-radius:6px;margin-bottom:8px">';
+    // Set youtube_id hidden
+    const ytIdInput = area.querySelector('input[name="youtube_id"]');
+    if (!ytIdInput) {
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden'; hiddenInput.name = 'youtube_id'; hiddenInput.value = videoId;
+      urlInput.parentElement.appendChild(hiddenInput);
+    } else { ytIdInput.value = videoId; }
+    toast('YouTube ID: ' + videoId + ' \u2014 Thumbnail loaded!');
+  });
+
   // Video CRUD listeners
   document.getElementById('publishVideoBtn')?.addEventListener('click', async () => {
-    const form = area.querySelector('.panel-body form') || area.querySelector('.panel-body');
     const inputs = area.querySelectorAll('.panel-body input, .panel-body select, .panel-body textarea');
     const obj = {};
     inputs.forEach(inp => { if (inp.name) obj[inp.name] = inp.value; });
+    // Extract youtube_id from URL if not already set
+    if (!obj.youtube_id && obj.youtube_url_input) {
+      const m2 = obj.youtube_url_input.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
+      if (m2) obj.youtube_id = m2[1];
+    }
+    if (!obj.youtube_id) obj.youtube_id = obj.youtube_url_input || '';
+    if (!obj.thumbnail && obj.youtube_id) obj.thumbnail = 'https://img.youtube.com/vi/' + obj.youtube_id + '/hqdefault.jpg';
+    delete obj.youtube_url_input;
     if (!obj.hindi_title) { toast('Please enter video title', 'error'); return; }
     await api('POST', 'videos', obj);
     toast('Video published');
@@ -1689,6 +1664,7 @@ function renderSettings(area) {
             ${field('Instagram URL', 'instagram_url', s.instagram_url, 'url')}
             ${field('Facebook URL', 'facebook_url', s.facebook_url, 'url')}
             ${field('Spotify URL', 'spotify_url', s.spotify_url, 'url')}
+            ${field('Twitter / X URL', 'twitter_url', s.twitter_url || '', 'url')}
           </div>
         </div>
         <div class="panel">
@@ -1702,6 +1678,23 @@ function renderSettings(area) {
               ${field('Videos Count', 'stats_videos', s.stats_videos)}
               ${field('Views Count', 'stats_views', s.stats_views)}
             </div>
+          </div>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-bottom:20px">
+        <div class="panel">
+          <div class="panel-header"><h2>Google Maps Location</h2></div>
+          <div class="panel-body">
+            ${field('Google Maps Embed URL', 'google_maps_url', s.google_maps_url || '', 'url')}
+            <div class="text-xs text-muted" style="margin-top:-8px;margin-bottom:12px">Go to Google Maps \u2192 Share \u2192 Embed a map \u2192 Copy the src URL from the iframe code.</div>
+            ${s.google_maps_url ? `<div style="border-radius:8px;overflow:hidden;margin-top:8px"><iframe src="${s.google_maps_url}" width="100%" height="200" style="border:0" allowfullscreen loading="lazy"></iframe></div>` : '<div style="color:#666;font-size:12px;text-align:center;padding:20px;border:1px dashed #333;border-radius:8px">No map location set. Add Google Maps embed URL above.</div>'}
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h2>Website Embed Code</h2></div>
+          <div class="panel-body">
+            <div class="text-xs text-muted" style="margin-bottom:8px">The Google Maps location will automatically show on the Contact section of the website.</div>
+            <div class="text-xs text-muted">Social media links (YouTube, Instagram, Facebook) will show on the website footer and floating icons.</div>
           </div>
         </div>
       </div>
@@ -1741,6 +1734,11 @@ function renderDirectors(area) {
                 <div class="artist-name">${d.name || ''}</div>
                 <div class="artist-role">${d.role || ''}</div>
                 <div style="font-size:11px;color:#888;margin-top:6px;padding:0 12px">${d.description || ''}</div>
+                <div class="artist-contact" style="font-size:11px;color:#999;padding:0 12px;margin-top:4px">
+                  ${d.email ? `<div>✉ ${d.email}</div>` : ''}
+                  ${d.phone ? `<div>📞 ${d.phone}</div>` : ''}
+                  ${d.address ? `<div>📍 ${d.address}</div>` : ''}
+                </div>
                 <div class="artist-social" style="margin-top:8px">
                   ${d.youtube_url ? `<a href="${d.youtube_url}" target="_blank" class="platform-icon pi-yt">▶</a>` : ''}
                   ${d.instagram_url ? `<a href="${d.instagram_url}" target="_blank" class="platform-icon" style="background:#e1306c">📷</a>` : ''}
@@ -1764,6 +1762,7 @@ function renderDirectors(area) {
       ${textareaField('Bio / Description', 'description', '', 'Write a short bio...')}
       ${field('Phone', 'phone', '', 'tel')}
       ${field('Email', 'email', '', 'email')}
+      ${field('Address', 'address', '')}
       <div class="form-group"><label style="color:#f59e0b;font-weight:700">Social Media Links</label></div>
       ${field('YouTube URL', 'youtube_url', '', 'url')}
       ${field('Instagram URL', 'instagram_url', '', 'url')}
@@ -1791,6 +1790,7 @@ function renderDirectors(area) {
         ${textareaField('Bio / Description', 'description', d.description || '', 'Write a short bio...')}
         ${field('Phone', 'phone', d.phone || '', 'tel')}
         ${field('Email', 'email', d.email || '', 'email')}
+        ${field('Address', 'address', d.address || '')}
         <div class="form-group"><label style="color:#f59e0b;font-weight:700">Social Media Links</label></div>
         ${field('YouTube URL', 'youtube_url', d.youtube_url || '', 'url')}
         ${field('Instagram URL', 'instagram_url', d.instagram_url || '', 'url')}
