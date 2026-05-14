@@ -6,12 +6,16 @@ import { signIn, useSession } from "next-auth/react";
 import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
   const { data: session } = useSession();
 
@@ -29,6 +33,7 @@ export default function LoginPage() {
     }
     setLoading(true);
     setError(null);
+    setSuccess(null);
     const result = await signIn("credentials", {
       email,
       password,
@@ -36,11 +41,46 @@ export default function LoginPage() {
     });
     setLoading(false);
     if (result?.error) {
-      setError("Invalid email or password");
+      setError("Invalid email or password. Account may be pending approval.");
     } else {
       router.push("/dashboard");
       router.refresh();
     }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !email || !password) {
+      setError("Name, email, and password are required");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password, phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Registration failed");
+      } else {
+        setSuccess("Account created! Admin will verify your account. You can login after approval.");
+        setName("");
+        setEmail("");
+        setPassword("");
+        setPhone("");
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    }
+    setLoading(false);
   };
 
   const handleGoogleLogin = async () => {
@@ -272,23 +312,69 @@ export default function LoginPage() {
 
           {/* Glassmorphism Card */}
           <div className="bg-white/[0.07] backdrop-blur-xl rounded-3xl border border-white/[0.12] p-8 shadow-2xl shadow-black/20">
+            {/* Tab Toggle */}
+            <div className="flex mb-6 bg-white/[0.05] rounded-xl p-1">
+              <button
+                type="button"
+                onClick={() => { setMode("login"); setError(null); setSuccess(null); }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  mode === "login"
+                    ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-500/25"
+                    : "text-white/50 hover:text-white/70"
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMode("register"); setError(null); setSuccess(null); }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  mode === "register"
+                    ? "bg-gradient-to-r from-green-600 to-green-500 text-white shadow-lg shadow-green-500/25"
+                    : "text-white/50 hover:text-white/70"
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+
             <div className="text-center mb-6">
               <h2 className="text-xl font-bold text-white">
-                Welcome back
+                {mode === "login" ? "Welcome back" : "Create Account"}
               </h2>
               <p className="text-sm text-white/40 mt-1">
-                Sign in to your account to continue
+                {mode === "login" ? "Sign in to your account to continue" : "Register for a new account"}
               </p>
             </div>
 
-            <form onSubmit={handleLogin}>
+            <form onSubmit={mode === "login" ? handleLogin : handleRegister}>
               {error && (
                 <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400 text-center">
                   {error}
                 </div>
               )}
+              {success && (
+                <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-sm text-green-400 text-center">
+                  {success}
+                </div>
+              )}
 
               <div className="space-y-4">
+                {mode === "register" && (
+                  <div>
+                    <label className="block text-sm font-medium text-white/70 mb-1.5">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Enter your full name"
+                      className="w-full px-4 py-3 bg-white/[0.06] border border-white/[0.1] rounded-xl text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-500/40 transition-all"
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-white/70 mb-1.5">
                     Email address
@@ -298,9 +384,26 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
-                    className="w-full px-4 py-3 bg-white/[0.06] border border-white/[0.1] rounded-xl text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500/40 transition-all"
+                    className={`w-full px-4 py-3 bg-white/[0.06] border border-white/[0.1] rounded-xl text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-2 transition-all ${
+                      mode === "login" ? "focus:ring-red-500/40 focus:border-red-500/40" : "focus:ring-green-500/40 focus:border-green-500/40"
+                    }`}
                   />
                 </div>
+
+                {mode === "register" && (
+                  <div>
+                    <label className="block text-sm font-medium text-white/70 mb-1.5">
+                      Phone Number <span className="text-white/30">(optional)</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="Enter your phone number"
+                      className="w-full px-4 py-3 bg-white/[0.06] border border-white/[0.1] rounded-xl text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-500/40 transition-all"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-white/70 mb-1.5">
@@ -351,15 +454,19 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-6 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-semibold py-3 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 hover:shadow-red-500/40"
+                className={`w-full mt-6 text-white font-semibold py-3 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2 ${
+                  mode === "login"
+                    ? "bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 shadow-lg shadow-red-500/25 hover:shadow-red-500/40"
+                    : "bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 shadow-lg shadow-green-500/25 hover:shadow-green-500/40"
+                }`}
               >
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Signing in...
+                    {mode === "login" ? "Signing in..." : "Creating account..."}
                   </>
                 ) : (
-                  "Sign in"
+                  mode === "login" ? "Sign in" : "Create Account"
                 )}
               </button>
             </form>
@@ -401,7 +508,11 @@ export default function LoginPage() {
           </div>
 
           <p className="text-center text-xs text-white/25 mt-4">
-            Contact admin for account creation.
+            {mode === "login" ? (
+              <>Don&apos;t have an account? <button type="button" onClick={() => { setMode("register"); setError(null); setSuccess(null); }} className="text-green-400/70 hover:text-green-400 underline">Create one</button></>
+            ) : (
+              <>Already have an account? <button type="button" onClick={() => { setMode("login"); setError(null); setSuccess(null); }} className="text-red-400/70 hover:text-red-400 underline">Sign in</button></>
+            )}
           </p>
         </div>
       </div>
