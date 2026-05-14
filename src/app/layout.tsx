@@ -14,19 +14,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "YouTube Studio",
+  title: "Bainsla Music Studio",
   description:
-    "YouTube Channel Management System — Manage channels, revenue, videos and payments.",
+    "Bainsla Music Studio — Channel Management System for YouTube creators. Manage channels, revenue, videos and payments.",
   keywords:
-    "youtube cms, channel management, revenue tracking, video management, music distribution",
+    "bainsla music studio, channel management, revenue tracking, video management, music distribution",
   openGraph: {
-    title: "YouTube Studio",
+    title: "Bainsla Music Studio",
     description:
-      "YouTube Channel Management System — Manage channels, revenue, videos and payments.",
+      "Bainsla Music Studio — Channel Management System for YouTube creators. Manage channels, revenue, videos and payments.",
     type: "website",
   },
   icons: {
     icon: "/favicon.ico",
+  },
+  verification: {
+    google: "EcahsfZ41sKrNAY8iZ2_eX4holWpehm71iXXMia6fgs",
   },
 };
 
