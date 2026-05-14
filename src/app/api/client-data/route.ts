@@ -4,6 +4,7 @@ import {
   cacheClientData,
   getCachedClientData,
   getAllCachedClientData,
+  removeChannelFromAllCaches,
   saveBankDetails,
   getBankDetails,
   saveAgreements,
@@ -82,6 +83,13 @@ export async function POST(request: Request) {
         return Response.json({ error: "Unauthorized" }, { status: 403 });
       }
       await saveBankDetails(userId, bankDetails);
+      return Response.json({ success: true });
+    }
+    case "removeChannelFromCache": {
+      if (!isAdmin) return Response.json({ error: "Admin only" }, { status: 403 });
+      const { channelId } = body as { channelId: string };
+      if (!channelId) return Response.json({ error: "channelId required" }, { status: 400 });
+      await removeChannelFromAllCaches(channelId);
       return Response.json({ success: true });
     }
     case "saveAgreements": {

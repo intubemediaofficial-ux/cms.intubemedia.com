@@ -289,46 +289,43 @@ export default function AdminChannelsPage() {
   const handleDeleteChannel = async (channelId: string, clientName: string) => {
     setActionLoading(true);
     try {
+      // Always remove from cached data in KV so it doesn't reappear on refresh
+      await fetch("/api/client-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "removeChannelFromCache", channelId }),
+      });
+
       let owner = clients.find((c) => c.channels.includes(channelId));
       if (!owner) {
         owner = clients.find((c) => c.name === clientName || c.email === clientName);
       }
-      if (!owner) {
-        // Channel is only in cached data, not in any client's KV list — remove from cache directly
-        setChannelDataMap((prev) => {
-          const next = { ...prev };
-          delete next[channelId];
-          return next;
+      if (owner) {
+        const updatedChannels = owner.channels.filter((ch) => ch !== channelId);
+        const res = await fetch("/api/users", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: owner.id, channels: updatedChannels }),
         });
-        setDeleteConfirm(null);
-        setActiveActionMenu(null);
-        setMenuPosition(null);
-        setActionLoading(false);
-        return;
-      }
-      const updatedChannels = owner.channels.filter((ch) => ch !== channelId);
-      const res = await fetch("/api/users", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: owner.id, channels: updatedChannels }),
-      });
-      if (res.ok) {
+        if (!res.ok) {
+          alert("Failed to delete channel. Please try again.");
+          setActionLoading(false);
+          return;
+        }
         setClients((prev) =>
           prev.map((c) =>
             c.id === owner.id ? { ...c, channels: updatedChannels } : c
           )
         );
-        setChannelDataMap((prev) => {
-          const next = { ...prev };
-          delete next[channelId];
-          return next;
-        });
-        setDeleteConfirm(null);
-        setActiveActionMenu(null);
-        setMenuPosition(null);
-      } else {
-        alert("Failed to delete channel. Please try again.");
       }
+      setChannelDataMap((prev) => {
+        const next = { ...prev };
+        delete next[channelId];
+        return next;
+      });
+      setDeleteConfirm(null);
+      setActiveActionMenu(null);
+      setMenuPosition(null);
     } catch {
       alert("Error deleting channel.");
     }
