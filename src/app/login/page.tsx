@@ -260,9 +260,9 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* YouTube Studio Text */}
+          {/* Bainsla Music Studio Text */}
           <h1 className="text-5xl font-black text-white mb-2 tracking-tight">
-            <span className="bg-gradient-to-r from-red-400 via-red-500 to-pink-500 bg-clip-text text-transparent">YouTube</span>
+            <span className="bg-gradient-to-r from-red-400 via-red-500 to-pink-500 bg-clip-text text-transparent">Bainsla Music</span>
           </h1>
           <h2 className="text-3xl font-bold text-white/90 tracking-[0.2em] uppercase mb-6">
             Studio
@@ -303,7 +303,7 @@ export default function LoginPage() {
               </div>
               <div className="text-left">
                 <h1 className="text-2xl font-black text-white">
-                  <span className="bg-gradient-to-r from-red-400 to-pink-500 bg-clip-text text-transparent">YouTube</span>
+                  <span className="bg-gradient-to-r from-red-400 to-pink-500 bg-clip-text text-transparent">Bainsla Music</span>
                 </h1>
                 <p className="text-[10px] font-bold tracking-[0.3em] text-white/60 uppercase">Studio</p>
               </div>
@@ -513,6 +513,9 @@ export default function LoginPage() {
             ) : (
               <>Already have an account? <button type="button" onClick={() => { setMode("login"); setError(null); setSuccess(null); }} className="text-red-400/70 hover:text-red-400 underline">Sign in</button></>
             )}
+          </p>
+          <p className="text-center text-xs text-white/20 mt-3">
+            <a href="/privacy-policy" target="_blank" className="hover:text-white/40 underline">Privacy Policy</a>
           </p>
         </div>
       </div>
