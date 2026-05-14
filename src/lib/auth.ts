@@ -15,6 +15,7 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
       role?: "admin" | "client";
+      userStatus?: "active" | "pending" | "inactive";
     };
   }
 }
@@ -26,6 +27,7 @@ declare module "next-auth/jwt" {
     accessTokenExpires?: number;
     error?: string;
     role?: "admin" | "client";
+    userStatus?: "active" | "pending" | "inactive";
   }
 }
 
@@ -67,23 +69,50 @@ function hashPassword(password: string): string {
 async function verifyClientCredentials(
   email: string,
   password: string
-): Promise<{ name: string; email: string } | null> {
+): Promise<{ name: string; email: string; status: string } | null> {
   try {
     const users = await kv.get<StoredUser[]>("bainsla_users");
     if (!users) return null;
 
     const user = users.find(
-      (u) => u.email.toLowerCase() === email && u.status === "active"
+      (u) => u.email.toLowerCase() === email && (u.status === "active" || u.status === "pending")
     );
     if (!user) return null;
 
     const hashed = hashPassword(password);
     if (user.password !== hashed) return null;
 
-    return { name: user.name, email: user.email };
+    return { name: user.name, email: user.email, status: user.status };
   } catch (error) {
     console.error("[Auth] Failed to verify client credentials:", error);
     return null;
+  }
+}
+
+async function getOrCreateUserStatus(email: string, name: string): Promise<"active" | "pending" | "inactive"> {
+  try {
+    if (ADMIN_EMAILS.includes(email.toLowerCase())) return "active";
+    const users = await kv.get<StoredUser[]>("bainsla_users") || [];
+    const existing = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    if (existing) return existing.status;
+
+    // Auto-register new Google login user as pending
+    const newUser: StoredUser = {
+      id: crypto.randomUUID(),
+      name: name || email.split("@")[0],
+      email: email.toLowerCase(),
+      password: "",
+      channels: [],
+      status: "pending",
+      role: "client",
+    };
+    users.push(newUser);
+    await kv.set("bainsla_users", users);
+    console.log(`[Auth] Auto-registered Google user as pending: ${email}`);
+    return "pending";
+  } catch (error) {
+    console.error("[Auth] Failed to get/create user status:", error);
+    return "pending";
   }
 }
 
@@ -208,7 +237,13 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, account, user }) {
       if (account) {
         if (account.type === "credentials") {
-          // role assigned below based on email
+          // Get user status from KV for credentials login
+          const credEmail = (user?.email || "").toLowerCase();
+          if (credEmail && !ADMIN_EMAILS.includes(credEmail)) {
+            const users = await kv.get<StoredUser[]>("bainsla_users") || [];
+            const storedUser = users.find((u) => u.email.toLowerCase() === credEmail);
+            token.userStatus = storedUser?.status || "pending";
+          }
         } else {
           token.accessToken = account.access_token;
           token.refreshToken = account.refresh_token;
@@ -225,6 +260,13 @@ export const authOptions: NextAuthOptions = {
             autoSaveClientToken(userEmail, account.access_token, account.refresh_token, expiry)
               .catch(() => {});
           }
+
+          // Auto-register Google login user as pending if not exists
+          if (userEmail && !ADMIN_EMAILS.includes(userEmail)) {
+            const userName = user?.name || userEmail.split("@")[0];
+            const status = await getOrCreateUserStatus(userEmail, userName);
+            token.userStatus = status;
+          }
         }
         if (user) {
           token.email = user.email;
@@ -234,6 +276,16 @@ export const authOptions: NextAuthOptions = {
 
       const email = token.email?.toLowerCase() || "";
       token.role = ADMIN_EMAILS.includes(email) ? "admin" : "client";
+      if (ADMIN_EMAILS.includes(email)) token.userStatus = "active";
+
+      // Refresh user status from KV on each request (so admin approval takes effect)
+      if (!ADMIN_EMAILS.includes(email) && email) {
+        try {
+          const users = await kv.get<StoredUser[]>("bainsla_users") || [];
+          const storedUser = users.find((u) => u.email.toLowerCase() === email);
+          if (storedUser) token.userStatus = storedUser.status;
+        } catch { /* ignore */ }
+      }
 
       if (
         token.accessTokenExpires &&
@@ -268,6 +320,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as "admin" | "client" | undefined;
         session.user.email = (token.email as string) || session.user.email;
         session.user.name = (token.name as string) || session.user.name;
+        session.user.userStatus = token.userStatus as "active" | "pending" | "inactive" | undefined;
       }
       return session;
     },
