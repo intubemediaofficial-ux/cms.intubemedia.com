@@ -24,12 +24,16 @@ export async function POST(request: Request) {
       return Response.json({ error: "Invalid state parameter" }, { status: 400 });
     }
 
-    const clientId = process.env.GOOGLE_CLIENT_ID;
+    // Use NEXT_PUBLIC_GOOGLE_CLIENT_ID (same as invite link) for token exchange
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    // Use request origin so redirect_uri matches the OAuth authorization request
+    // Use x-forwarded-host/host header to get the correct public URL on Vercel
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
     const requestUrl = new URL(request.url);
-    const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`;
-    const redirectUri = `${baseUrl}/callback`;
+    const host = forwardedHost || requestUrl.host;
+    const protocol = forwardedHost ? forwardedProto : requestUrl.protocol.replace(":", "");
+    const redirectUri = `${protocol}://${host}/callback`;
 
     if (!clientId || !clientSecret) {
       return Response.json({ error: "Google OAuth not configured" }, { status: 500 });

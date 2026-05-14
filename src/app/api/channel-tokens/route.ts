@@ -42,15 +42,18 @@ export async function GET(request: Request) {
         return Response.json({ error: "channelId required" }, { status: 400 });
       }
 
-      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
       if (!clientId) {
         return Response.json({ error: "Google Client ID not configured" }, { status: 500 });
       }
 
-      // Use request origin for redirect URI so it matches the current deployment
+      // Use x-forwarded-host for correct public URL on Vercel
+      const forwardedHost = request.headers.get("x-forwarded-host");
+      const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
       const requestUrl = new URL(request.url);
-      const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`;
-      const redirectUri = `${baseUrl}/callback`;
+      const host = forwardedHost || requestUrl.host;
+      const protocol = forwardedHost ? forwardedProto : requestUrl.protocol.replace(":", "");
+      const redirectUri = `${protocol}://${host}/callback`;
       const state = channelId;
 
       const scopes = [
