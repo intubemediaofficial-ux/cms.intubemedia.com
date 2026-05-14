@@ -289,9 +289,20 @@ export default function AdminChannelsPage() {
   const handleDeleteChannel = async (channelId: string, clientName: string) => {
     setActionLoading(true);
     try {
-      const owner = clients.find((c) => c.name === clientName || c.channels.includes(channelId));
+      let owner = clients.find((c) => c.channels.includes(channelId));
       if (!owner) {
-        alert("Could not find the client who owns this channel.");
+        owner = clients.find((c) => c.name === clientName || c.email === clientName);
+      }
+      if (!owner) {
+        // Channel is only in cached data, not in any client's KV list — remove from cache directly
+        setChannelDataMap((prev) => {
+          const next = { ...prev };
+          delete next[channelId];
+          return next;
+        });
+        setDeleteConfirm(null);
+        setActiveActionMenu(null);
+        setMenuPosition(null);
         setActionLoading(false);
         return;
       }
