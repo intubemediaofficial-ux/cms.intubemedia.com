@@ -56,7 +56,7 @@ interface StoredUser {
   email: string;
   password: string;
   channels: string[];
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "pending";
   role: "client";
 }
 

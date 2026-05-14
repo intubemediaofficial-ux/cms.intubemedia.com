@@ -27,7 +27,7 @@ export interface StoredUser {
   password: string;
   phone: string;
   channels: string[];
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "pending";
   joinedDate: string;
   category: string;
   role: "client";

@@ -75,7 +75,7 @@ interface Client {
   email: string;
   phone: string;
   channels: string[];
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "pending";
   joinedDate: string;
   category: string;
   networks?: NetworkAssignment[];
@@ -544,7 +544,7 @@ export default function AdminClientsPage() {
   }, []);
 
   const handleToggleStatus = async (client: Client) => {
-    const newStatus = client.status === "active" ? "inactive" : "active";
+    const newStatus = client.status === "active" ? "inactive" : "active"; // pending → active, inactive → active, active → inactive
     try {
       await fetch("/api/users", {
         method: "PUT",
@@ -668,6 +668,7 @@ export default function AdminClientsPage() {
             className="border border-border rounded-lg px-3 py-2 text-sm"
           >
             <option value="">All Status</option>
+            <option value="pending">Pending Approval</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
@@ -763,10 +764,12 @@ export default function AdminClientsPage() {
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${
                           client.status === "active"
                             ? "bg-green-100 text-green-700 hover:bg-green-200"
+                            : client.status === "pending"
+                            ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
                             : "bg-red-100 text-red-700 hover:bg-red-200"
                         }`}
                       >
-                        {client.status === "active" ? "Active" : "Inactive"}
+                        {client.status === "active" ? "Active" : client.status === "pending" ? "Pending" : "Inactive"}
                       </button>
                     </td>
                     <td className="px-4 py-3 text-muted">{client.joinedDate}</td>
