@@ -786,17 +786,30 @@ export default function AdminClientsPage() {
                             Reject
                           </button>
                         </div>
+                      ) : client.status === "active" ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                            Approved
+                          </span>
+                          <button
+                            onClick={() => handleToggleStatus(client)}
+                            className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
+                          >
+                            Deactivate
+                          </button>
+                        </div>
                       ) : (
-                        <button
-                          onClick={() => handleToggleStatus(client)}
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${
-                            client.status === "active"
-                              ? "bg-green-100 text-green-700 hover:bg-green-200"
-                              : "bg-red-100 text-red-700 hover:bg-red-200"
-                          }`}
-                        >
-                          {client.status === "active" ? "Active" : "Inactive"}
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                            Inactive
+                          </span>
+                          <button
+                            onClick={() => handleToggleStatus(client)}
+                            className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors"
+                          >
+                            Activate
+                          </button>
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-muted">{client.joinedDate}</td>
