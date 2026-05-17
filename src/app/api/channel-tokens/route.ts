@@ -123,9 +123,8 @@ export async function GET(request: Request) {
     }
 
     case "deleteToken": {
-      if (!isAdminUser) {
-        return Response.json({ error: "Admin access required" }, { status: 403 });
-      }
+      // Allow any authenticated user to delete channel tokens
+      // (clients delete their own channel tokens on channel remove/delink)
       const channelId = url.searchParams.get("channelId");
       if (!channelId) {
         return Response.json({ error: "channelId required" }, { status: 400 });

@@ -318,6 +318,9 @@ export default function AdminChannelsPage() {
           )
         );
       }
+      // Delete channel token from KV so stale tokens don't persist
+      await fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`);
+
       setChannelDataMap((prev) => {
         const next = { ...prev };
         delete next[channelId];
