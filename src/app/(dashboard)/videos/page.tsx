@@ -141,16 +141,17 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
     };
   }
 
-  // licensedContent = true means a rights holder claimed this video via Content ID
+  // licensedContent = true means video contains licensed content (e.g. licensed music)
+  // This does NOT mean there is an active claim — just that content is licensed
   const isLicensed = video.contentDetails?.licensedContent === true;
   if (isLicensed) {
     return {
-      isMonetized: false,
-      hasActiveClaim: true,
-      claimType: "content_id",
-      claimant: "Content ID (CMS name not available via API)",
-      label: "Content ID Claim",
-      color: "bg-orange-100 text-orange-700",
+      isMonetized: true,
+      hasActiveClaim: false,
+      claimType: null,
+      claimant: null,
+      label: "Licensed Content",
+      color: "bg-blue-100 text-blue-700",
     };
   }
 
