@@ -173,24 +173,50 @@ export default function DashboardPage() {
     setActiveChannelIds(getActiveChannelIds());
   }, []);
 
-  // Fetch channel IDs from server-side cached data (more reliable than localStorage alone)
+  // Fetch channel IDs from server-side (user record + cached data)
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetch("/api/client-data?action=getAllCachedData")
-      .then((r) => r.json())
-      .then((j) => {
-        const ids: string[] = [];
-        for (const cd of (j.data || [])) {
-          for (const ch of (cd.channels || [])) {
-            if (ch.channelId && !ch.channelId.startsWith("UCtest")) {
-              ids.push(ch.channelId);
+    const fetchIds = async () => {
+      const ids: string[] = [];
+      // Get own user record (works for clients via action=me)
+      try {
+        const res = await fetch("/api/users?action=me");
+        if (res.ok) {
+          const json = await res.json();
+          const user = json.data;
+          if (user?.channels) {
+            for (const ch of user.channels) {
+              if (ch && !ch.startsWith("UCtest") && ch !== "test") ids.push(ch);
+            }
+          }
+          if (user?.pendingChannels) {
+            for (const ch of user.pendingChannels) {
+              if (ch && !ch.startsWith("UCtest") && ch !== "test") ids.push(ch);
             }
           }
         }
-        setServerChannelIds(ids);
-      })
-      .catch(() => {});
-  }, [isAuthenticated]);
+      } catch { /* silent */ }
+      // Also try cached data for own email
+      try {
+        const email = session?.user?.email;
+        if (email) {
+          const res = await fetch(`/api/client-data?action=getCachedData&userId=${encodeURIComponent(email)}`);
+          if (res.ok) {
+            const j = await res.json();
+            if (j.data?.channels) {
+              for (const ch of j.data.channels) {
+                if (ch.channelId && !ch.channelId.startsWith("UCtest")) {
+                  ids.push(ch.channelId);
+                }
+              }
+            }
+          }
+        }
+      } catch { /* silent */ }
+      setServerChannelIds(ids);
+    };
+    fetchIds();
+  }, [isAuthenticated, session?.user?.email]);
 
   // Merge localStorage + server channel IDs
   const allChannelIds = useMemo(() => {
