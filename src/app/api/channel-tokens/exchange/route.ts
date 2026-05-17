@@ -74,26 +74,36 @@ export async function POST(request: Request) {
       return Response.json({ error: "No access token received" }, { status: 400 });
     }
 
-    // Use the access token to get channel info
-    const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: accessToken });
+    // Try to get channel info (may fail if quota exceeded — that's OK, token still gets saved)
+    let googleChannelId = expectedChannelId;
+    let channelTitle = expectedChannelId;
+    let subscribers = 0;
+    let totalViews = 0;
+    let totalVideos = 0;
+    let thumbnail = "";
+    let quotaWarning = false;
 
-    const youtube = google.youtube({ version: "v3", auth: oauth2Client });
-    const channelResponse = await youtube.channels.list({
-      part: ["snippet", "statistics"],
-      mine: true,
-    });
-
-    const channel = channelResponse.data.items?.[0];
-    const googleChannelId = channel?.id || "unknown";
-    const channelTitle = channel?.snippet?.title || "Unknown Channel";
-    const subscribers = Number(channel?.statistics?.subscriberCount || 0);
-    const totalViews = Number(channel?.statistics?.viewCount || 0);
-    const totalVideos = Number(channel?.statistics?.videoCount || 0);
-    const thumbnail = channel?.snippet?.thumbnails?.default?.url || "";
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      const youtube = google.youtube({ version: "v3", auth: oauth2Client });
+      const channelResponse = await youtube.channels.list({
+        part: ["snippet", "statistics"],
+        mine: true,
+      });
+      const channel = channelResponse.data.items?.[0];
+      googleChannelId = channel?.id || expectedChannelId;
+      channelTitle = channel?.snippet?.title || expectedChannelId;
+      subscribers = Number(channel?.statistics?.subscriberCount || 0);
+      totalViews = Number(channel?.statistics?.viewCount || 0);
+      totalVideos = Number(channel?.statistics?.videoCount || 0);
+      thumbnail = channel?.snippet?.thumbnails?.default?.url || "";
+    } catch (ytError) {
+      console.warn("YouTube API call failed (quota?), saving token anyway:", ytError);
+      quotaWarning = true;
+    }
 
     // Store the token with the expectedChannelId from state parameter
-    // This ensures the token is stored with the same ID that the CMS uses
     const storageChannelId = expectedChannelId;
 
     const channelToken: ChannelToken = {
@@ -115,6 +125,7 @@ export async function POST(request: Request) {
       data: {
         success: true,
         kvConfigured: isKVConfigured(),
+        quotaWarning,
         channelInfo: {
           channelId: storageChannelId,
           channelTitle,
