@@ -210,31 +210,36 @@ export default function VideosPage() {
     if (!isAuthenticated) return;
     const fetchServerIds = async () => {
       const ids: string[] = [];
-      // Try user record in KV (has channels array)
+      // Try own user record via /api/users?action=me (works for clients)
       try {
-        const email = session?.user?.email;
-        if (email) {
-          const res = await fetch("/api/users");
-          if (res.ok) {
-            const json = await res.json();
-            const user = (json.data || []).find((u: { email: string }) => u.email.toLowerCase() === email.toLowerCase());
-            if (user?.channels) {
-              for (const ch of user.channels) {
-                if (ch && !ch.startsWith("UCtest") && ch !== "test") ids.push(ch);
-              }
+        const res = await fetch("/api/users?action=me");
+        if (res.ok) {
+          const json = await res.json();
+          const user = json.data;
+          if (user?.channels) {
+            for (const ch of user.channels) {
+              if (ch && !ch.startsWith("UCtest") && ch !== "test") ids.push(ch);
+            }
+          }
+          if (user?.pendingChannels) {
+            for (const ch of user.pendingChannels) {
+              if (ch && !ch.startsWith("UCtest") && ch !== "test") ids.push(ch);
             }
           }
         }
       } catch { /* silent */ }
-      // Also try cached data
+      // Also try cached data for own email
       try {
-        const res = await fetch("/api/client-data?action=getAllCachedData");
-        if (res.ok) {
-          const j = await res.json();
-          for (const cd of (j.data || [])) {
-            for (const ch of (cd.channels || [])) {
-              if (ch.channelId && !ch.channelId.startsWith("UCtest")) {
-                ids.push(ch.channelId);
+        const email = session?.user?.email;
+        if (email) {
+          const res = await fetch(`/api/client-data?action=getCachedData&userId=${encodeURIComponent(email)}`);
+          if (res.ok) {
+            const j = await res.json();
+            if (j.data?.channels) {
+              for (const ch of j.data.channels) {
+                if (ch.channelId && !ch.channelId.startsWith("UCtest")) {
+                  ids.push(ch.channelId);
+                }
               }
             }
           }
