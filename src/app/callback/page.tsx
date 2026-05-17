@@ -54,7 +54,7 @@ function CallbackContent() {
         const response = await fetch("/api/channel-tokens/exchange", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code, state }),
+          body: JSON.stringify({ code, state, redirectUri: `${window.location.origin}/callback` }),
         });
 
         const result = await response.json();
@@ -81,7 +81,7 @@ function CallbackContent() {
       <div className="max-w-lg w-full">
         <div className="bg-white rounded-xl shadow-lg p-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">YouTube OAuth2 Callback</h1>
-          <p className="text-gray-500 text-sm mb-6">Successfully processed YouTube authorization callback</p>
+          <p className="text-gray-500 text-sm mb-6">{status === "error" ? "Failed to process authorization callback" : status === "success" ? "Successfully processed YouTube authorization callback" : "Processing..."}</p>
 
           {status === "loading" && (
             <div className="flex flex-col items-center py-8">
