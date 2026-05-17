@@ -30,7 +30,7 @@ async function loadData() {
     updateBadges();
   } catch (e) {
     console.error('Load failed', e);
-    DATA = { settings: {}, banners: [], releases: [], artists: [], videos: [], catalogue: [], licensing: [], inquiries: [], distribution: [] };
+    DATA = { settings: {}, banners: [], releases: [], artists: [], videos: [], catalogue: [], licensing: [], inquiries: [], distribution: [], directors: [], team: [] };
   }
 }
 
@@ -1730,37 +1730,54 @@ function renderSettings(area) {
    ═══════════════════════════════════════════════ */
 function renderDirectors(area) {
   const directors = DATA.directors || [];
+  const team = DATA.team || [];
+
+  function personCard(d, type) {
+    var cls = type === 'director' ? 'edit-director-btn' : 'edit-team-btn';
+    var delCls = type === 'director' ? 'delete-director-btn' : 'delete-team-btn';
+    return `<div class="artist-card" style="position:relative">
+      <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:2">
+        <button class="btn btn-outline btn-sm ${cls}" data-id="${d.id}" style="padding:4px 8px;font-size:10px">✏ Edit</button>
+        <button class="btn btn-outline btn-sm ${delCls}" data-id="${d.id}" style="padding:4px 8px;font-size:10px;border-color:#ef4444;color:#ef4444">✕ Delete</button>
+      </div>
+      ${d.image ? `<img src="${d.image}" class="artist-img" alt="${d.name}">` : '<div class="artist-img" style="background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:32px">👤</div>'}
+      <div class="artist-name">${d.name || ''}</div>
+      <div class="artist-role">${d.role || ''}</div>
+      <div style="font-size:11px;color:#888;margin-top:6px;padding:0 12px">${d.description || ''}</div>
+      <div class="artist-contact" style="font-size:11px;color:#999;padding:0 12px;margin-top:4px">
+        ${d.email ? `<div>✉ ${d.email}</div>` : ''}
+        ${d.phone ? `<div>📞 ${d.phone}</div>` : ''}
+        ${d.address ? `<div>📍 ${d.address}</div>` : ''}
+      </div>
+      <div class="artist-social" style="margin-top:8px">
+        ${d.youtube_url ? `<a href="${d.youtube_url}" target="_blank" class="platform-icon pi-yt">▶</a>` : ''}
+        ${d.instagram_url ? `<a href="${d.instagram_url}" target="_blank" class="platform-icon" style="background:#e1306c">📷</a>` : ''}
+        ${d.facebook_url ? `<a href="${d.facebook_url}" target="_blank" class="platform-icon" style="background:#1877f2">f</a>` : ''}
+        ${d.linkedin_url ? `<a href="${d.linkedin_url}" target="_blank" class="platform-icon" style="background:#0077b5">in</a>` : ''}
+      </div>
+    </div>`;
+  }
+
   area.innerHTML = `
     <div class="grid-2" style="margin-bottom:20px">
       <div class="panel" style="grid-column:1/-1">
         <div class="panel-header"><h2>Company Directors & Leadership</h2><button class="btn btn-primary btn-sm" id="addDirectorBtn">+ Add Director</button></div>
         <div class="panel-body">
           <div class="grid-3">
-            ${directors.map(d => `
-              <div class="artist-card" style="position:relative">
-                <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:2">
-                  <button class="btn btn-outline btn-sm edit-director-btn" data-id="${d.id}" style="padding:4px 8px;font-size:10px">✏ Edit</button>
-                  <button class="btn btn-outline btn-sm delete-director-btn" data-id="${d.id}" style="padding:4px 8px;font-size:10px;border-color:#ef4444;color:#ef4444">✕ Delete</button>
-                </div>
-                ${d.image ? `<img src="${d.image}" class="artist-img" alt="${d.name}">` : '<div class="artist-img" style="background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:32px">👤</div>'}
-                <div class="artist-name">${d.name || ''}</div>
-                <div class="artist-role">${d.role || ''}</div>
-                <div style="font-size:11px;color:#888;margin-top:6px;padding:0 12px">${d.description || ''}</div>
-                <div class="artist-contact" style="font-size:11px;color:#999;padding:0 12px;margin-top:4px">
-                  ${d.email ? `<div>✉ ${d.email}</div>` : ''}
-                  ${d.phone ? `<div>📞 ${d.phone}</div>` : ''}
-                  ${d.address ? `<div>📍 ${d.address}</div>` : ''}
-                </div>
-                <div class="artist-social" style="margin-top:8px">
-                  ${d.youtube_url ? `<a href="${d.youtube_url}" target="_blank" class="platform-icon pi-yt">▶</a>` : ''}
-                  ${d.instagram_url ? `<a href="${d.instagram_url}" target="_blank" class="platform-icon" style="background:#e1306c">📷</a>` : ''}
-                  ${d.facebook_url ? `<a href="${d.facebook_url}" target="_blank" class="platform-icon" style="background:#1877f2">f</a>` : ''}
-                  ${d.linkedin_url ? `<a href="${d.linkedin_url}" target="_blank" class="platform-icon" style="background:#0077b5">in</a>` : ''}
-                </div>
-              </div>
-            `).join('')}
+            ${directors.map(d => personCard(d, 'director')).join('')}
           </div>
           ${directors.length === 0 ? '<p style="color:#666;text-align:center;padding:40px">No directors added yet. Click "+ Add Director" to add your first director.</p>' : ''}
+        </div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-bottom:20px">
+      <div class="panel" style="grid-column:1/-1">
+        <div class="panel-header"><h2>Team Members</h2><button class="btn btn-primary btn-sm" id="addTeamBtn">+ Add Team Member</button></div>
+        <div class="panel-body">
+          <div class="grid-3">
+            ${team.map(t => personCard(t, 'team')).join('')}
+          </div>
+          ${team.length === 0 ? '<p style="color:#666;text-align:center;padding:40px">No team members added yet. Click "+ Add Team Member" to add your first team member.</p>' : ''}
         </div>
       </div>
     </div>`;
@@ -1824,6 +1841,70 @@ function renderDirectors(area) {
       if (!confirm('Are you sure you want to delete this director?')) return;
       await api('DELETE', 'directors', null, btn.dataset.id);
       toast('Director deleted', 'error');
+      await loadData();
+      showSection('directors');
+    });
+  });
+
+  // Add Team Member
+  document.getElementById('addTeamBtn').addEventListener('click', () => {
+    showModal('Add Team Member', `<form>
+      ${imageUploadField('Photo', 'image', '', 'artists')}
+      ${field('Full Name', 'name', '', 'text', true)}
+      ${field('Designation / Role', 'role', '', 'text', true)}
+      ${textareaField('Bio / Description', 'description', '', 'Write a short bio...')}
+      ${field('Phone', 'phone', '', 'tel')}
+      ${field('Email', 'email', '', 'email')}
+      ${field('Address', 'address', '')}
+      <div class="form-group"><label style="color:#f59e0b;font-weight:700">Social Media Links</label></div>
+      ${field('YouTube URL', 'youtube_url', '', 'url')}
+      ${field('Instagram URL', 'instagram_url', '', 'url')}
+      ${field('Facebook URL', 'facebook_url', '', 'url')}
+      ${field('LinkedIn URL', 'linkedin_url', '', 'url')}
+      ${formActions()}
+    </form>`, async (obj) => {
+      await api('POST', 'team', obj);
+      toast('Team member added');
+      await loadData();
+      showSection('directors');
+    });
+  });
+
+  // Edit Team Member
+  document.querySelectorAll('.edit-team-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const t = (DATA.team || []).find(x => x.id === id);
+      if (!t) return;
+      showModal('Edit Team Member', `<form>
+        ${imageUploadField('Photo', 'image', t.image || '', 'artists')}
+        ${field('Full Name', 'name', t.name, 'text', true)}
+        ${field('Designation / Role', 'role', t.role, 'text', true)}
+        ${textareaField('Bio / Description', 'description', t.description || '', 'Write a short bio...')}
+        ${field('Phone', 'phone', t.phone || '', 'tel')}
+        ${field('Email', 'email', t.email || '', 'email')}
+        ${field('Address', 'address', t.address || '')}
+        <div class="form-group"><label style="color:#f59e0b;font-weight:700">Social Media Links</label></div>
+        ${field('YouTube URL', 'youtube_url', t.youtube_url || '', 'url')}
+        ${field('Instagram URL', 'instagram_url', t.instagram_url || '', 'url')}
+        ${field('Facebook URL', 'facebook_url', t.facebook_url || '', 'url')}
+        ${field('LinkedIn URL', 'linkedin_url', t.linkedin_url || '', 'url')}
+        ${formActions()}
+      </form>`, async (obj) => {
+        await api('PUT', 'team', obj, id);
+        toast('Team member updated');
+        await loadData();
+        showSection('directors');
+      });
+    });
+  });
+
+  // Delete Team Member
+  document.querySelectorAll('.delete-team-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to delete this team member?')) return;
+      await api('DELETE', 'team', null, btn.dataset.id);
+      toast('Team member deleted', 'error');
       await loadData();
       showSection('directors');
     });
