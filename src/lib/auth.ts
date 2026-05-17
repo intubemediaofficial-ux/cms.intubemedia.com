@@ -291,20 +291,7 @@ export const authOptions: NextAuthOptions = {
       }
 
       if (token.refreshToken) {
-        const refreshed = await refreshAccessToken(token);
-        // Update stored channel tokens with refreshed access token
-        if (refreshed.accessToken && !refreshed.error) {
-          const refreshEmail = (refreshed.email as string || "").toLowerCase();
-          if (refreshEmail && !ADMIN_EMAILS.includes(refreshEmail)) {
-            autoSaveClientToken(
-              refreshEmail,
-              refreshed.accessToken as string,
-              refreshed.refreshToken as string,
-              refreshed.accessTokenExpires as number
-            ).catch(() => {});
-          }
-        }
-        return refreshed;
+        return await refreshAccessToken(token);
       }
 
       return token;
