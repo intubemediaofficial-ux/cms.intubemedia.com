@@ -285,7 +285,7 @@ export default function VideosPage() {
       switch (monetizationFilter) {
         case "monetized": return mStatus.isMonetized && !mStatus.hasActiveClaim;
         case "not_monetized": return !mStatus.isMonetized;
-        case "copyright_claim": return mStatus.hasActiveClaim && mStatus.claimType === "copyright";
+        case "copyright_claim": return mStatus.hasActiveClaim;
         case "content_id_claim": return mStatus.hasActiveClaim && mStatus.claimType === "content_id";
         case "no_claim": return !mStatus.hasActiveClaim;
         default: return true;
