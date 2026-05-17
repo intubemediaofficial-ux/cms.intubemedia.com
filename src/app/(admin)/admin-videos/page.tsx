@@ -168,6 +168,8 @@ export default function AdminVideosPage() {
   const [monetizationFilter, setMonetizationFilter] = useState<MonetizationFilter>("all");
   const [privacyFilter, setPrivacyFilter] = useState<string>("all");
   const [channelFilter, setChannelFilter] = useState<string>("all");
+  const VIDEOS_PER_PAGE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
 
   const channelOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -221,15 +223,17 @@ export default function AdminVideosPage() {
       return;
     }
     setLoadingVideos(true);
+    // Fetch all channels in parallel for speed
+    const results = await Promise.allSettled(
+      channelIds.map((channelId) =>
+        fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`)
+          .then((r) => r.json())
+          .then((j) => (j.data || []) as VideoItem[])
+      )
+    );
     const allVideos: VideoItem[] = [];
-    for (const channelId of channelIds) {
-      try {
-        const res = await fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`);
-        const json = await res.json();
-        if (res.ok && json.data) {
-          allVideos.push(...json.data);
-        }
-      } catch { /* continue */ }
+    for (const r of results) {
+      if (r.status === "fulfilled") allVideos.push(...r.value);
     }
     setVideos(allVideos);
     setLoadingVideos(false);
@@ -319,6 +323,15 @@ export default function AdminVideosPage() {
     }
     return result;
   }, [videos, searchQuery, monetizationFilter, privacyFilter, channelFilter, claims]);
+
+  // Reset page when filters change
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, privacyFilter, monetizationFilter, channelFilter, selectedClient]);
+
+  const totalPages = Math.ceil(filteredVideos.length / VIDEOS_PER_PAGE);
+  const paginatedVideos = useMemo(() => {
+    const start = (currentPage - 1) * VIDEOS_PER_PAGE;
+    return filteredVideos.slice(start, start + VIDEOS_PER_PAGE);
+  }, [filteredVideos, currentPage]);
 
   const claimStats = useMemo(() => {
     let copyrightClaims = 0;
@@ -608,7 +621,7 @@ export default function AdminVideosPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredVideos.map((video) => {
+                {paginatedVideos.map((video) => {
                   const thumbnail = video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url || "";
                   const privacy = video.status?.privacyStatus || "public";
                   const publishedDate = video.snippet?.publishedAt
@@ -718,13 +731,16 @@ export default function AdminVideosPage() {
 
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
           <p className="text-sm text-muted">
-            Showing {filteredVideos.length} of {videos.length} videos
-            {monetizationFilter !== "all" && (
-              <span className="ml-2 text-primary font-medium">
-                (filtered: {monetizationFilter.replace(/_/g, " ")})
-              </span>
-            )}
+            Showing {(currentPage - 1) * VIDEOS_PER_PAGE + 1}–{Math.min(currentPage * VIDEOS_PER_PAGE, filteredVideos.length)} of {filteredVideos.length} videos
+            {filteredVideos.length !== videos.length && ` (${videos.length} total)`}
           </p>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 text-xs border rounded-lg disabled:opacity-40 hover:bg-slate-50">Prev</button>
+              <span className="text-xs text-muted">Page {currentPage} of {totalPages}</span>
+              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 text-xs border rounded-lg disabled:opacity-40 hover:bg-slate-50">Next</button>
+            </div>
+          )}
         </div>
       </div>
 

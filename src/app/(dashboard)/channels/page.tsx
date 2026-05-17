@@ -209,6 +209,34 @@ export default function ChannelsPage() {
     fetchChannels();
   }, [isAuthenticated, storedChannels, channelDataMap]);
 
+  // Auto-refresh channel stats (subscribers, views, videos) every 60s
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const refreshChannelStats = useCallback(async () => {
+    const activeStored = storedChannels.filter((c) => c.status === "active" || c.status === "pending_approval");
+    if (activeStored.length === 0) return;
+    const results = await Promise.allSettled(
+      activeStored.map((c) =>
+        fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(c.id)}`)
+          .then((r) => r.json())
+          .then((j) => ({ id: c.id, data: j.data?.[0] as YouTubeChannel | undefined }))
+      )
+    );
+    const newMap: Record<string, YouTubeChannel> = { ...channelDataMap };
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value.data) {
+        newMap[r.value.id] = r.value.data;
+      }
+    }
+    setChannelDataMap(newMap);
+    setLastRefresh(new Date());
+  }, [storedChannels, channelDataMap]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const interval = setInterval(refreshChannelStats, 60000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, refreshChannelStats]);
+
   // Fetch token statuses for all stored channels + auto-refresh every 30s
   const fetchTokenStatuses = useCallback(() => {
     const allStored = storedChannels.filter((c) => c.status === "active" || c.status === "transferred");
@@ -867,11 +895,26 @@ export default function ChannelsPage() {
               </button>
             </div>
 
-            {/* Total + Add Channel + Download */}
+            {/* Total + Live Stats + Add Channel + Download */}
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-              <p className="text-sm text-muted">
-                Total Channels: <span className="font-semibold text-primary">{filteredChannels.length}</span>
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-muted">
+                  Total Channels: <span className="font-semibold text-primary">{filteredChannels.length}</span>
+                </p>
+                <div className="flex items-center gap-1.5 text-xs text-green-600">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span>Live Stats</span>
+                  <span className="text-muted">· Updated {lastRefresh.toLocaleTimeString()}</span>
+                </div>
+                <button
+                  onClick={refreshChannelStats}
+                  className="flex items-center gap-1 text-xs text-primary hover:text-primary-dark transition-colors"
+                  title="Refresh channel stats now"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Refresh
+                </button>
+              </div>
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleExportCSV}

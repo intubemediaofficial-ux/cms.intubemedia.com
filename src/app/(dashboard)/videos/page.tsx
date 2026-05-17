@@ -239,17 +239,17 @@ export default function VideosPage() {
     }
     setLoading(true);
     setError(null);
+    // Fetch all channels in parallel for speed
+    const results = await Promise.allSettled(
+      allChannelIds.map((channelId) =>
+        fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`)
+          .then((r) => r.json())
+          .then((j) => (j.data || []) as VideoItem[])
+      )
+    );
     const allVideos: VideoItem[] = [];
-    for (const channelId of allChannelIds) {
-      try {
-        const res = await fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`);
-        const json = await res.json();
-        if (res.ok && json.data) {
-          allVideos.push(...json.data);
-        }
-      } catch {
-        // continue with other channels
-      }
+    for (const r of results) {
+      if (r.status === "fulfilled") allVideos.push(...r.value);
     }
     if (allVideos.length > 0) {
       setVideos(allVideos);
@@ -271,6 +271,8 @@ export default function VideosPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "public" | "private" | "unlisted">("all");
   const [monetizationFilter, setMonetizationFilter] = useState<MonetizationFilter>("all");
   const [channelFilter, setChannelFilter] = useState<string>("all");
+  const VIDEOS_PER_PAGE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
 
   const channelOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -329,6 +331,15 @@ export default function VideosPage() {
     }
     return result;
   }, [videos, isReal, searchQuery, statusFilter, monetizationFilter, channelFilter, claims]);
+
+  // Reset page when filters change
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, statusFilter, monetizationFilter, channelFilter]);
+
+  const totalPages = Math.ceil(filteredVideos.length / VIDEOS_PER_PAGE);
+  const paginatedVideos = useMemo(() => {
+    const start = (currentPage - 1) * VIDEOS_PER_PAGE;
+    return filteredVideos.slice(start, start + VIDEOS_PER_PAGE);
+  }, [filteredVideos, currentPage]);
 
   const claimStats = useMemo(() => {
     const total = filteredVideos.length;
@@ -671,7 +682,7 @@ export default function VideosPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredVideos.map((video) => {
+                    {paginatedVideos.map((video) => {
                       const thumbnail = video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url || "";
                       const privacy = video.status?.privacyStatus || "public";
                       const publishedDate = video.snippet?.publishedAt
@@ -818,13 +829,16 @@ export default function VideosPage() {
 
             <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
               <p className="text-sm text-muted">
-                Showing {filteredVideos.length} of {videos.length} videos
-                {monetizationFilter !== "all" && (
-                  <span className="ml-2 text-primary font-medium">
-                    (filtered: {monetizationFilter.replace(/_/g, " ")})
-                  </span>
-                )}
+                Showing {(currentPage - 1) * VIDEOS_PER_PAGE + 1}–{Math.min(currentPage * VIDEOS_PER_PAGE, filteredVideos.length)} of {filteredVideos.length} videos
+                {filteredVideos.length !== videos.length && ` (${videos.length} total)`}
               </p>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 text-xs border rounded-lg disabled:opacity-40 hover:bg-slate-50">Prev</button>
+                  <span className="text-xs text-muted">Page {currentPage} of {totalPages}</span>
+                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 text-xs border rounded-lg disabled:opacity-40 hover:bg-slate-50">Next</button>
+                </div>
+              )}
             </div>
           </div>
         </>
