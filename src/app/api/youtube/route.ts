@@ -35,32 +35,24 @@ export async function GET(request: Request) {
     );
   }
 
-  const isAdminCredentials = !session.accessToken && ADMIN_EMAILS.includes(session.user?.email?.toLowerCase() || "");
-  const isCredentialsLogin = !session.accessToken;
+  // Since PR #68 removed YouTube scopes from Google login, login tokens only have
+  // "openid email profile" — they cannot call YouTube Data/Analytics APIs.
+  // All YouTube API calls must use per-channel tokens from KV.
+  // Treat ALL users as "credentials login" for YouTube API purposes.
+  const isCredentialsLogin = true; // Login tokens lack YouTube scopes; always use per-channel tokens
 
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
   const startDate = url.searchParams.get("startDate") || getDefaultStartDate();
   const endDate = url.searchParams.get("endDate") || getDefaultEndDate();
 
-  // Credentials login (admin or client) can access dashboardFull and lookupChannel via per-channel tokens
-  if (!session.accessToken && !isAdminCredentials && !isCredentialsLogin) {
-    return Response.json(
-      {
-        error: session.error === "RefreshAccessTokenError"
-          ? "Session expired. Please log out and log in again."
-          : "No access token. Please log out and sign in with Google again.",
-        sessionError: session.error || null,
-      },
-      { status: 401 }
-    );
-  }
+  // All users can access YouTube data via per-channel tokens
 
   try {
-    // Credentials login (admin or client) can only access certain actions via per-channel tokens
-    if (isCredentialsLogin && !["dashboardFull", "lookupChannel", "dashboard", "videos"].includes(action || "")) {
+    // All YouTube API actions now use per-channel tokens (login tokens lack YouTube scopes)
+    if (!["dashboardFull", "lookupChannel", "dashboard", "videos"].includes(action || "")) {
       return Response.json(
-        { error: "This action requires Google OAuth login. Please sign in with Google.", needsGoogleAuth: true },
+        { error: "This action requires per-channel token validation. Please validate channel tokens first." },
         { status: 401 }
       );
     }
@@ -77,12 +69,10 @@ export async function GET(request: Request) {
         // 0 = fetch ALL videos (no limit)
         const maxResultsParam = url.searchParams.get("maxResults");
         const maxResults = maxResultsParam ? Number(maxResultsParam) : 0;
-        // Try using per-channel token first, then fall back to admin token
-        let videoToken = session.accessToken;
-        if (!videoToken) {
-          const channelSpecificToken = await getValidAccessToken(channelId);
-          if (channelSpecificToken) videoToken = channelSpecificToken;
-        }
+        // Use per-channel token for video data
+        let videoToken: string | undefined = undefined;
+        const channelSpecificToken = await getValidAccessToken(channelId);
+        if (channelSpecificToken) videoToken = channelSpecificToken;
         if (videoToken) {
           const videos = await getChannelVideos(videoToken, channelId, maxResults);
           return Response.json({ data: videos });
@@ -154,13 +144,10 @@ export async function GET(request: Request) {
         const query = url.searchParams.get("query");
         if (!query)
           return Response.json({ error: "query required" }, { status: 400 });
-        // Try OAuth token first
-        let lookupToken = session.accessToken;
-        if (!lookupToken) {
-          // Try per-channel token for the queried channel itself
-          const t = await getValidAccessToken(query);
-          if (t) lookupToken = t;
-        }
+        // Use per-channel tokens for channel lookup
+        let lookupToken: string | undefined = undefined;
+        const t = await getValidAccessToken(query);
+        if (t) lookupToken = t;
         if (!lookupToken) {
           // Try per-channel tokens from explicit list or all known channels
           const storedIds = url.searchParams.get("storedChannelIds")?.split(",").filter(Boolean) || [];
@@ -212,28 +199,8 @@ export async function GET(request: Request) {
         return Response.json({ data: results });
       }
       case "dashboard": {
-        if (!session.accessToken) {
-          return Response.json({ error: "Google OAuth required for this action" }, { status: 401 });
-        }
-        const [channels, analyticsData, topVideosData] = await Promise.all([
-          getChannelStats(session.accessToken),
-          getAnalyticsData(
-            session.accessToken,
-            startDate,
-            endDate,
-            "views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes,averageViewDuration",
-            "month"
-          ),
-          getTopVideos(session.accessToken, startDate, endDate),
-        ]);
-
-        return Response.json({
-          data: {
-            channels,
-            analytics: analyticsData,
-            topVideos: topVideosData,
-          },
-        });
+        // Legacy action — redirect to dashboardFull which uses per-channel tokens
+        return Response.json({ error: "Use dashboardFull action instead — login tokens no longer have YouTube scopes." }, { status: 400 });
       }
       case "dashboardFull": {
         const prevStartDate = url.searchParams.get("prevStartDate") || startDate;
@@ -245,18 +212,14 @@ export async function GET(request: Request) {
 
         const performanceMetrics = "views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes";
 
-        // For admin credentials login (no Google OAuth token), use per-channel tokens only
-        const adminToken = session.accessToken;
-        const hasAdminToken = !!adminToken;
+        // Login tokens lack YouTube scopes — always use per-channel tokens
+        const hasAdminToken = false;
 
-        // Fetch channel stats for specific added channels
-        // For credentials login, use any available per-channel token
-        let channelLookupToken = adminToken;
-        if (!channelLookupToken) {
-          for (const cid of channelIds) {
-            const t = await getValidAccessToken(cid);
-            if (t) { channelLookupToken = t; break; }
-          }
+        // Use per-channel tokens for channel data lookup
+        let channelLookupToken: string | undefined = undefined;
+        for (const cid of channelIds) {
+          const t = await getValidAccessToken(cid);
+          if (t) { channelLookupToken = t; break; }
         }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let channelsPromise: Promise<any[]>;
@@ -271,17 +234,8 @@ export async function GET(request: Request) {
           channelsPromise = Promise.resolve([]);
         }
 
-        // Check if user's own channel is among the added channels
-        let myChannelIds: string[] = [];
-        let hasOwnChannel = false;
-        if (hasAdminToken) {
-          const myChannels = await getChannelStats(adminToken);
-          myChannelIds = myChannels.map(
-            (ch: { id?: string | null }) => ch.id
-          ).filter(Boolean) as string[];
-          hasOwnChannel = channelIds.length === 0 ||
-            myChannelIds.some((id) => channelIds.includes(id));
-        }
+        // No admin token — all data comes from per-channel tokens
+        const hasOwnChannel = false;
 
         // Get yesterday's date for last day revenue
         const yesterday = new Date();
@@ -308,44 +262,14 @@ export async function GET(request: Request) {
         const tokenizedChannelIds = Object.keys(channelTokenMap);
         const hasAnyToken = hasOwnChannel || tokenizedChannelIds.length > 0;
 
-        // Fetch analytics using admin token (for own channel) — only if admin has Google OAuth
-        const [
-          channels,
-          currentPerformance,
-          prevPerformance,
-          currentRevenue,
-          prevRevenue,
-          dailyRevenue,
-          topVideosByViews,
-          lastDayRevenueData,
-          channelRevenueData,
-        ] = await Promise.all([
-          channelsPromise,
-          hasOwnChannel && hasAdminToken
-            ? getAnalyticsData(adminToken, startDate, endDate, performanceMetrics, "")
-            : Promise.resolve(null),
-          hasOwnChannel && hasAdminToken
-            ? getAnalyticsData(adminToken, prevStartDate, prevEndDate, performanceMetrics, "")
-            : Promise.resolve(null),
-          hasOwnChannel && hasAdminToken
-            ? getRevenueData(adminToken, startDate, endDate).catch(() => null)
-            : Promise.resolve(null),
-          hasOwnChannel && hasAdminToken
-            ? getRevenueData(adminToken, prevStartDate, prevEndDate).catch(() => null)
-            : Promise.resolve(null),
-          hasOwnChannel && hasAdminToken
-            ? getAnalyticsData(adminToken, startDate, endDate, "estimatedRevenue", "day").catch(() => null)
-            : Promise.resolve(null),
-          hasOwnChannel && hasAdminToken
-            ? getTopVideos(adminToken, startDate, endDate)
-            : Promise.resolve({ analytics: null, videos: [] }),
-          hasOwnChannel && hasAdminToken
-            ? getAnalyticsData(adminToken, lastDayDate, lastDayDate, "estimatedRevenue,views", "").catch(() => null)
-            : Promise.resolve(null),
-          hasOwnChannel && hasAdminToken
-            ? getAnalyticsData(adminToken, startDate, endDate, "estimatedRevenue,views", "").catch(() => null)
-            : Promise.resolve(null),
-        ]);
+        // All YouTube data comes from per-channel tokens (no admin token for YouTube API)
+        const channels = await channelsPromise;
+        const currentPerformance = null;
+        const prevPerformance = null;
+        const currentRevenue = null;
+        const prevRevenue = null;
+        const dailyRevenue = null;
+        const topVideosByViews = { analytics: null, videos: [] as unknown[] };
 
         // Fetch analytics for each tokenized channel using their own OAuth tokens
         const perChannelAnalytics: Record<string, {
@@ -359,8 +283,7 @@ export async function GET(request: Request) {
 
         const perChannelErrors: Record<string, string> = {};
         for (const [cid, token] of Object.entries(channelTokenMap)) {
-          // Skip if this is the admin's own channel (already fetched above)
-          if (myChannelIds.includes(cid)) continue;
+          // Process all tokenized channels
           try {
             const [perf, prevPerf, rev, prevRev, daily, revViews] = await Promise.all([
               getAnalyticsData(token, startDate, endDate, performanceMetrics, "").catch((e) => { console.error(`[dashboardFull] ${cid} perf error:`, e?.message || e); return null; }),
@@ -389,24 +312,6 @@ export async function GET(request: Request) {
         // Build per-channel revenue map
         const channelRevenueMap: Record<string, { revenue: number; views: number; rpm: number }> = {};
 
-        // Admin's own channel revenue
-        if (channelRevenueData?.rows?.length && channelRevenueData.columnHeaders) {
-          const headers = (channelRevenueData.columnHeaders as Array<{ name?: string | null }>).map((h) => h.name || "");
-          const revIdx = headers.indexOf("estimatedRevenue");
-          const viewsIdx = headers.indexOf("views");
-          const totalRevenue = revIdx !== -1 ? Number(channelRevenueData.rows[0][revIdx]) || 0 : 0;
-          const totalViews = viewsIdx !== -1 ? Number(channelRevenueData.rows[0][viewsIdx]) || 0 : 0;
-          for (const myId of myChannelIds) {
-            if (channelIds.length === 0 || channelIds.includes(myId)) {
-              channelRevenueMap[myId] = {
-                revenue: totalRevenue,
-                views: totalViews,
-                rpm: totalViews > 0 ? (totalRevenue / totalViews) * 1000 : 0,
-              };
-            }
-          }
-        }
-
         // Per-channel token revenue
         for (const [cid, data] of Object.entries(perChannelAnalytics)) {
           const revData = data.revenueViews as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;
@@ -424,13 +329,16 @@ export async function GET(request: Request) {
           }
         }
 
-        // Extract last day revenue
+        // Last day revenue — computed from per-channel data
         let lastDayRevenue = 0;
-        if (lastDayRevenueData?.rows?.length && lastDayRevenueData.columnHeaders) {
-          const headers = (lastDayRevenueData.columnHeaders as Array<{ name?: string | null }>).map((h) => h.name || "");
-          const revIdx = headers.indexOf("estimatedRevenue");
-          if (revIdx !== -1) {
-            lastDayRevenue = Number(lastDayRevenueData.rows[0][revIdx]) || 0;
+        for (const pca of Object.values(perChannelAnalytics)) {
+          const revData = pca.revenueViews as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;
+          if (revData?.rows?.length && revData.columnHeaders) {
+            const headers = revData.columnHeaders.map((h) => h.name || "");
+            const revIdx = headers.indexOf("estimatedRevenue");
+            if (revIdx !== -1) {
+              lastDayRevenue += Number(revData.rows[0][revIdx]) || 0;
+            }
           }
         }
 
