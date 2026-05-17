@@ -9,8 +9,15 @@ import {
   getBankDetails,
   saveAgreements,
   getAgreements,
+  setGlobalWarning,
+  getGlobalWarning,
+  setClientWarning,
+  getClientWarning,
+  getSupportRequests,
+  addSupportRequest,
+  resolveSupportRequest,
 } from "@/lib/client-data-cache";
-import type { CachedClientData, BankDetails, Agreement } from "@/lib/client-data-cache";
+import type { CachedClientData, BankDetails, Agreement, AdminWarning, SupportRequest } from "@/lib/client-data-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +63,38 @@ export async function GET(request: Request) {
       const data = await getAgreements(userId);
       return Response.json({ data });
     }
+    case "getGlobalWarning": {
+      const data = await getGlobalWarning();
+      return Response.json({ data });
+    }
+    case "getClientWarning": {
+      const targetId = userId || session.user?.email;
+      if (!targetId) return Response.json({ error: "userId required" }, { status: 400 });
+      if (!isAdmin && session.user?.email?.toLowerCase() !== targetId.toLowerCase()) {
+        return Response.json({ error: "Unauthorized" }, { status: 403 });
+      }
+      const data = await getClientWarning(targetId);
+      return Response.json({ data });
+    }
+    case "getMyWarnings": {
+      const email = session.user?.email?.toLowerCase() || "";
+      const [globalW, clientW] = await Promise.all([
+        getGlobalWarning(),
+        getClientWarning(email),
+      ]);
+      return Response.json({ data: { global: globalW, client: clientW } });
+    }
+    case "getSupportRequests": {
+      if (!isAdmin) return Response.json({ error: "Admin only" }, { status: 403 });
+      const data = await getSupportRequests();
+      return Response.json({ data });
+    }
+    case "getMySupportRequests": {
+      const email = session.user?.email?.toLowerCase() || "";
+      const allReqs = await getSupportRequests();
+      const myReqs = allReqs.filter((r) => r.clientEmail.toLowerCase() === email);
+      return Response.json({ data: myReqs });
+    }
     default:
       return Response.json({ error: "Invalid action" }, { status: 400 });
   }
@@ -97,6 +136,41 @@ export async function POST(request: Request) {
       const { userId, agreements } = body as { userId: string; agreements: Agreement[] };
       if (!userId || !agreements) return Response.json({ error: "userId and agreements required" }, { status: 400 });
       await saveAgreements(userId, agreements);
+      return Response.json({ success: true });
+    }
+    case "setGlobalWarning": {
+      if (!isAdmin) return Response.json({ error: "Admin only" }, { status: 403 });
+      const { warning } = body as { warning: AdminWarning | null };
+      await setGlobalWarning(warning);
+      return Response.json({ success: true });
+    }
+    case "setClientWarning": {
+      if (!isAdmin) return Response.json({ error: "Admin only" }, { status: 403 });
+      const { userId, warning } = body as { userId: string; warning: AdminWarning | null };
+      if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
+      await setClientWarning(userId, warning);
+      return Response.json({ success: true });
+    }
+    case "submitSupportRequest": {
+      const { message, screenshot, clientName } = body as { message: string; screenshot?: string; clientName?: string };
+      if (!message?.trim()) return Response.json({ error: "message required" }, { status: 400 });
+      const req: SupportRequest = {
+        id: `sr-${Date.now()}`,
+        clientEmail: session.user?.email?.toLowerCase() || "",
+        clientName: clientName || session.user?.name || "Unknown",
+        message: message.trim(),
+        screenshot,
+        status: "open",
+        createdAt: new Date().toISOString(),
+      };
+      await addSupportRequest(req);
+      return Response.json({ success: true, data: req });
+    }
+    case "resolveSupportRequest": {
+      if (!isAdmin) return Response.json({ error: "Admin only" }, { status: 403 });
+      const { requestId, adminResponse } = body as { requestId: string; adminResponse?: string };
+      if (!requestId) return Response.json({ error: "requestId required" }, { status: 400 });
+      await resolveSupportRequest(requestId, adminResponse);
       return Response.json({ success: true });
     }
     default:

@@ -57,7 +57,7 @@ interface StoredChannel {
   cms: string;
   addedDate: string;
   delinkedDate?: string;
-  status: "active" | "delinked" | "transferred";
+  status: "active" | "delinked" | "transferred" | "pending_approval";
 }
 
 interface ChannelRequest {
@@ -92,12 +92,13 @@ function getStoredChannels(): StoredChannel[] {
 function saveStoredChannels(channels: StoredChannel[]) {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
-  // Sync channel IDs to KV (so admin can see them)
-  const channelIds = channels.filter((c) => c.status === "active").map((c) => c.id);
+  // Sync channel IDs to KV — active go to channels, pending go to pendingChannels
+  const activeIds = channels.filter((c) => c.status === "active").map((c) => c.id);
+  const pendingIds = channels.filter((c) => c.status === "pending_approval").map((c) => c.id);
   fetch("/api/users", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ channels: channelIds }),
+    body: JSON.stringify({ channels: activeIds, pendingChannels: pendingIds }),
   }).catch(() => { /* silent - best effort sync */ });
 }
 
@@ -184,7 +185,7 @@ export default function ChannelsPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const activeStored = storedChannels.filter((c) => c.status === "active");
+    const activeStored = storedChannels.filter((c) => c.status === "active" || c.status === "pending_approval");
     if (activeStored.length === 0) return;
 
     const idsToFetch = activeStored
@@ -207,6 +208,34 @@ export default function ChannelsPage() {
     };
     fetchChannels();
   }, [isAuthenticated, storedChannels, channelDataMap]);
+
+  // Auto-refresh channel stats (subscribers, views, videos) every 60s
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const refreshChannelStats = useCallback(async () => {
+    const activeStored = storedChannels.filter((c) => c.status === "active" || c.status === "pending_approval");
+    if (activeStored.length === 0) return;
+    const results = await Promise.allSettled(
+      activeStored.map((c) =>
+        fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(c.id)}`)
+          .then((r) => r.json())
+          .then((j) => ({ id: c.id, data: j.data?.[0] as YouTubeChannel | undefined }))
+      )
+    );
+    const newMap: Record<string, YouTubeChannel> = { ...channelDataMap };
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value.data) {
+        newMap[r.value.id] = r.value.data;
+      }
+    }
+    setChannelDataMap(newMap);
+    setLastRefresh(new Date());
+  }, [storedChannels, channelDataMap]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const interval = setInterval(refreshChannelStats, 60000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, refreshChannelStats]);
 
   // Fetch token statuses for all stored channels + auto-refresh every 30s
   const fetchTokenStatuses = useCallback(() => {
@@ -246,6 +275,36 @@ export default function ChannelsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ channels: activeChannelIds }),
     }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
+  // Sync approval status from KV — if admin approved a pending channel, update localStorage
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetch("/api/users?action=me")
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j.data) return;
+        const kvApproved = new Set<string>(j.data.channels || []);
+        const kvPending = new Set<string>(j.data.pendingChannels || []);
+        let changed = false;
+        const updated = storedChannels.map((ch) => {
+          if (ch.status === "pending_approval" && kvApproved.has(ch.id)) {
+            changed = true;
+            return { ...ch, status: "active" as const };
+          }
+          if (ch.status === "pending_approval" && !kvPending.has(ch.id) && !kvApproved.has(ch.id)) {
+            changed = true;
+            return null; // rejected by admin — remove
+          }
+          return ch;
+        }).filter(Boolean) as StoredChannel[];
+        if (changed) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+          setStoredChannels(updated);
+        }
+      })
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
@@ -380,7 +439,7 @@ export default function ChannelsPage() {
         tokenStatus: "Invalid",
         cms: cmsInput || "Bainsla Music",
         addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
-        status: "active",
+        status: "pending_approval",
       };
 
       const updatedChannels = [...storedChannels, newStored];
@@ -568,7 +627,7 @@ export default function ChannelsPage() {
     addedDate: string;
     delinkedDate: string;
     isOwn: boolean;
-    status: "active" | "delinked" | "transferred";
+    status: "active" | "delinked" | "transferred" | "pending_approval";
   };
 
   const allChannelRows: ChannelRow[] = useMemo(() => {
@@ -622,7 +681,7 @@ export default function ChannelsPage() {
     return rows;
   }, [isReal, myChannels, storedChannels, channelDataMap, tokenStatuses]);
 
-  const activeChannels = allChannelRows.filter((c) => c.status === "active");
+  const activeChannels = allChannelRows.filter((c) => c.status === "active" || c.status === "pending_approval");
   const transferredChannels = allChannelRows.filter((c) => c.status === "transferred");
   const channelsWithToken = activeChannels.filter((c) => c.tokenStatus === "Valid");
   const transferredWithToken = transferredChannels.filter((c) => c.tokenStatus === "Valid");
@@ -836,11 +895,26 @@ export default function ChannelsPage() {
               </button>
             </div>
 
-            {/* Total + Add Channel + Download */}
+            {/* Total + Live Stats + Add Channel + Download */}
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-              <p className="text-sm text-muted">
-                Total Channels: <span className="font-semibold text-primary">{filteredChannels.length}</span>
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-muted">
+                  Total Channels: <span className="font-semibold text-primary">{filteredChannels.length}</span>
+                </p>
+                <div className="flex items-center gap-1.5 text-xs text-green-600">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span>Live Stats</span>
+                  <span className="text-muted">· Updated {lastRefresh.toLocaleTimeString()}</span>
+                </div>
+                <button
+                  onClick={refreshChannelStats}
+                  className="flex items-center gap-1 text-xs text-primary hover:text-primary-dark transition-colors"
+                  title="Refresh channel stats now"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Refresh
+                </button>
+              </div>
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleExportCSV}
@@ -951,24 +1025,30 @@ export default function ChannelsPage() {
                       <td className="px-4 py-3 text-foreground">{channel.videos.toLocaleString()}</td>
                       <td className="px-4 py-3 text-foreground">{formatNumber(channel.views)}</td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => channel.tokenStatus === "Valid" ? handleViewChannelDetail(channel.id) : undefined}
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            channel.tokenStatus === "Valid"
-                              ? "bg-green-100 text-green-700 cursor-pointer hover:bg-green-200 transition-colors"
-                              : channel.tokenStatus === "Expired"
-                              ? "bg-amber-100 text-amber-700 cursor-default"
-                              : "bg-red-100 text-red-700 cursor-default"
-                          }`}
-                        >
-                          {channel.tokenStatus === "Valid" && (
-                            <Check className="w-3.5 h-3.5 text-green-600" />
-                          )}
-                          {channel.tokenStatus}
-                          {channel.tokenStatus === "Valid" && (
-                            <Eye className="w-3 h-3 ml-0.5 text-green-500" />
-                          )}
-                        </button>
+                        {channel.status === "pending_approval" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                            ⏳ Pending Approval
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => channel.tokenStatus === "Valid" ? handleViewChannelDetail(channel.id) : undefined}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              channel.tokenStatus === "Valid"
+                                ? "bg-green-100 text-green-700 cursor-pointer hover:bg-green-200 transition-colors"
+                                : channel.tokenStatus === "Expired"
+                                ? "bg-amber-100 text-amber-700 cursor-default"
+                                : "bg-red-100 text-red-700 cursor-default"
+                            }`}
+                          >
+                            {channel.tokenStatus === "Valid" && (
+                              <Check className="w-3.5 h-3.5 text-green-600" />
+                            )}
+                            {channel.tokenStatus}
+                            {channel.tokenStatus === "Valid" && (
+                              <Eye className="w-3 h-3 ml-0.5 text-green-500" />
+                            )}
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-foreground">{channel.cms}</td>
                       <td className="px-4 py-3 text-foreground">{channel.category}</td>

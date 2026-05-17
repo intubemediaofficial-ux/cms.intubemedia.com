@@ -141,3 +141,113 @@ export async function getAgreements(userId: string): Promise<Agreement[]> {
     return [];
   }
 }
+
+// Warning/Notification System
+export interface AdminWarning {
+  id: string;
+  message: string;
+  type: "maintenance" | "warning" | "info";
+  createdAt: string;
+  createdBy: string;
+}
+
+const GLOBAL_WARNING_KEY = "admin_global_warning";
+const CLIENT_WARNING_PREFIX = "client_warning:";
+
+export async function setGlobalWarning(warning: AdminWarning | null): Promise<void> {
+  if (!isKVAvailable()) return;
+  try {
+    if (warning) {
+      await kv.set(GLOBAL_WARNING_KEY, warning);
+    } else {
+      await kv.del(GLOBAL_WARNING_KEY);
+    }
+  } catch (error) {
+    console.error("[Warning] Failed to set global warning:", error);
+  }
+}
+
+export async function getGlobalWarning(): Promise<AdminWarning | null> {
+  if (!isKVAvailable()) return null;
+  try {
+    return await kv.get<AdminWarning>(GLOBAL_WARNING_KEY);
+  } catch (error) {
+    console.error("[Warning] Failed to get global warning:", error);
+    return null;
+  }
+}
+
+export async function setClientWarning(userId: string, warning: AdminWarning | null): Promise<void> {
+  if (!isKVAvailable()) return;
+  try {
+    if (warning) {
+      await kv.set(`${CLIENT_WARNING_PREFIX}${userId}`, warning);
+    } else {
+      await kv.del(`${CLIENT_WARNING_PREFIX}${userId}`);
+    }
+  } catch (error) {
+    console.error(`[Warning] Failed to set client warning for ${userId}:`, error);
+  }
+}
+
+export async function getClientWarning(userId: string): Promise<AdminWarning | null> {
+  if (!isKVAvailable()) return null;
+  try {
+    return await kv.get<AdminWarning>(`${CLIENT_WARNING_PREFIX}${userId}`);
+  } catch (error) {
+    console.error(`[Warning] Failed to get client warning for ${userId}:`, error);
+    return null;
+  }
+}
+
+// Support Request System
+export interface SupportRequest {
+  id: string;
+  clientEmail: string;
+  clientName: string;
+  message: string;
+  screenshot?: string;
+  status: "open" | "resolved";
+  createdAt: string;
+  resolvedAt?: string;
+  adminResponse?: string;
+}
+
+const SUPPORT_REQUESTS_KEY = "support_requests";
+
+export async function getSupportRequests(): Promise<SupportRequest[]> {
+  if (!isKVAvailable()) return [];
+  try {
+    return await kv.get<SupportRequest[]>(SUPPORT_REQUESTS_KEY) || [];
+  } catch (error) {
+    console.error("[Support] Failed to get support requests:", error);
+    return [];
+  }
+}
+
+export async function addSupportRequest(request: SupportRequest): Promise<void> {
+  if (!isKVAvailable()) return;
+  try {
+    const existing = await getSupportRequests();
+    existing.unshift(request);
+    // Keep last 100 requests
+    await kv.set(SUPPORT_REQUESTS_KEY, existing.slice(0, 100));
+  } catch (error) {
+    console.error("[Support] Failed to add support request:", error);
+  }
+}
+
+export async function resolveSupportRequest(requestId: string, adminResponse?: string): Promise<void> {
+  if (!isKVAvailable()) return;
+  try {
+    const existing = await getSupportRequests();
+    const updated = existing.map((r) =>
+      r.id === requestId
+        ? { ...r, status: "resolved" as const, resolvedAt: new Date().toISOString(), adminResponse: adminResponse || "" }
+        : r
+    );
+    await kv.set(SUPPORT_REQUESTS_KEY, updated);
+  } catch (error) {
+    console.error("[Support] Failed to resolve support request:", error);
+  }
+}

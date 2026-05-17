@@ -1,14 +1,60 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Shield, Settings, Save, Users, Key } from "lucide-react";
+import { Shield, Settings, Save, Users, Key, AlertTriangle, Wrench, Info, Trash2, Loader2, MessageSquare, Image as ImageIcon, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+
+interface AdminWarning {
+  id: string;
+  message: string;
+  type: "maintenance" | "warning" | "info";
+  createdAt: string;
+  createdBy: string;
+}
+
+interface SupportRequest {
+  id: string;
+  clientEmail: string;
+  clientName: string;
+  message: string;
+  screenshot?: string;
+  status: "open" | "resolved";
+  createdAt: string;
+  resolvedAt?: string;
+  adminResponse?: string;
+}
+
+interface Client {
+  id: string;
+  name: string;
+  email: string;
+}
 
 export default function AdminSettingsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [saved, setSaved] = useState(false);
+
+  // Warning states
+  const [globalWarning, setGlobalWarning] = useState<AdminWarning | null>(null);
+  const [globalMessage, setGlobalMessage] = useState("");
+  const [globalType, setGlobalType] = useState<"maintenance" | "warning" | "info">("maintenance");
+  const [warningLoading, setWarningLoading] = useState(false);
+
+  // Per-client warning
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClientEmail, setSelectedClientEmail] = useState("");
+  const [clientMessage, setClientMessage] = useState("");
+  const [clientWarningType, setClientWarningType] = useState<"maintenance" | "warning" | "info">("warning");
+  const [clientWarningLoading, setClientWarningLoading] = useState(false);
+
+  // Support requests
+  const [supportRequests, setSupportRequests] = useState<SupportRequest[]>([]);
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [responseText, setResponseText] = useState("");
+  const [respondingTo, setRespondingTo] = useState<string | null>(null);
+  const [viewScreenshot, setViewScreenshot] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -16,9 +62,129 @@ export default function AdminSettingsPage() {
     }
   }, [status, session, router]);
 
+  // Fetch current warnings + clients + support requests
+  useEffect(() => {
+    if (status !== "authenticated" || session?.user?.role !== "admin") return;
+
+    // Fetch global warning
+    fetch("/api/client-data?action=getGlobalWarning")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data) {
+          setGlobalWarning(j.data);
+          setGlobalMessage(j.data.message);
+          setGlobalType(j.data.type);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch clients for per-client warning
+    fetch("/api/users")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data?.length) {
+          setClients(j.data.map((u: Client) => ({ id: u.id, name: u.name, email: u.email })));
+        }
+      })
+      .catch(() => {});
+
+    // Fetch support requests
+    setSupportLoading(true);
+    fetch("/api/client-data?action=getSupportRequests")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data) setSupportRequests(j.data);
+      })
+      .catch(() => {})
+      .finally(() => setSupportLoading(false));
+  }, [status, session]);
+
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleSetGlobalWarning = async () => {
+    if (!globalMessage.trim()) return;
+    setWarningLoading(true);
+    const warning: AdminWarning = {
+      id: `gw-${Date.now()}`,
+      message: globalMessage.trim(),
+      type: globalType,
+      createdAt: new Date().toISOString(),
+      createdBy: session?.user?.email || "admin",
+    };
+    await fetch("/api/client-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "setGlobalWarning", warning }),
+    });
+    setGlobalWarning(warning);
+    setWarningLoading(false);
+  };
+
+  const handleClearGlobalWarning = async () => {
+    setWarningLoading(true);
+    await fetch("/api/client-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "setGlobalWarning", warning: null }),
+    });
+    setGlobalWarning(null);
+    setGlobalMessage("");
+    setWarningLoading(false);
+  };
+
+  const handleSetClientWarning = async () => {
+    if (!selectedClientEmail || !clientMessage.trim()) return;
+    setClientWarningLoading(true);
+    const warning: AdminWarning = {
+      id: `cw-${Date.now()}`,
+      message: clientMessage.trim(),
+      type: clientWarningType,
+      createdAt: new Date().toISOString(),
+      createdBy: session?.user?.email || "admin",
+    };
+    await fetch("/api/client-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "setClientWarning", userId: selectedClientEmail, warning }),
+    });
+    setClientMessage("");
+    setSelectedClientEmail("");
+    setClientWarningLoading(false);
+    alert(`Warning sent to ${selectedClientEmail}`);
+  };
+
+  const handleClearClientWarning = async (email: string) => {
+    await fetch("/api/client-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "setClientWarning", userId: email, warning: null }),
+    });
+    alert(`Warning cleared for ${email}`);
+  };
+
+  const handleResolveSupportRequest = async (requestId: string) => {
+    setRespondingTo(requestId);
+    await fetch("/api/client-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "resolveSupportRequest", requestId, adminResponse: responseText }),
+    });
+    setSupportRequests((prev) =>
+      prev.map((r) =>
+        r.id === requestId ? { ...r, status: "resolved" as const, resolvedAt: new Date().toISOString(), adminResponse: responseText } : r
+      )
+    );
+    setResponseText("");
+    setRespondingTo(null);
+  };
+
+  const typeIcons = {
+    maintenance: <Wrench className="w-4 h-4" />,
+    warning: <AlertTriangle className="w-4 h-4" />,
+    info: <Info className="w-4 h-4" />,
   };
 
   return (
@@ -32,8 +198,201 @@ export default function AdminSettingsPage() {
 
       <div>
         <h1 className="text-2xl font-bold text-foreground">Admin Settings</h1>
-        <p className="text-sm text-muted mt-1">Configure system-level settings and admin accounts.</p>
+        <p className="text-sm text-muted mt-1">Configure warnings, view support requests, and manage admin accounts.</p>
       </div>
+
+      {/* Global Warning / Maintenance Banner */}
+      <div className="bg-white rounded-xl border border-border overflow-hidden">
+        <div className="p-5 border-b border-border">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
+            <h2 className="text-lg font-semibold text-foreground">Global Warning / Maintenance</h2>
+          </div>
+          <p className="text-sm text-muted mt-1">Set a warning message that all clients will see on their dashboard.</p>
+        </div>
+        <div className="p-5 space-y-4">
+          {globalWarning && (
+            <div className={`p-3 rounded-lg border flex items-center justify-between ${
+              globalWarning.type === "maintenance" ? "bg-amber-50 border-amber-200 text-amber-800" :
+              globalWarning.type === "warning" ? "bg-red-50 border-red-200 text-red-800" :
+              "bg-blue-50 border-blue-200 text-blue-800"
+            }`}>
+              <div className="flex items-center gap-2">
+                {typeIcons[globalWarning.type]}
+                <span className="text-sm font-medium">{globalWarning.message}</span>
+              </div>
+              <button onClick={handleClearGlobalWarning} className="p-1 hover:opacity-70" disabled={warningLoading}>
+                {warningLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
+          <div className="flex gap-3">
+            <select
+              value={globalType}
+              onChange={(e) => setGlobalType(e.target.value as "maintenance" | "warning" | "info")}
+              className="border border-border rounded-lg px-3 py-2.5 text-sm"
+            >
+              <option value="maintenance">🔧 Maintenance</option>
+              <option value="warning">⚠️ Warning</option>
+              <option value="info">ℹ️ Info</option>
+            </select>
+            <input
+              type="text"
+              value={globalMessage}
+              onChange={(e) => setGlobalMessage(e.target.value)}
+              placeholder="Enter warning message for all clients..."
+              className="flex-1 px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <button
+              onClick={handleSetGlobalWarning}
+              disabled={warningLoading || !globalMessage.trim()}
+              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+            >
+              {warningLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+              Set Warning
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Per-Client Warning */}
+      <div className="bg-white rounded-xl border border-border overflow-hidden">
+        <div className="p-5 border-b border-border">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-red-500" />
+            <h2 className="text-lg font-semibold text-foreground">Send Warning to Client</h2>
+          </div>
+          <p className="text-sm text-muted mt-1">Send a specific warning/notification to a particular client.</p>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <select
+              value={selectedClientEmail}
+              onChange={(e) => setSelectedClientEmail(e.target.value)}
+              className="border border-border rounded-lg px-3 py-2.5 text-sm"
+            >
+              <option value="">Select Client...</option>
+              {clients.map((c) => (
+                <option key={c.email} value={c.email}>{c.name} ({c.email})</option>
+              ))}
+            </select>
+            <select
+              value={clientWarningType}
+              onChange={(e) => setClientWarningType(e.target.value as "maintenance" | "warning" | "info")}
+              className="border border-border rounded-lg px-3 py-2.5 text-sm"
+            >
+              <option value="warning">⚠️ Warning</option>
+              <option value="maintenance">🔧 Maintenance</option>
+              <option value="info">ℹ️ Info</option>
+            </select>
+            <button
+              onClick={handleSetClientWarning}
+              disabled={clientWarningLoading || !selectedClientEmail || !clientMessage.trim()}
+              className="flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+            >
+              {clientWarningLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+              Send Warning
+            </button>
+          </div>
+          <input
+            type="text"
+            value={clientMessage}
+            onChange={(e) => setClientMessage(e.target.value)}
+            placeholder="Enter warning message for this client..."
+            className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          {selectedClientEmail && (
+            <button
+              onClick={() => handleClearClientWarning(selectedClientEmail)}
+              className="text-xs text-red-500 hover:text-red-700 underline"
+            >
+              Clear existing warning for this client
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Support Requests from Clients */}
+      <div className="bg-white rounded-xl border border-border overflow-hidden">
+        <div className="p-5 border-b border-border">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">Support Requests</h2>
+          </div>
+          <p className="text-sm text-muted mt-1">Client support requests — messages, screenshots, and problems reported.</p>
+        </div>
+        <div className="p-5">
+          {supportLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : supportRequests.length === 0 ? (
+            <p className="text-sm text-muted text-center py-8">No support requests yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {supportRequests.map((req) => (
+                <div key={req.id} className={`p-4 rounded-lg border ${req.status === "resolved" ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{req.clientName} ({req.clientEmail})</p>
+                      <p className="text-xs text-muted">{new Date(req.createdAt).toLocaleString()}</p>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${req.status === "resolved" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                      {req.status === "resolved" ? "Resolved" : "Open"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-foreground mt-2">{req.message}</p>
+                  {req.screenshot && (
+                    <button
+                      onClick={() => setViewScreenshot(req.screenshot || null)}
+                      className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      View Screenshot
+                    </button>
+                  )}
+                  {req.adminResponse && (
+                    <div className="mt-2 p-2 bg-white rounded border border-green-200">
+                      <p className="text-xs text-muted">Admin Response:</p>
+                      <p className="text-sm text-foreground">{req.adminResponse}</p>
+                    </div>
+                  )}
+                  {req.status === "open" && (
+                    <div className="mt-3 flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Response (optional)..."
+                        value={respondingTo === req.id ? responseText : ""}
+                        onChange={(e) => { setRespondingTo(req.id); setResponseText(e.target.value); }}
+                        onFocus={() => setRespondingTo(req.id)}
+                        className="flex-1 px-2 py-1.5 border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary/30"
+                      />
+                      <button
+                        onClick={() => handleResolveSupportRequest(req.id)}
+                        className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded text-xs font-medium transition-colors"
+                      >
+                        Resolve
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Screenshot Modal */}
+      {viewScreenshot && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90] p-4" onClick={() => setViewScreenshot(null)}>
+          <div className="bg-white rounded-xl max-w-3xl w-full p-4 relative" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setViewScreenshot(null)} className="absolute top-2 right-2 p-1 hover:bg-slate-100 rounded">
+              <X className="w-5 h-5" />
+            </button>
+            <img src={viewScreenshot} alt="Screenshot" className="w-full rounded-lg" />
+          </div>
+        </div>
+      )}
 
       {/* General Settings */}
       <div className="bg-white rounded-xl border border-border overflow-hidden">

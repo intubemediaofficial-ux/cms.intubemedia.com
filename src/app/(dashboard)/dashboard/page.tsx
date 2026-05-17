@@ -593,92 +593,6 @@ export default function DashboardPage() {
 
       {isAuthenticated && !loading && !hasNoChannelsAdded && isReal && (
         <>
-          {/* ===== SECTION 1: Cumulative Metrics (date-independent) ===== */}
-          <div className="bg-slate-50 rounded-xl border border-border p-5">
-            <h3 className="text-sm font-semibold text-foreground mb-3">
-              Cumulative Metrics <span className="text-xs font-normal text-muted">(Aggregated across {channels.length} added channel{channels.length !== 1 ? "s" : ""})</span>
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              <MetricCard
-                title="Estimated Revenue"
-                value={formatCurrency(curEstRevenue)}
-                tooltip="Total estimated revenue across all time for the selected period"
-                color="#f59e0b"
-              />
-              <MetricCard
-                title="Ad Revenue"
-                value={formatCurrency(curAdRevenue)}
-                tooltip="Revenue from ads shown on your videos"
-                color="#3b82f6"
-              />
-              <MetricCard
-                title="Premium Revenue"
-                value={formatCurrency(curPremiumRevenue)}
-                tooltip="Revenue from YouTube Premium viewers"
-                color="#22c55e"
-              />
-              <MetricCard
-                title="Avg CPM"
-                value={formatCurrency(curCPM)}
-                tooltip="Average cost per 1000 impressions"
-                color="#8b5cf6"
-              />
-              <MetricCard
-                title="Avg RPM"
-                value={formatCurrency(curRPM)}
-                tooltip="Average revenue per 1000 views"
-                color="#ec4899"
-              />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
-              <MetricCard
-                title="Total Channels"
-                value={String(channelCount)}
-                tooltip="Number of YouTube channels linked"
-                color="#06b6d4"
-              />
-              <MetricCard
-                title="Revenue Per Channel"
-                value={formatCurrency(curRevenuePerChannel)}
-                tooltip="Average revenue per channel"
-                color="#f97316"
-              />
-              <MetricCard
-                title="Videos"
-                value={formatNumber(totalVideos)}
-                tooltip="Total number of videos on your channel(s)"
-                color="#84cc16"
-              />
-              <MetricCard
-                title="Views"
-                value={formatNumber(totalViews)}
-                tooltip="Total lifetime views across all channels"
-                color="#eab308"
-              />
-              <MetricCard
-                title="Subscribers"
-                value={formatNumber(totalSubscribers)}
-                tooltip="Total subscribers across all channels"
-                color="#14b8a6"
-              />
-            </div>
-            {/* Last Day Revenue */}
-            {lastDayRevenue > 0 && (
-              <div className="mt-3 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg border border-amber-200 px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-amber-600" />
-                    <span className="text-sm font-medium text-amber-800">Last Day Revenue</span>
-                    {lastDayDate && (
-                      <span className="text-xs text-amber-600">({lastDayDate})</span>
-                    )}
-                  </div>
-                  <span className="text-lg font-bold text-amber-700">{formatCurrency(lastDayRevenue)}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* ===== NOTE ===== */}
           <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-xs text-blue-700">
             <span className="font-semibold shrink-0">Note:</span>
@@ -688,19 +602,21 @@ export default function DashboardPage() {
           {/* ===== DATE RANGE FILTER ===== */}
           <DateRangeFilter value={datePreset} onChange={handleDateChange} />
 
-          {/* ===== SECTION 2: Performance Overview (with % change) ===== */}
-          <div className="relative">
+          {/* ===== COMBINED DASHBOARD OVERVIEW ===== */}
+          <div className="relative bg-slate-50 rounded-xl border border-border p-5">
             {loading && (
               <div className="absolute inset-0 bg-white/60 z-10 flex items-center justify-center rounded-lg">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
             )}
             <h3 className="text-sm font-semibold text-foreground mb-1">
-              Performance Overview
+              Dashboard Overview
               <span className="text-xs font-normal text-muted ml-2">
-                (Current: {dateRange.label} - {displayStart} to {displayEnd} | Prev: {prevDisplayStart} to {prevDisplayEnd})
+                ({channels.length} channel{channels.length !== 1 ? "s" : ""} | {dateRange.label}: {displayStart} to {displayEnd})
               </span>
             </h3>
+
+            {/* Row 1: Revenue Metrics */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
               <MetricCard
                 title="Estimated Revenue"
@@ -738,27 +654,21 @@ export default function DashboardPage() {
                 color="#ec4899"
               />
             </div>
+
+            {/* Row 2: Channel & Revenue Breakdown */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
               <MetricCard
-                title="New Linked Channels"
-                value={String(newLinkedChannels)}
-                change={pctChange(newLinkedChannels, 0)}
-                tooltip="New channels linked during the selected period"
+                title="Total Channels"
+                value={String(channelCount)}
+                tooltip="Number of YouTube channels linked"
                 color="#06b6d4"
               />
               <MetricCard
-                title="Revenue Channels"
-                value={String(curRevenueChannels)}
-                change={null}
-                tooltip="Channels with revenue > $0 in selected period"
+                title="Revenue Per Channel"
+                value={formatCurrency(curRevenuePerChannel)}
+                change={pctChange(curRevenuePerChannel, prevRevenuePerChannel)}
+                tooltip="Average revenue per channel in selected period"
                 color="#f97316"
-              />
-              <MetricCard
-                title="New Channel Revenue"
-                value={formatCurrency(curNewChannelRevenue)}
-                change={pctChange(curNewChannelRevenue, prevNewChannelRevenue)}
-                tooltip="Revenue from newly linked channels in this period"
-                color="#22c55e"
               />
               <MetricCard
                 title="Carry Forward Revenue"
@@ -768,34 +678,42 @@ export default function DashboardPage() {
                 color="#8b5cf6"
               />
               <MetricCard
-                title="Revenue Per Channel"
-                value={formatCurrency(curRevenuePerChannel)}
-                change={pctChange(curRevenuePerChannel, prevRevenuePerChannel)}
-                tooltip="Average revenue per channel in selected period"
-                color="#ec4899"
+                title="Revenue Channels"
+                value={String(curRevenueChannels)}
+                tooltip="Channels with revenue > $0 in selected period"
+                color="#22c55e"
               />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
               <MetricCard
-                title="Revenue Per New Channel"
-                value={formatCurrency(curRevenuePerNewChannel)}
-                change={pctChange(curRevenuePerNewChannel, prevRevenuePerNewChannel)}
-                tooltip="Average revenue per newly linked channel"
+                title="New Channel Revenue"
+                value={formatCurrency(curNewChannelRevenue)}
+                change={pctChange(curNewChannelRevenue, prevNewChannelRevenue)}
+                tooltip="Revenue from newly linked channels in this period"
                 color="#f59e0b"
               />
+            </div>
+
+            {/* Row 3: Engagement Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
               <MetricCard
                 title="Views"
-                value={formatNumber(curViews)}
+                value={formatNumber(curViews || totalViews)}
                 change={pctChange(curViews, prevViews)}
                 tooltip="Total views in selected period"
                 color="#eab308"
               />
               <MetricCard
                 title="Subscribers"
-                value={formatNumber(curSubs)}
+                value={formatNumber(curSubs || totalSubscribers)}
                 change={pctChange(curSubs, prevSubs)}
-                tooltip="Net subscribers gained in selected period"
+                tooltip="Subscribers in selected period"
                 color="#14b8a6"
+              />
+              <MetricCard
+                title="Videos"
+                value={formatNumber(curVideos || totalVideos)}
+                change={pctChange(curVideos || totalVideos, prevVideosPerf || totalVideos)}
+                tooltip="Total videos in selected period"
+                color="#84cc16"
               />
               <MetricCard
                 title="Likes"
@@ -805,13 +723,29 @@ export default function DashboardPage() {
                 color="#ef4444"
               />
               <MetricCard
-                title="Videos"
-                value={formatNumber(curVideos || totalVideos)}
-                change={pctChange(curVideos || totalVideos, prevVideosPerf || totalVideos)}
-                tooltip="Total videos published in selected period"
+                title="New Linked Channels"
+                value={String(newLinkedChannels)}
+                change={pctChange(newLinkedChannels, 0)}
+                tooltip="New channels linked during the selected period"
                 color="#06b6d4"
               />
             </div>
+
+            {/* Last Day Revenue */}
+            {lastDayRevenue > 0 && (
+              <div className="mt-3 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg border border-amber-200 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-amber-600" />
+                    <span className="text-sm font-medium text-amber-800">Last Day Revenue</span>
+                    {lastDayDate && (
+                      <span className="text-xs text-amber-600">({lastDayDate})</span>
+                    )}
+                  </div>
+                  <span className="text-lg font-bold text-amber-700">{formatCurrency(lastDayRevenue)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ===== SECTION 3: Top 5 Leaderboards ===== */}
