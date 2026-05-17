@@ -21,6 +21,7 @@ function CallbackContent() {
   const [channelInfo, setChannelInfo] = useState<ChannelInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [kvConfigured, setKvConfigured] = useState<boolean | null>(null);
+  const [quotaWarning, setQuotaWarning] = useState(false);
 
   useEffect(() => {
     const code = searchParams.get("code");
@@ -66,6 +67,7 @@ function CallbackContent() {
 
         setChannelInfo(result.data.channelInfo);
         setKvConfigured(result.data.kvConfigured ?? null);
+        setQuotaWarning(result.data.quotaWarning ?? false);
         setStatus("success");
       } catch {
         setStatus("error");
@@ -99,6 +101,13 @@ function CallbackContent() {
                 </div>
                 <p className="text-sm text-green-600 mt-1">Token validated and stored. Channel status will update to &quot;Valid&quot; in the CMS dashboard.</p>
               </div>
+              {quotaWarning && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
+                  <p className="text-sm text-amber-700">
+                    <strong>Note:</strong> YouTube API quota limit reached — channel details could not be loaded right now. But your <strong>token has been saved successfully</strong>. Channel info will load automatically when quota resets (usually within 24 hours).
+                  </p>
+                </div>
+              )}
               {kvConfigured === false && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
                   <p className="text-sm text-amber-700">
