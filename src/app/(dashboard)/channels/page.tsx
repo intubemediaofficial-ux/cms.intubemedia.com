@@ -265,35 +265,59 @@ export default function ChannelsPage() {
     return () => clearInterval(interval);
   }, [isAuthenticated, fetchTokenStatuses]);
 
-  // Sync localStorage channels to KV on page load (so admin sees real channel IDs)
+  // Restore channels from KV if localStorage is empty (e.g. after logout/login)
+  // Then sync localStorage to KV, and sync approval statuses
   useEffect(() => {
     if (!isAuthenticated) return;
-    const activeChannelIds = storedChannels.filter((c) => c.status === "active").map((c) => c.id);
-    if (activeChannelIds.length === 0) return;
-    fetch("/api/users", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channels: activeChannelIds }),
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
 
-  // Sync approval status from KV — if admin approved a pending channel, update localStorage
-  useEffect(() => {
-    if (!isAuthenticated) return;
     fetch("/api/users?action=me")
       .then((r) => r.json())
       .then((j) => {
         if (!j.data) return;
-        const kvApproved = new Set<string>(j.data.channels || []);
-        const kvPending = new Set<string>(j.data.pendingChannels || []);
+        const kvApproved: string[] = j.data.channels || [];
+        const kvPending: string[] = j.data.pendingChannels || [];
+        const currentStored = getStoredChannels();
+
+        // If localStorage is empty but KV has channels, restore from KV
+        if (currentStored.length === 0 && (kvApproved.length > 0 || kvPending.length > 0)) {
+          const restored: StoredChannel[] = [];
+          for (const id of kvApproved) {
+            restored.push({
+              id,
+              category: "",
+              channelType: "",
+              tokenStatus: "N/A",
+              cms: "",
+              addedDate: new Date().toISOString().split("T")[0],
+              status: "active",
+            });
+          }
+          for (const id of kvPending) {
+            restored.push({
+              id,
+              category: "",
+              channelType: "",
+              tokenStatus: "N/A",
+              cms: "",
+              addedDate: new Date().toISOString().split("T")[0],
+              status: "pending_approval",
+            });
+          }
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
+          setStoredChannels(restored);
+          return; // Skip other syncs — restored data is already in sync with KV
+        }
+
+        // Sync approval status from KV — if admin approved a pending channel, update localStorage
+        const kvApprovedSet = new Set(kvApproved);
+        const kvPendingSet = new Set(kvPending);
         let changed = false;
-        const updated = storedChannels.map((ch) => {
-          if (ch.status === "pending_approval" && kvApproved.has(ch.id)) {
+        const updated = currentStored.map((ch) => {
+          if (ch.status === "pending_approval" && kvApprovedSet.has(ch.id)) {
             changed = true;
             return { ...ch, status: "active" as const };
           }
-          if (ch.status === "pending_approval" && !kvPending.has(ch.id) && !kvApproved.has(ch.id)) {
+          if (ch.status === "pending_approval" && !kvPendingSet.has(ch.id) && !kvApprovedSet.has(ch.id)) {
             changed = true;
             return null; // rejected by admin — remove
           }
@@ -302,6 +326,17 @@ export default function ChannelsPage() {
         if (changed) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
           setStoredChannels(updated);
+        }
+
+        // Sync localStorage channels to KV (only if localStorage has data)
+        const activeChannelIds = (changed ? updated : currentStored).filter((c) => c.status === "active").map((c) => c.id);
+        if (activeChannelIds.length > 0) {
+          const pendingIds = (changed ? updated : currentStored).filter((c) => c.status === "pending_approval").map((c) => c.id);
+          fetch("/api/users", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ channels: activeChannelIds, pendingChannels: pendingIds }),
+          }).catch(() => {});
         }
       })
       .catch(() => {});

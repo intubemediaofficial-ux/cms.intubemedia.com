@@ -873,38 +873,47 @@ export default function AdminDashboardPage() {
               <Crown className="w-5 h-5 text-amber-500" />
               <h2 className="text-lg font-semibold text-foreground">Top Clients</h2>
             </div>
-            <span className="text-xs text-muted">By channel count</span>
+            <span className="text-xs text-muted">By channel count & revenue</span>
           </div>
           <div className="p-4">
             {topClientsByChannels.length === 0 ? (
               <p className="text-center text-muted py-8 text-sm">No clients yet</p>
             ) : (
               <div className="space-y-3">
-                {topClientsByChannels.map((client, idx) => (
-                  <div
-                    key={client.id}
-                    className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${
-                      idx === 0 ? "bg-amber-500" : idx === 1 ? "bg-slate-400" : idx === 2 ? "bg-amber-700" : "bg-slate-300"
-                    }`}>
-                      {idx + 1}
+                {topClientsByChannels.map((client, idx) => {
+                  const clientCached = cachedClientData.find((cd) => cd.email === client.email);
+                  return (
+                    <div
+                      key={client.id}
+                      className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                        idx === 0 ? "bg-amber-500" : idx === 1 ? "bg-slate-400" : idx === 2 ? "bg-amber-700" : "bg-slate-300"
+                      }`}>
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{client.name}</p>
+                        <p className="text-xs text-muted truncate">{client.email}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-foreground">{client.channels.length}</p>
+                        <p className="text-xs text-muted">channels</p>
+                      </div>
+                      {clientCached && clientCached.totalRevenue > 0 && (
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-green-600">${clientCached.totalRevenue.toFixed(2)}</p>
+                          <p className="text-xs text-muted">revenue</p>
+                        </div>
+                      )}
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        client.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                      }`}>
+                        {client.status}
+                      </span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{client.name}</p>
-                      <p className="text-xs text-muted truncate">{client.email}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-foreground">{client.channels.length}</p>
-                      <p className="text-xs text-muted">channels</p>
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      client.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                    }`}>
-                      {client.status}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1021,6 +1030,7 @@ export default function AdminDashboardPage() {
                     {sortBy === "status" && (sortDir === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />)}
                   </div>
                 </th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground">Revenue</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Joined</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Details</th>
               </tr>
@@ -1059,6 +1069,15 @@ export default function AdminDashboardPage() {
                         {client.status === "active" ? "Active" : "Inactive"}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const cc = cachedClientData.find((cd) => cd.email === client.email);
+                        if (cc && cc.totalRevenue > 0) {
+                          return <span className="font-semibold text-green-600">${cc.totalRevenue.toFixed(2)}</span>;
+                        }
+                        return <span className="text-muted text-xs">—</span>;
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-muted">{client.joinedDate}</td>
                     <td className="px-4 py-3">
                       {client.channels.length > 0 && (
@@ -1078,7 +1097,7 @@ export default function AdminDashboardPage() {
                   </tr>
                   {expandedClient === client.id && client.channels.length > 0 && (
                     <tr key={`${client.id}-channels`} className="bg-slate-50">
-                      <td colSpan={8} className="px-8 py-4">
+                      <td colSpan={9} className="px-8 py-4">
                         <div className="space-y-2">
                           <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
                             Channel IDs assigned to {client.name}

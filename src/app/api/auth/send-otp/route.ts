@@ -74,7 +74,12 @@ export async function POST(request: Request) {
 
     if (result.error) {
       console.error("[OTP] Resend error:", result.error);
-      return Response.json({ error: `Email send failed: ${result.error.message || "Unknown error"}` }, { status: 500 });
+      // Check if domain verification issue
+      const errMsg = result.error.message || "Unknown error";
+      if (errMsg.includes("testing emails") || errMsg.includes("verify a domain")) {
+        return Response.json({ error: "Email service needs domain setup. Please ask admin to verify domain at resend.com/domains. Contact: bainslamusicofficial@gmail.com" }, { status: 500 });
+      }
+      return Response.json({ error: `Email send failed: ${errMsg}` }, { status: 500 });
     }
 
     console.log(`[OTP] Sent to ${normalizedEmail}`);
