@@ -408,6 +408,9 @@ export default function ChannelsPage() {
     );
     saveStoredChannels(updated);
     setStoredChannels(updated);
+    // Delete channel token from KV when delinked
+    fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`)
+      .catch(() => {});
   };
 
   const handleTransfer = (channelId: string) => {
@@ -417,6 +420,9 @@ export default function ChannelsPage() {
     );
     saveStoredChannels(updated);
     setStoredChannels(updated);
+    // Delete channel token from KV when transferred
+    fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`)
+      .catch(() => {});
   };
 
   const handleRelink = (channelId: string) => {
@@ -437,6 +443,9 @@ export default function ChannelsPage() {
       delete copy[channelId];
       return copy;
     });
+    // Delete channel token from KV so it doesn't persist as stale/valid
+    fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`)
+      .catch(() => {});
     setShowDeleteConfirm(null);
   };
 
