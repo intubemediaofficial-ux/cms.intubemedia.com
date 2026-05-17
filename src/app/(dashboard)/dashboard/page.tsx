@@ -165,6 +165,7 @@ export default function DashboardPage() {
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
+  const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7>(7);
 
   const [serverChannelIds, setServerChannelIds] = useState<string[]>([]);
 
@@ -309,6 +310,42 @@ export default function DashboardPage() {
   const avgDailyRevenue = dailyRevenueData.length > 0
     ? dailyRevenueData.reduce((s, d) => s + d.revenue, 0) / dailyRevenueData.length
     : 0;
+
+  // Per-Channel Daily Revenue table data
+  const perChannelDailyRevenue = useMemo(() => {
+    const perChannel = dashData?.perChannelAnalytics || {};
+    const channelList = dashData?.channels || [];
+    const channelNameMap: Record<string, string> = {};
+    for (const ch of channelList) {
+      if (ch.id) channelNameMap[ch.id] = ch.snippet?.title || ch.id;
+    }
+
+    // Build per-channel daily data: { channelId, channelName, dailyData: { date: revenue } }
+    const result: { channelId: string; channelName: string; dailyMap: Record<string, number> }[] = [];
+    const allDates = new Set<string>();
+
+    for (const [cid, pca] of Object.entries(perChannel)) {
+      const daily = getDailyRevenueChartData(pca.dailyRevenue);
+      const dailyMap: Record<string, number> = {};
+      for (const d of daily) {
+        // d.date is in "MM-DD" format from getDailyRevenueChartData (sliced from index 5)
+        // We need the full date for sorting — reconstruct from dailyRevenue raw data
+        dailyMap[d.date] = d.revenue;
+        allDates.add(d.date);
+      }
+      result.push({
+        channelId: cid,
+        channelName: channelNameMap[cid] || cid,
+        dailyMap,
+      });
+    }
+
+    // Sort dates descending (latest first) and take last N days
+    const sortedDates = Array.from(allDates).sort((a, b) => b.localeCompare(a));
+    const filteredDates = sortedDates.slice(0, dailyRevDays);
+
+    return { channels: result, dates: filteredDates };
+  }, [dashData, dailyRevDays]);
 
   // Top videos
   const topVideos = isReal ? (dashData?.topVideos?.videos || []) : [];
@@ -977,6 +1014,78 @@ export default function DashboardPage() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
+            </div>
+          )}
+
+          {/* ===== SECTION 4B: Per-Channel Daily Revenue Table ===== */}
+          {perChannelDailyRevenue.channels.length > 0 && perChannelDailyRevenue.dates.length > 0 && (
+            <div className="bg-white rounded-xl border border-border p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-foreground text-sm">Per-Channel Daily Revenue</h3>
+                <div className="flex items-center gap-1.5">
+                  {([1, 3, 7] as const).map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setDailyRevDays(d)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        dailyRevDays === d
+                          ? "bg-primary text-white"
+                          : "bg-slate-100 text-muted hover:bg-slate-200"
+                      }`}
+                    >
+                      {d === 1 ? "Latest" : `${d} Days`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 pr-4 font-medium text-muted text-xs">Channel</th>
+                      {perChannelDailyRevenue.dates.map((date) => (
+                        <th key={date} className="text-right py-2 px-2 font-medium text-muted text-xs whitespace-nowrap">{date}</th>
+                      ))}
+                      <th className="text-right py-2 pl-3 font-semibold text-foreground text-xs">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {perChannelDailyRevenue.channels.map((ch) => {
+                      const total = perChannelDailyRevenue.dates.reduce((s, d) => s + (ch.dailyMap[d] || 0), 0);
+                      return (
+                        <tr key={ch.channelId} className="border-b border-border/50 hover:bg-slate-50">
+                          <td className="py-2 pr-4 text-foreground font-medium truncate max-w-[200px]" title={ch.channelName}>{ch.channelName}</td>
+                          {perChannelDailyRevenue.dates.map((date) => (
+                            <td key={date} className="text-right py-2 px-2 text-muted tabular-nums">
+                              ${(ch.dailyMap[date] || 0).toFixed(2)}
+                            </td>
+                          ))}
+                          <td className="text-right py-2 pl-3 font-semibold text-foreground tabular-nums">${total.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-slate-50">
+                      <td className="py-2 pr-4 font-bold text-foreground">Total</td>
+                      {perChannelDailyRevenue.dates.map((date) => {
+                        const dayTotal = perChannelDailyRevenue.channels.reduce((s, ch) => s + (ch.dailyMap[date] || 0), 0);
+                        return (
+                          <td key={date} className="text-right py-2 px-2 font-bold text-foreground tabular-nums">
+                            ${dayTotal.toFixed(2)}
+                          </td>
+                        );
+                      })}
+                      <td className="text-right py-2 pl-3 font-bold text-primary tabular-nums">
+                        ${perChannelDailyRevenue.channels.reduce((s, ch) =>
+                          s + perChannelDailyRevenue.dates.reduce((ss, d) => ss + (ch.dailyMap[d] || 0), 0), 0
+                        ).toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="text-xs text-muted mt-3">YouTube revenue data is ~2 days delayed. Latest available date shown first.</p>
             </div>
           )}
 
