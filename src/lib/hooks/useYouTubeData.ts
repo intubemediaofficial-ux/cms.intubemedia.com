@@ -13,6 +13,8 @@ export function useYouTubeData<T>(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isReal, setIsReal] = useState(false);
+  const [cached, setCached] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const paramsKey = useMemo(() => JSON.stringify(params), [params]);
 
@@ -38,6 +40,8 @@ export function useYouTubeData<T>(
         if (res.ok && json.data) {
           setData(json.data);
           setIsReal(true);
+          setCached(!!json._cached);
+          setLastUpdated(json._lastUpdated || null);
         } else {
           console.error(`YouTube API error [${action}]:`, json.error);
           setError(json.error || "Failed to fetch data");
@@ -54,5 +58,5 @@ export function useYouTubeData<T>(
     fetchData();
   }, [session?.accessToken, session?.user?.role, session?.user?.email, status, action, paramsKey]);
 
-  return { data, loading, error, isReal };
+  return { data, loading, error, isReal, cached, lastUpdated };
 }

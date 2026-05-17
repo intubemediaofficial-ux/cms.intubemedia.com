@@ -176,6 +176,8 @@ export default function VideosPage() {
   const [error, setError] = useState<string | null>(null);
   const [isReal, setIsReal] = useState(false);
 
+  const [cacheLastUpdated, setCacheLastUpdated] = useState<string | null>(null);
+
   const [editVideo, setEditVideo] = useState<VideoItem | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
@@ -265,12 +267,20 @@ export default function VideosPage() {
     setError(null);
     try {
       // Fetch all channels in parallel for speed with timeout
+      let latestCacheTime: string | null = null;
+      let anyFromCache = false;
       const results = await Promise.allSettled(
         allChannelIds.map((channelId) =>
           Promise.race([
             fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`)
               .then((r) => r.json())
-              .then((j) => (j.data || []) as VideoItem[]),
+              .then((j) => {
+                if (j._cached && j._lastUpdated) {
+                  anyFromCache = true;
+                  if (!latestCacheTime || j._lastUpdated > latestCacheTime) latestCacheTime = j._lastUpdated;
+                }
+                return (j.data || []) as VideoItem[];
+              }),
             new Promise<VideoItem[]>((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000))
           ])
         )
@@ -282,6 +292,11 @@ export default function VideosPage() {
       if (allVideos.length > 0) {
         setVideos(allVideos);
         setIsReal(true);
+        if (anyFromCache && latestCacheTime) {
+          setCacheLastUpdated(latestCacheTime);
+        } else {
+          setCacheLastUpdated(null);
+        }
       } else {
         setError("No videos found for added channels. Please check if channels have valid tokens.");
       }
@@ -527,6 +542,13 @@ export default function VideosPage() {
           </p>
         </div>
       </div>
+
+      {cacheLastUpdated && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>Showing cached data — Last updated: {new Date(cacheLastUpdated).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}</span>
+        </div>
+      )}
 
       {!isAuthenticated && (
         <div className="flex items-center justify-center py-20">

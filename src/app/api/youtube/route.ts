@@ -17,6 +17,7 @@ import {
 } from "@/lib/youtube";
 import { getValidAccessToken, getTokenStatus, getAnyValidAccessToken } from "@/lib/channel-tokens";
 import { getAllCachedClientData } from "@/lib/client-data-cache";
+import { cacheChannelVideos, getCachedChannelVideos, cacheDashboardData, getCachedDashboardData, cacheChannelStats, getCachedChannelStats } from "@/lib/youtube-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,8 @@ export async function GET(request: Request) {
         if (videoToken) {
           try {
             const videos = await getChannelVideos(videoToken, channelId, maxResults);
+            // Cache on success
+            cacheChannelVideos(channelId, videos).catch(() => {});
             return Response.json({ data: videos });
           } catch (vidErr) {
             console.warn("[videos] Token-based fetch failed (quota?):", vidErr instanceof Error ? vidErr.message : vidErr);
@@ -87,11 +90,18 @@ export async function GET(request: Request) {
         try {
           const publicVideos = await getChannelVideosPublic(channelId, maxResults);
           if (publicVideos.length > 0) {
+            // Cache on success
+            cacheChannelVideos(channelId, publicVideos).catch(() => {});
             return Response.json({ data: publicVideos });
           }
         } catch (pubErr) {
           console.warn("[videos] Public API fetch failed (quota?):", pubErr instanceof Error ? pubErr.message : pubErr);
-          return Response.json({ data: [], warning: "YouTube API quota exceeded — videos temporarily unavailable" });
+        }
+        // Final fallback: KV cache
+        const cachedVids = await getCachedChannelVideos(channelId);
+        if (cachedVids?.videos?.length) {
+          console.log(`[videos] Serving ${cachedVids.videos.length} cached videos for ${channelId} (last updated: ${cachedVids.lastUpdated})`);
+          return Response.json({ data: cachedVids.videos, _cached: true, _lastUpdated: cachedVids.lastUpdated });
         }
         return Response.json({ error: "No token available for this channel. Please validate the channel token first." }, { status: 401 });
       }
@@ -223,10 +233,17 @@ export async function GET(request: Request) {
         }
         try {
           const results = await lookupChannel(lookupToken, query);
+          // Cache channel stats on success
+          if (results?.[0]) cacheChannelStats(query, results[0]).catch(() => {});
           return Response.json({ data: results });
         } catch (lookupErr) {
           console.warn("[lookupChannel] Failed (quota?):", lookupErr instanceof Error ? lookupErr.message : lookupErr);
-          // Fall back to cached data
+          // Fall back to per-channel stats cache
+          const cachedStats = await getCachedChannelStats(query);
+          if (cachedStats?.stats) {
+            return Response.json({ data: [cachedStats.stats], _cached: true, _lastUpdated: cachedStats.lastUpdated });
+          }
+          // Fall back to client data cache
           try {
             const allCached = await getAllCachedClientData();
             for (const cd of allCached) {
@@ -419,30 +436,35 @@ export async function GET(request: Request) {
           }
         }
 
-        return Response.json({
-          data: {
-            channels,
-            currentPerformance,
-            prevPerformance,
-            currentRevenue,
-            prevRevenue,
-            dailyRevenue,
-            topVideos: topVideosByViews,
-            hasOwnChannel: hasAnyToken,
-            channelRevenueMap,
-            lastDayRevenue,
-            lastDayDate,
-            perChannelAnalytics,
-            tokenizedChannels: tokenizedChannelIds,
-            _debug: {
-              totalChannelIds: channelIds.length,
-              tokenizedCount: tokenizedChannelIds.length,
-              channelTokenErrors,
-              perChannelErrors,
-              hasAdminToken,
-            },
+        const responseData = {
+          channels,
+          currentPerformance,
+          prevPerformance,
+          currentRevenue,
+          prevRevenue,
+          dailyRevenue,
+          topVideos: topVideosByViews,
+          hasOwnChannel: hasAnyToken,
+          channelRevenueMap,
+          lastDayRevenue,
+          lastDayDate,
+          perChannelAnalytics,
+          tokenizedChannels: tokenizedChannelIds,
+          _debug: {
+            totalChannelIds: channelIds.length,
+            tokenizedCount: tokenizedChannelIds.length,
+            channelTokenErrors,
+            perChannelErrors,
+            hasAdminToken,
           },
-        });
+        };
+
+        // Cache dashboard data on success (only if we got real analytics data)
+        if (Object.keys(perChannelAnalytics).length > 0) {
+          cacheDashboardData(channelIds, responseData).catch(() => {});
+        }
+
+        return Response.json({ data: responseData });
       }
       default:
         return Response.json({ error: "Invalid action" }, { status: 400 });
