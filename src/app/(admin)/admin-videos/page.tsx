@@ -303,6 +303,7 @@ export default function AdminVideosPage() {
   }, [videos, searchQuery, monetizationFilter, privacyFilter, channelFilter, claims]);
 
   const claimStats = useMemo(() => {
+    const vids = channelFilter === "all" ? videos : videos.filter((v) => v.snippet?.channelId === channelFilter);
     let copyrightClaims = 0;
     let contentIdClaims = 0;
     let monetized = 0;
@@ -310,7 +311,7 @@ export default function AdminVideosPage() {
     let privateCount = 0;
     let unlistedCount = 0;
     let draftCount = 0;
-    for (const v of videos) {
+    for (const v of vids) {
       const s = getMonetizationStatus(v, claims);
       if (s.claimType === "copyright") copyrightClaims++;
       else if (s.claimType === "content_id") contentIdClaims++;
@@ -321,8 +322,8 @@ export default function AdminVideosPage() {
       else if (privacy === "unlisted") unlistedCount++;
       else draftCount++;
     }
-    return { total: videos.length, copyrightClaims, contentIdClaims, monetized, publicCount, privateCount, unlistedCount, draftCount };
-  }, [videos, claims]);
+    return { total: vids.length, copyrightClaims, contentIdClaims, monetized, publicCount, privateCount, unlistedCount, draftCount };
+  }, [videos, claims, channelFilter]);
 
   const handleAddClaim = async () => {
     if (!claimVideoId || !claimChannelId) return;
@@ -378,16 +379,14 @@ export default function AdminVideosPage() {
   };
 
   const handleExportCSV = () => {
-    const headers = ["Video Title", "Video URL", "Video ID", "Channel", "Channel ID", "Privacy", "Claim Status", "Claim Type", "Claimant / CMS", "Views", "Likes", "Comments", "Duration", "Published Date"];
+    const headers = ["Video URL", "Video Title", "Channel", "Privacy", "Claim Status", "Claim Type", "Claimant / CMS", "Views", "Likes", "Comments", "Duration", "Published Date"];
     const rows = filteredVideos.map((v) => {
       const mStatus = getMonetizationStatus(v, claims);
       const videoUrl = v.id ? `https://www.youtube.com/watch?v=${v.id}` : "";
       return [
-        `"${(v.snippet?.title || "").replace(/"/g, '""')}"`,
         videoUrl,
-        v.id || "",
+        `"${(v.snippet?.title || "").replace(/"/g, '""')}"`,
         `"${(v.snippet?.channelTitle || "").replace(/"/g, '""')}"`,
-        v.snippet?.channelId || "",
         v.status?.privacyStatus || "public",
         mStatus.label,
         mStatus.claimType || "-",
