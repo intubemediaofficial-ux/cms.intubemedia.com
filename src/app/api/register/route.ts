@@ -55,10 +55,22 @@ export async function POST(request: Request) {
     const users = await kv.get<StoredUser[]>(USERS_KEY) || [];
 
     // Check if email already exists
-    const exists = users.some(
+    const existingIdx = users.findIndex(
       (u) => u.email.toLowerCase() === emailLower
     );
-    if (exists) {
+    if (existingIdx !== -1) {
+      // If user was auto-registered via Google (empty password), allow setting password
+      const existing = users[existingIdx];
+      if (!existing.password) {
+        existing.password = hashPassword(password);
+        existing.name = name.trim() || existing.name;
+        if (phone) existing.phone = phone.trim();
+        await kv.set(USERS_KEY, users);
+        return Response.json(
+          { message: "Password set successfully! You can now login with email and password." },
+          { status: 200 }
+        );
+      }
       return Response.json(
         { error: "An account with this email already exists" },
         { status: 409 }
