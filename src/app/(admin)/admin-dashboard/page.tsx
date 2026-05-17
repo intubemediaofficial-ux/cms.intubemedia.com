@@ -21,6 +21,7 @@ import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -248,7 +249,7 @@ export default function AdminDashboardPage() {
     ...(allChannelIds.length > 0 ? { channelIds: allChannelIds.join(",") } : {}),
   }), [dateRange, allChannelIds]);
 
-  const { data: dashData, loading: ytLoading } = useYouTubeData<DashboardFullData>(
+  const { data: dashData, loading: ytLoading, cached: dashCached, lastUpdated: dashLastUpdated } = useYouTubeData<DashboardFullData>(
     "dashboardFull",
     ytApiParams,
     {}
@@ -495,6 +496,13 @@ export default function AdminDashboardPage() {
           </button>
         </div>
       </div>
+
+      {dashCached && dashLastUpdated && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>Showing cached data — Last updated: {new Date(dashLastUpdated).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}</span>
+        </div>
+      )}
 
       {/* Syncing indicator */}
       {syncing && cachedClientData.length === 0 && (

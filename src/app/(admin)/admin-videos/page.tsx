@@ -217,20 +217,30 @@ export default function AdminVideosPage() {
     } catch { /* silent */ }
   }, []);
 
+  const [videoCacheTime, setVideoCacheTime] = useState<string | null>(null);
+
   const fetchVideosForChannels = useCallback(async (channelIds: string[]) => {
     if (channelIds.length === 0) {
       setVideos([]);
       return;
     }
     setLoadingVideos(true);
+    setVideoCacheTime(null);
     try {
-      // Fetch all channels in parallel for speed with timeout
+      let latestCacheTime: string | null = null;
+      let anyFromCache = false;
       const results = await Promise.allSettled(
         channelIds.map((channelId) =>
           Promise.race([
             fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`)
               .then((r) => r.json())
-              .then((j) => (j.data || []) as VideoItem[]),
+              .then((j) => {
+                if (j._cached && j._lastUpdated) {
+                  anyFromCache = true;
+                  if (!latestCacheTime || j._lastUpdated > latestCacheTime) latestCacheTime = j._lastUpdated;
+                }
+                return (j.data || []) as VideoItem[];
+              }),
             new Promise<VideoItem[]>((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000))
           ])
         )
@@ -240,6 +250,7 @@ export default function AdminVideosPage() {
         if (r.status === "fulfilled") allVideos.push(...r.value);
       }
       setVideos(allVideos);
+      if (anyFromCache && latestCacheTime) setVideoCacheTime(latestCacheTime);
     } catch { /* silent */ }
     setLoadingVideos(false);
   }, []);
@@ -489,6 +500,13 @@ export default function AdminVideosPage() {
           <Plus className="w-4 h-4" /> Add Claim
         </button>
       </div>
+
+      {videoCacheTime && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>Showing cached data — Last updated: {new Date(videoCacheTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}</span>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

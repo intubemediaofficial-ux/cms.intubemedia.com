@@ -244,7 +244,7 @@ export default function DashboardPage() {
     ...(allChannelIds.length > 0 ? { channelIds: allChannelIds.join(",") } : {}),
   }), [dateRange, allChannelIds]);
 
-  const { data: dashData, isReal, error, loading } = useYouTubeData<DashboardFullData>(
+  const { data: dashData, isReal, error, loading, cached: dashCached, lastUpdated: dashLastUpdated } = useYouTubeData<DashboardFullData>(
     "dashboardFull",
     apiParams,
     {}
@@ -553,6 +553,13 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {dashCached && dashLastUpdated && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+          <WifiOff className="w-4 h-4 flex-shrink-0" />
+          <span>Showing cached data — Last updated: {new Date(dashLastUpdated).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}</span>
+        </div>
+      )}
 
       {/* Not authenticated */}
       {!isAuthenticated && (
