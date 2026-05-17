@@ -302,6 +302,7 @@ export default function AdminVideosPage() {
   }, [videos, searchQuery, monetizationFilter, privacyFilter, channelFilter, claims]);
 
   const claimStats = useMemo(() => {
+    const vids = channelFilter === "all" ? videos : videos.filter((v) => v.snippet?.channelId === channelFilter);
     let copyrightClaims = 0;
     let contentIdClaims = 0;
     let monetized = 0;
@@ -309,7 +310,7 @@ export default function AdminVideosPage() {
     let privateCount = 0;
     let unlistedCount = 0;
     let draftCount = 0;
-    for (const v of videos) {
+    for (const v of vids) {
       const s = getMonetizationStatus(v, claims);
       if (s.claimType === "copyright") copyrightClaims++;
       else if (s.claimType === "content_id") contentIdClaims++;
@@ -320,8 +321,8 @@ export default function AdminVideosPage() {
       else if (privacy === "unlisted") unlistedCount++;
       else draftCount++;
     }
-    return { total: videos.length, copyrightClaims, contentIdClaims, monetized, publicCount, privateCount, unlistedCount, draftCount };
-  }, [videos, claims]);
+    return { total: vids.length, copyrightClaims, contentIdClaims, monetized, publicCount, privateCount, unlistedCount, draftCount };
+  }, [videos, claims, channelFilter]);
 
   const handleAddClaim = async () => {
     if (!claimVideoId || !claimChannelId) return;
