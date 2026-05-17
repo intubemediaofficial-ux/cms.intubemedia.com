@@ -51,15 +51,15 @@ export async function POST(request: Request) {
     const resend = new Resend(resendApiKey);
     const fromEmail = process.env.OTP_FROM_EMAIL || "onboarding@resend.dev";
 
-    await resend.emails.send({
-      from: `YouTube Studio <${fromEmail}>`,
+    const result = await resend.emails.send({
+      from: `Bainsla Music <${fromEmail}>`,
       to: normalizedEmail,
-      subject: "Your YouTube Studio Login OTP",
+      subject: "Your Bainsla Music Studio OTP",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #1a1a1a; margin: 0;">YouTube Studio</h2>
-            <p style="color: #666; font-size: 14px;">Login Verification</p>
+            <h2 style="color: #1a1a1a; margin: 0;">Bainsla Music Studio</h2>
+            <p style="color: #666; font-size: 14px;">Password Reset / Login Verification</p>
           </div>
           <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 20px;">
             <p style="color: #666; font-size: 14px; margin: 0 0 10px;">Your One-Time Password</p>
@@ -71,6 +71,11 @@ export async function POST(request: Request) {
         </div>
       `,
     });
+
+    if (result.error) {
+      console.error("[OTP] Resend error:", result.error);
+      return Response.json({ error: `Email send failed: ${result.error.message || "Unknown error"}` }, { status: 500 });
+    }
 
     console.log(`[OTP] Sent to ${normalizedEmail}`);
 
