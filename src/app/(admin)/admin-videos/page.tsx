@@ -273,33 +273,51 @@ export default function AdminVideosPage() {
     }
   }, [selectedClient, clients, cachedChannelIds, fetchVideosForChannels]);
 
+  // Pre-compute privacy counts (based on channel filter only) for dropdown labels
+  const privacyCounts = useMemo(() => {
+    const channelVids = videos.filter((v) =>
+      channelFilter === "all" || v.snippet?.channelId === channelFilter
+    );
+    let pub = 0, priv = 0, unlist = 0;
+    for (const v of channelVids) {
+      const p = (v.status?.privacyStatus || "public").toLowerCase();
+      if (p === "private") priv++;
+      else if (p === "unlisted") unlist++;
+      else pub++;
+    }
+    return { all: channelVids.length, public: pub, private: priv, unlisted: unlist };
+  }, [videos, channelFilter]);
+
   const filteredVideos = useMemo(() => {
-    return videos.filter((video) => {
-      const title = video.snippet?.title || "";
-      const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase());
-      if (!matchesSearch) return false;
-
+    const result: VideoItem[] = [];
+    for (const video of videos) {
       // Channel filter
-      if (channelFilter !== "all" && video.snippet?.channelId !== channelFilter) return false;
+      if (channelFilter !== "all" && video.snippet?.channelId !== channelFilter) continue;
 
-      // Privacy filter
+      // Search filter
+      const title = video.snippet?.title || "";
+      if (searchQuery && !title.toLowerCase().includes(searchQuery.toLowerCase())) continue;
+
+      // Privacy filter - strict comparison
       if (privacyFilter !== "all") {
-        const privacy = video.status?.privacyStatus?.toLowerCase() || "public";
-        if (privacyFilter !== privacy) return false;
+        const rawPrivacy = video.status?.privacyStatus;
+        const videoPrivacy = rawPrivacy ? rawPrivacy.toLowerCase() : "public";
+        if (videoPrivacy !== privacyFilter) continue;
       }
 
       // Monetization filter
-      if (monetizationFilter === "all") return true;
-      const mStatus = getMonetizationStatus(video, claims);
-      switch (monetizationFilter) {
-        case "monetized": return mStatus.isMonetized && !mStatus.hasActiveClaim;
-        case "not_monetized": return !mStatus.isMonetized;
-        case "copyright_claim": return mStatus.hasActiveClaim;
-        case "content_id_claim": return mStatus.hasActiveClaim && mStatus.claimType === "content_id";
-        case "no_claim": return !mStatus.hasActiveClaim;
-        default: return true;
+      if (monetizationFilter !== "all") {
+        const mStatus = getMonetizationStatus(video, claims);
+        if (monetizationFilter === "monetized" && !(mStatus.isMonetized && !mStatus.hasActiveClaim)) continue;
+        if (monetizationFilter === "not_monetized" && mStatus.isMonetized) continue;
+        if (monetizationFilter === "copyright_claim" && !mStatus.hasActiveClaim) continue;
+        if (monetizationFilter === "content_id_claim" && !(mStatus.hasActiveClaim && mStatus.claimType === "content_id")) continue;
+        if (monetizationFilter === "no_claim" && mStatus.hasActiveClaim) continue;
       }
-    });
+
+      result.push(video);
+    }
+    return result;
   }, [videos, searchQuery, monetizationFilter, privacyFilter, channelFilter, claims]);
 
   const claimStats = useMemo(() => {
@@ -527,11 +545,10 @@ export default function AdminVideosPage() {
               onChange={(e) => setPrivacyFilter(e.target.value)}
               className="border border-border rounded-lg px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
-              <option value="all">All Privacy ({claimStats.total})</option>
-              <option value="public">Public ({claimStats.publicCount})</option>
-              <option value="private">Private ({claimStats.privateCount})</option>
-              <option value="unlisted">Unlisted ({claimStats.unlistedCount})</option>
-              <option value="draft">Draft ({claimStats.draftCount})</option>
+              <option value="all">All Privacy ({privacyCounts.all})</option>
+              <option value="public">Public ({privacyCounts.public})</option>
+              <option value="private">Private ({privacyCounts.private})</option>
+              <option value="unlisted">Unlisted ({privacyCounts.unlisted})</option>
             </select>
             {channelOptions.length > 1 && (
               <select
@@ -571,7 +588,13 @@ export default function AdminVideosPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {(privacyFilter !== "all" || channelFilter !== "all" || monetizationFilter !== "all" || searchQuery) && (
+            <p className="text-xs text-muted mb-3">
+              Showing {filteredVideos.length} of {videos.length} videos
+            </p>
+          )}
+          <div className="overflow-x-auto" key={`avt-${privacyFilter}-${channelFilter}-${monetizationFilter}`}>
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
@@ -690,6 +713,7 @@ export default function AdminVideosPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
