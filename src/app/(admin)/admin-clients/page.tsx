@@ -759,18 +759,45 @@ export default function AdminClientsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => handleToggleStatus(client)}
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${
-                          client.status === "active"
-                            ? "bg-green-100 text-green-700 hover:bg-green-200"
-                            : client.status === "pending"
-                            ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                            : "bg-red-100 text-red-700 hover:bg-red-200"
-                        }`}
-                      >
-                        {client.status === "active" ? "Active" : client.status === "pending" ? "Pending" : "Inactive"}
-                      </button>
+                      {client.status === "pending" ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                            Pending
+                          </span>
+                          <button
+                            onClick={() => handleToggleStatus(client)}
+                            className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await fetch("/api/users", {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: client.id, status: "inactive" }),
+                                });
+                                fetchClients();
+                              } catch { /* silent */ }
+                            }}
+                            className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleToggleStatus(client)}
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${
+                            client.status === "active"
+                              ? "bg-green-100 text-green-700 hover:bg-green-200"
+                              : "bg-red-100 text-red-700 hover:bg-red-200"
+                          }`}
+                        >
+                          {client.status === "active" ? "Active" : "Inactive"}
+                        </button>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-muted">{client.joinedDate}</td>
                     <td className="px-4 py-3">
