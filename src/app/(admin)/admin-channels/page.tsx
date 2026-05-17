@@ -16,6 +16,9 @@ import {
   Trash2,
   Edit3,
   ArrowRightLeft,
+  CheckCircle2,
+  XCircle,
+  Clock,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -27,6 +30,7 @@ interface Client {
   email: string;
   phone: string;
   channels: string[];
+  pendingChannels?: string[];
   status: "active" | "inactive";
   joinedDate: string;
   category: string;
@@ -95,6 +99,7 @@ export default function AdminChannelsPage() {
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [pendingActionLoading, setPendingActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -391,6 +396,67 @@ export default function AdminChannelsPage() {
     setActionLoading(false);
   };
 
+  // Pending channels from all clients
+  const pendingChannelsList = useMemo(() => {
+    const list: { channelId: string; clientId: string; clientName: string; clientEmail: string }[] = [];
+    for (const client of clients) {
+      if (client.pendingChannels?.length) {
+        for (const ch of client.pendingChannels) {
+          list.push({ channelId: ch, clientId: client.id, clientName: client.name, clientEmail: client.email });
+        }
+      }
+    }
+    return list;
+  }, [clients]);
+
+  const handleApproveChannel = async (userId: string, channelId: string) => {
+    setPendingActionLoading(channelId);
+    try {
+      const res = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "approve_channel", userId, channelId }),
+      });
+      if (res.ok) {
+        // Update local state
+        setClients((prev) => prev.map((c) => {
+          if (c.id === userId) {
+            return {
+              ...c,
+              channels: [...c.channels, channelId],
+              pendingChannels: (c.pendingChannels || []).filter((ch) => ch !== channelId),
+            };
+          }
+          return c;
+        }));
+      }
+    } catch { /* silent */ }
+    setPendingActionLoading(null);
+  };
+
+  const handleRejectChannel = async (userId: string, channelId: string) => {
+    setPendingActionLoading(channelId);
+    try {
+      const res = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "reject_channel", userId, channelId }),
+      });
+      if (res.ok) {
+        setClients((prev) => prev.map((c) => {
+          if (c.id === userId) {
+            return {
+              ...c,
+              pendingChannels: (c.pendingChannels || []).filter((ch) => ch !== channelId),
+            };
+          }
+          return c;
+        }));
+      }
+    } catch { /* silent */ }
+    setPendingActionLoading(null);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 text-sm text-muted">
@@ -444,6 +510,48 @@ export default function AdminChannelsPage() {
           </div>
         </div>
       </div>
+
+      {/* Pending Channels Approval Section */}
+      {pendingChannelsList.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Clock className="w-5 h-5 text-amber-600" />
+            <h2 className="text-lg font-bold text-amber-900">Pending Channel Approvals ({pendingChannelsList.length})</h2>
+          </div>
+          <div className="space-y-3">
+            {pendingChannelsList.map((item) => (
+              <div key={`${item.clientId}-${item.channelId}`} className="bg-white rounded-lg border border-amber-200 p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{item.channelId}</p>
+                  <p className="text-xs text-muted">Client: <span className="font-medium">{item.clientName}</span> ({item.clientEmail})</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {pendingActionLoading === item.channelId ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleApproveChannel(item.clientId, item.channelId)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-medium transition-colors"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleRejectChannel(item.clientId, item.channelId)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition-colors"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        Reject
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-xl border border-border p-4">

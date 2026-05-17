@@ -27,6 +27,7 @@ export interface StoredUser {
   password: string;
   phone: string;
   channels: string[];
+  pendingChannels?: string[];
   status: "active" | "inactive" | "pending";
   joinedDate: string;
   category: string;
@@ -174,6 +175,30 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const { id, name, email, password, phone, channels, category, status, networks, channelNetworks } = body;
 
+    // Approve or reject a pending channel
+    if (body.type === "approve_channel" || body.type === "reject_channel") {
+      const { userId, channelId } = body;
+      if (!userId || !channelId) {
+        return Response.json({ error: "userId and channelId required" }, { status: 400 });
+      }
+      const users = await getUsers();
+      const userIdx = users.findIndex((u) => u.id === userId);
+      if (userIdx === -1) {
+        return Response.json({ error: "User not found" }, { status: 404 });
+      }
+      // Remove from pendingChannels
+      users[userIdx].pendingChannels = (users[userIdx].pendingChannels || []).filter((c) => c !== channelId);
+      // If approving, add to channels
+      if (body.type === "approve_channel") {
+        if (!users[userIdx].channels.includes(channelId)) {
+          users[userIdx].channels.push(channelId);
+        }
+      }
+      const saved = await saveUsers(users);
+      if (!saved) return Response.json({ error: "Failed to update" }, { status: 500 });
+      return Response.json({ data: { success: true, action: body.type, channelId, user: users[userIdx].name } });
+    }
+
     // Channel transfer between users
     if (body.type === "transfer_channel") {
       const { fromUserId, toUserId, channelId } = body;
@@ -238,6 +263,7 @@ export async function PUT(request: Request) {
 }
 
 // PATCH: Allow logged-in client to sync their localStorage channels to KV
+// New channels go to pendingChannels (require admin approval)
 export async function PATCH(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -246,14 +272,11 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    const { channels } = body;
+    const { channels, pendingChannels } = body;
 
-    if (!Array.isArray(channels)) {
-      return Response.json({ error: "channels array required" }, { status: 400 });
+    if (!Array.isArray(channels) && !Array.isArray(pendingChannels)) {
+      return Response.json({ error: "channels or pendingChannels array required" }, { status: 400 });
     }
-
-    // Only allow valid-looking channel IDs
-    const validChannels = channels.filter((c: unknown) => typeof c === "string" && (c as string).length > 0);
 
     const users = await getUsers();
     const userEmail = session.user.email.toLowerCase();
@@ -263,25 +286,39 @@ export async function PATCH(request: Request) {
       return Response.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Merge: add new channels from client, keep any admin-added channels that client doesn't have
-    const existingChannels = new Set(users[idx].channels);
-    for (const ch of validChannels) {
-      existingChannels.add(ch);
+    // If pendingChannels is provided, add new channels to pending list
+    if (Array.isArray(pendingChannels)) {
+      const validPending = pendingChannels.filter((c: unknown) => typeof c === "string" && (c as string).length > 0);
+      const existingPending = new Set(users[idx].pendingChannels || []);
+      const existingApproved = new Set(users[idx].channels);
+      for (const ch of validPending) {
+        if (!existingApproved.has(ch)) {
+          existingPending.add(ch);
+        }
+      }
+      users[idx].pendingChannels = Array.from(existingPending);
     }
-    // Remove test/placeholder channels if real ones are being synced
-    const realChannels = Array.from(existingChannels).filter((ch) => {
-      if (ch.startsWith("UCtest") || ch === "test") return false;
-      return true;
-    });
 
-    users[idx].channels = realChannels.length > 0 ? realChannels : Array.from(existingChannels);
+    // If channels is provided (for backward compat — admin-approved channels)
+    if (Array.isArray(channels)) {
+      const validChannels = channels.filter((c: unknown) => typeof c === "string" && (c as string).length > 0);
+      const existingChannels = new Set(users[idx].channels);
+      for (const ch of validChannels) {
+        existingChannels.add(ch);
+      }
+      const realChannels = Array.from(existingChannels).filter((ch) => {
+        if (ch.startsWith("UCtest") || ch === "test") return false;
+        return true;
+      });
+      users[idx].channels = realChannels.length > 0 ? realChannels : Array.from(existingChannels);
+    }
 
     const saved = await saveUsers(users);
     if (!saved) {
       return Response.json({ error: "Failed to sync channels" }, { status: 500 });
     }
 
-    return Response.json({ data: { success: true, channels: users[idx].channels } });
+    return Response.json({ data: { success: true, channels: users[idx].channels, pendingChannels: users[idx].pendingChannels || [] } });
   } catch (error) {
     console.error("[Users] Error syncing channels:", error);
     return Response.json({ error: "Failed to sync channels" }, { status: 500 });

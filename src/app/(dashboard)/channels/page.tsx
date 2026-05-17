@@ -57,7 +57,7 @@ interface StoredChannel {
   cms: string;
   addedDate: string;
   delinkedDate?: string;
-  status: "active" | "delinked" | "transferred";
+  status: "active" | "delinked" | "transferred" | "pending_approval";
 }
 
 interface ChannelRequest {
@@ -92,12 +92,13 @@ function getStoredChannels(): StoredChannel[] {
 function saveStoredChannels(channels: StoredChannel[]) {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
-  // Sync channel IDs to KV (so admin can see them)
-  const channelIds = channels.filter((c) => c.status === "active").map((c) => c.id);
+  // Sync channel IDs to KV — active go to channels, pending go to pendingChannels
+  const activeIds = channels.filter((c) => c.status === "active").map((c) => c.id);
+  const pendingIds = channels.filter((c) => c.status === "pending_approval").map((c) => c.id);
   fetch("/api/users", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ channels: channelIds }),
+    body: JSON.stringify({ channels: activeIds, pendingChannels: pendingIds }),
   }).catch(() => { /* silent - best effort sync */ });
 }
 
@@ -184,7 +185,7 @@ export default function ChannelsPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const activeStored = storedChannels.filter((c) => c.status === "active");
+    const activeStored = storedChannels.filter((c) => c.status === "active" || c.status === "pending_approval");
     if (activeStored.length === 0) return;
 
     const idsToFetch = activeStored
@@ -380,7 +381,7 @@ export default function ChannelsPage() {
         tokenStatus: "Invalid",
         cms: cmsInput || "Bainsla Music",
         addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
-        status: "active",
+        status: "pending_approval",
       };
 
       const updatedChannels = [...storedChannels, newStored];
@@ -568,7 +569,7 @@ export default function ChannelsPage() {
     addedDate: string;
     delinkedDate: string;
     isOwn: boolean;
-    status: "active" | "delinked" | "transferred";
+    status: "active" | "delinked" | "transferred" | "pending_approval";
   };
 
   const allChannelRows: ChannelRow[] = useMemo(() => {
@@ -622,7 +623,7 @@ export default function ChannelsPage() {
     return rows;
   }, [isReal, myChannels, storedChannels, channelDataMap, tokenStatuses]);
 
-  const activeChannels = allChannelRows.filter((c) => c.status === "active");
+  const activeChannels = allChannelRows.filter((c) => c.status === "active" || c.status === "pending_approval");
   const transferredChannels = allChannelRows.filter((c) => c.status === "transferred");
   const channelsWithToken = activeChannels.filter((c) => c.tokenStatus === "Valid");
   const transferredWithToken = transferredChannels.filter((c) => c.tokenStatus === "Valid");
@@ -951,24 +952,30 @@ export default function ChannelsPage() {
                       <td className="px-4 py-3 text-foreground">{channel.videos.toLocaleString()}</td>
                       <td className="px-4 py-3 text-foreground">{formatNumber(channel.views)}</td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => channel.tokenStatus === "Valid" ? handleViewChannelDetail(channel.id) : undefined}
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            channel.tokenStatus === "Valid"
-                              ? "bg-green-100 text-green-700 cursor-pointer hover:bg-green-200 transition-colors"
-                              : channel.tokenStatus === "Expired"
-                              ? "bg-amber-100 text-amber-700 cursor-default"
-                              : "bg-red-100 text-red-700 cursor-default"
-                          }`}
-                        >
-                          {channel.tokenStatus === "Valid" && (
-                            <Check className="w-3.5 h-3.5 text-green-600" />
-                          )}
-                          {channel.tokenStatus}
-                          {channel.tokenStatus === "Valid" && (
-                            <Eye className="w-3 h-3 ml-0.5 text-green-500" />
-                          )}
-                        </button>
+                        {channel.status === "pending_approval" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                            ⏳ Pending Approval
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => channel.tokenStatus === "Valid" ? handleViewChannelDetail(channel.id) : undefined}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              channel.tokenStatus === "Valid"
+                                ? "bg-green-100 text-green-700 cursor-pointer hover:bg-green-200 transition-colors"
+                                : channel.tokenStatus === "Expired"
+                                ? "bg-amber-100 text-amber-700 cursor-default"
+                                : "bg-red-100 text-red-700 cursor-default"
+                            }`}
+                          >
+                            {channel.tokenStatus === "Valid" && (
+                              <Check className="w-3.5 h-3.5 text-green-600" />
+                            )}
+                            {channel.tokenStatus}
+                            {channel.tokenStatus === "Valid" && (
+                              <Eye className="w-3 h-3 ml-0.5 text-green-500" />
+                            )}
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-foreground">{channel.cms}</td>
                       <td className="px-4 py-3 text-foreground">{channel.category}</td>
