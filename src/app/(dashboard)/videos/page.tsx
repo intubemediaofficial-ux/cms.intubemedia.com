@@ -25,7 +25,7 @@ import {
   XCircle,
   Filter,
 } from "lucide-react";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
 
 const CHANNELS_STORAGE_KEY = "bainsla_channels";
@@ -167,9 +167,7 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
 
 export default function VideosPage() {
   const { data: session, status: sessionStatus } = useSession();
-  const hasAccessToken = !!session?.accessToken;
-  const isAdminSession = session?.user?.role === "admin";
-  const isAuthenticated = sessionStatus === "authenticated" && (hasAccessToken || isAdminSession);
+  const isAuthenticated = sessionStatus === "authenticated";
 
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
   const [videos, setVideos] = useState<VideoItem[]>([]);
