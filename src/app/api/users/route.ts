@@ -175,8 +175,8 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const { id, name, email, password, phone, channels, category, status, networks, channelNetworks } = body;
 
-    // Approve or reject a pending channel
-    if (body.type === "approve_channel" || body.type === "reject_channel") {
+    // Approve, reject, or unapprove a channel
+    if (body.type === "approve_channel" || body.type === "reject_channel" || body.type === "unapprove_channel") {
       const { userId, channelId } = body;
       if (!userId || !channelId) {
         return Response.json({ error: "userId and channelId required" }, { status: 400 });
@@ -186,12 +186,22 @@ export async function PUT(request: Request) {
       if (userIdx === -1) {
         return Response.json({ error: "User not found" }, { status: 404 });
       }
-      // Remove from pendingChannels
-      users[userIdx].pendingChannels = (users[userIdx].pendingChannels || []).filter((c) => c !== channelId);
-      // If approving, add to channels
-      if (body.type === "approve_channel") {
-        if (!users[userIdx].channels.includes(channelId)) {
-          users[userIdx].channels.push(channelId);
+
+      if (body.type === "unapprove_channel") {
+        // Move from channels to pendingChannels
+        users[userIdx].channels = users[userIdx].channels.filter((c) => c !== channelId);
+        if (!users[userIdx].pendingChannels) users[userIdx].pendingChannels = [];
+        if (!users[userIdx].pendingChannels.includes(channelId)) {
+          users[userIdx].pendingChannels.push(channelId);
+        }
+      } else {
+        // Remove from pendingChannels
+        users[userIdx].pendingChannels = (users[userIdx].pendingChannels || []).filter((c) => c !== channelId);
+        // If approving, add to channels
+        if (body.type === "approve_channel") {
+          if (!users[userIdx].channels.includes(channelId)) {
+            users[userIdx].channels.push(channelId);
+          }
         }
       }
       const saved = await saveUsers(users);
