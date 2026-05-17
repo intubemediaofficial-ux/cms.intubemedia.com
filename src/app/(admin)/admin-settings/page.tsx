@@ -17,6 +17,7 @@ interface SupportRequest {
   id: string;
   clientEmail: string;
   clientName: string;
+  category?: string;
   message: string;
   screenshot?: string;
   status: "open" | "resolved";
@@ -335,7 +336,10 @@ export default function AdminSettingsPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-sm font-medium text-foreground">{req.clientName} ({req.clientEmail})</p>
-                      <p className="text-xs text-muted">{new Date(req.createdAt).toLocaleString()}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {req.category && <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">{req.category}</span>}
+                        <p className="text-xs text-muted">{new Date(req.createdAt).toLocaleString()}</p>
+                      </div>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${req.status === "resolved" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
                       {req.status === "resolved" ? "Resolved" : "Open"}

@@ -110,7 +110,7 @@ export default function AdminClaimsPage() {
       c.songTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.userEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.originalUPC.toLowerCase().includes(searchQuery.toLowerCase());
+      c.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = !statusFilter || c.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -154,7 +154,7 @@ export default function AdminClaimsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by song, client, UPC..."
+            placeholder="Search by song, client..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -193,7 +193,6 @@ export default function AdminClaimsPage() {
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Client</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Song Title</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Claim Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">UPC</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Date</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Actions</th>
@@ -219,7 +218,6 @@ export default function AdminClaimsPage() {
                       </td>
                       <td className="px-4 py-3 font-medium text-slate-900">{item.songTitle}</td>
                       <td className="px-4 py-3 text-slate-600">{item.claimType}</td>
-                      <td className="px-4 py-3 text-slate-600 font-mono text-xs">{item.originalUPC || "—"}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}>
                           <StatusIcon className="w-3 h-3" />
@@ -318,9 +316,8 @@ export default function AdminClaimsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-slate-500">Claim Type:</span> <span className="font-medium">{viewingItem.claimType}</span></div>
-                <div><span className="text-slate-500">Original UPC:</span> <span className="font-medium font-mono">{viewingItem.originalUPC || "—"}</span></div>
+              <div className="text-sm">
+                <span className="text-slate-500">Claim Type:</span> <span className="font-medium">{viewingItem.claimType}</span>
               </div>
 
               {viewingItem.videoLink && (
