@@ -111,10 +111,10 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
   const activeClaims = claims.filter(
     (c) => c.videoId === video.id && c.status === "active"
   );
-  const hasActiveClaim = activeClaims.length > 0;
-  const isLicensed = video.contentDetails?.licensedContent === true;
+  const hasManualClaim = activeClaims.length > 0;
 
-  if (hasActiveClaim) {
+  // Manual claims from admin take priority
+  if (hasManualClaim) {
     const claim = activeClaims[0];
     const typeLabel = claim.claimType === "copyright" ? "Copyright Claim" :
                       claim.claimType === "content_id" ? "Content ID Claim" : "Manual Claim";
@@ -128,7 +128,7 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
     };
   }
 
-  // Auto-detect copyright issues from YouTube API status
+  // Auto-detect copyright rejection from YouTube API
   const rejectionReason = video.status?.rejectionReason;
   if (rejectionReason === "copyright" || rejectionReason === "duplicate") {
     return {
@@ -136,19 +136,21 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
       hasActiveClaim: true,
       claimType: "copyright",
       claimant: "YouTube Auto-Detected",
-      label: "Copyright Claim (Auto)",
+      label: "Copyright Claim",
       color: "bg-red-100 text-red-700",
     };
   }
 
+  // licensedContent = true means a rights holder claimed this video via Content ID
+  const isLicensed = video.contentDetails?.licensedContent === true;
   if (isLicensed) {
     return {
-      isMonetized: true,
-      hasActiveClaim: false,
-      claimType: null,
-      claimant: null,
-      label: "Monetized",
-      color: "bg-green-100 text-green-700",
+      isMonetized: false,
+      hasActiveClaim: true,
+      claimType: "content_id",
+      claimant: "Content ID (CMS name not available via API)",
+      label: "Content ID Claim",
+      color: "bg-orange-100 text-orange-700",
     };
   }
 
@@ -158,7 +160,7 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
     claimType: null,
     claimant: null,
     label: "No Claim",
-    color: "bg-slate-100 text-slate-600",
+    color: "bg-green-100 text-green-700",
   };
 }
 
@@ -306,17 +308,19 @@ export default function VideosPage() {
   }, [videos, claims]);
 
   const handleExportCSV = () => {
-    const headers = ["Video Title", "Video ID", "Channel", "Privacy", "Monetization Status", "Claim Type", "Claimant", "Views", "Likes", "Comments", "Duration", "Published Date"];
+    const headers = ["Video Title", "Video URL", "Video ID", "Channel", "Privacy", "Claim Status", "Claim Type", "Claimant / CMS", "Views", "Likes", "Comments", "Duration", "Published Date"];
     const rows = filteredVideos.map((v) => {
       const mStatus = getMonetizationStatus(v, claims);
+      const videoUrl = v.id ? `https://www.youtube.com/watch?v=${v.id}` : "";
       return [
-        (v.snippet?.title || "").replace(/,/g, " "),
+        `"${(v.snippet?.title || "").replace(/"/g, '""')}"`,
+        videoUrl,
         v.id || "",
-        v.snippet?.channelTitle || v.snippet?.channelId || "",
+        `"${(v.snippet?.channelTitle || v.snippet?.channelId || "").replace(/"/g, '""')}"`,
         v.status?.privacyStatus || "public",
         mStatus.label,
         mStatus.claimType || "-",
-        mStatus.claimant || "-",
+        `"${(mStatus.claimant || "-").replace(/"/g, '""')}"`,
         v.statistics?.viewCount || "0",
         v.statistics?.likeCount || "0",
         v.statistics?.commentCount || "0",
@@ -325,12 +329,14 @@ export default function VideosPage() {
       ];
     });
     const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     const filterLabel = monetizationFilter !== "all" ? `_${monetizationFilter}` : "";
-    a.download = `videos_report${filterLabel}_${new Date().toISOString().slice(0, 10)}.csv`;
+    const statusLabel = statusFilter !== "all" ? `_${statusFilter}` : "";
+    a.download = `videos_report${statusLabel}${filterLabel}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
