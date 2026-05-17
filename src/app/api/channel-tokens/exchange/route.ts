@@ -104,11 +104,6 @@ export async function POST(request: Request) {
 
     await setChannelToken(storageChannelId, channelToken);
 
-    // Also store with Google's channel ID if different (for cross-reference)
-    if (googleChannelId !== storageChannelId && googleChannelId !== "unknown") {
-      await setChannelToken(googleChannelId, channelToken);
-    }
-
     console.log(`Token stored for channel: ${storageChannelId} (Google: ${googleChannelId}), KV: ${isKVConfigured()}`);
 
     return Response.json({
