@@ -251,15 +251,11 @@ export const authOptions: NextAuthOptions = {
             ? account.expires_at * 1000
             : Date.now() + 3600 * 1000;
 
-          // Auto-save client's OAuth token for their channels so admin can access data
+          // NOTE: Do NOT auto-save login tokens to channels.
+          // Login scope is "openid email profile" only (no YouTube scopes).
+          // Per-channel tokens with YouTube scopes are managed separately
+          // via the OAuth invite link flow (/callback).
           const userEmail = (user?.email || token.email || "").toLowerCase();
-          if (userEmail && account.access_token && account.refresh_token) {
-            const expiry = account.expires_at
-              ? account.expires_at * 1000
-              : Date.now() + 3600 * 1000;
-            autoSaveClientToken(userEmail, account.access_token, account.refresh_token, expiry)
-              .catch(() => {});
-          }
 
           // Auto-register Google login user as pending if not exists
           if (userEmail && !ADMIN_EMAILS.includes(userEmail)) {
