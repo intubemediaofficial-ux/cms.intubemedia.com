@@ -74,13 +74,23 @@ export async function GET(request: Request) {
         const channelSpecificToken = await getValidAccessToken(channelId);
         if (channelSpecificToken) videoToken = channelSpecificToken;
         if (videoToken) {
-          const videos = await getChannelVideos(videoToken, channelId, maxResults);
-          return Response.json({ data: videos });
+          try {
+            const videos = await getChannelVideos(videoToken, channelId, maxResults);
+            return Response.json({ data: videos });
+          } catch (vidErr) {
+            console.warn("[videos] Token-based fetch failed (quota?):", vidErr instanceof Error ? vidErr.message : vidErr);
+            // Fall through to public API
+          }
         }
         // Fallback: use API key for public video data
-        const publicVideos = await getChannelVideosPublic(channelId, maxResults);
-        if (publicVideos.length > 0) {
-          return Response.json({ data: publicVideos });
+        try {
+          const publicVideos = await getChannelVideosPublic(channelId, maxResults);
+          if (publicVideos.length > 0) {
+            return Response.json({ data: publicVideos });
+          }
+        } catch (pubErr) {
+          console.warn("[videos] Public API fetch failed (quota?):", pubErr instanceof Error ? pubErr.message : pubErr);
+          return Response.json({ data: [], warning: "YouTube API quota exceeded — videos temporarily unavailable" });
         }
         return Response.json({ error: "No token available for this channel. Please validate the channel token first." }, { status: 401 });
       }
@@ -195,8 +205,13 @@ export async function GET(request: Request) {
           }
           return Response.json({ error: "No token available for channel lookup. Please validate at least one channel token first." }, { status: 401 });
         }
-        const results = await lookupChannel(lookupToken, query);
-        return Response.json({ data: results });
+        try {
+          const results = await lookupChannel(lookupToken, query);
+          return Response.json({ data: results });
+        } catch (lookupErr) {
+          console.warn("[lookupChannel] Failed (quota?):", lookupErr instanceof Error ? lookupErr.message : lookupErr);
+          return Response.json({ data: [], warning: "YouTube API quota exceeded — channel data temporarily unavailable" });
+        }
       }
       case "dashboard": {
         // Legacy action — redirect to dashboardFull which uses per-channel tokens
@@ -263,7 +278,13 @@ export async function GET(request: Request) {
         const hasAnyToken = hasOwnChannel || tokenizedChannelIds.length > 0;
 
         // All YouTube data comes from per-channel tokens (no admin token for YouTube API)
-        const channels = await channelsPromise;
+        // Wrap in try-catch so quota errors don't crash the entire endpoint
+        let channels: unknown[] = [];
+        try {
+          channels = await channelsPromise;
+        } catch (chErr) {
+          console.warn("[dashboardFull] Channel stats lookup failed (quota?):", chErr instanceof Error ? chErr.message : chErr);
+        }
         const currentPerformance = null;
         const prevPerformance = null;
         const currentRevenue = null;
