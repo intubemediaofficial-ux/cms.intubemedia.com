@@ -6,7 +6,8 @@ import { useState, useCallback } from "react";
 export default function ReadOnlyBanner() {
   const { data: session } = useSession();
 
-  if (!session?.user || session.user.role === "admin" || session.user.userStatus === "active") {
+  // Only show banner if status is explicitly "pending" — not for undefined/loading states
+  if (!session?.user || session.user.role === "admin" || session.user.userStatus !== "pending") {
     return null;
   }
 
@@ -24,9 +25,9 @@ export default function ReadOnlyBanner() {
 
 export function useIsPending(): boolean {
   const { data: session } = useSession();
-  if (!session?.user) return true;
+  if (!session?.user) return false;
   if (session.user.role === "admin") return false;
-  return session.user.userStatus !== "active";
+  return session.user.userStatus === "pending";
 }
 
 export function usePendingGuard(): () => boolean {
