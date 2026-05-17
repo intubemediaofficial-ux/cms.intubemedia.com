@@ -129,6 +129,8 @@ export default function AdminClientsPage() {
   const [clientChannelsLoading, setClientChannelsLoading] = useState(false);
   const [clientRevenue, setClientRevenue] = useState<ClientRevenueData | null>(null);
   const [clientDetailTab, setClientDetailTab] = useState<"channels" | "bank" | "agreements">("channels");
+  const [revenueDays, setRevenueDays] = useState<number>(28);
+  const [revenueLoading, setRevenueLoading] = useState(false);
 
   // Bank details for viewed client
   interface BankDetails {
@@ -382,6 +384,7 @@ export default function AdminClientsPage() {
     setClientDetailTab("channels");
     setClientBankDetails(null);
     setClientAgreements([]);
+    setRevenueDays(28);
 
     // Fetch bank details and agreements in background
     setBankLoading(true);
@@ -393,100 +396,34 @@ export default function AdminClientsPage() {
       .then(r => r.json()).then(j => { if (j.data) setClientAgreements(j.data); })
       .catch(() => {}).finally(() => setAgreementLoading(false));
 
-    // Also fetch cached data as fallback for revenue
-    let cachedRevenue: { totalRevenue: number; totalViews: number; totalSubscribers: number } | null = null;
-    try {
-      const cachedRes = await fetch(`/api/client-data?action=getCachedData&userId=${encodeURIComponent(client.email)}`);
-      if (cachedRes.ok) {
-        const cachedJson = await cachedRes.json();
-        if (cachedJson.data) cachedRevenue = cachedJson.data;
-      }
-    } catch { /* silent */ }
-
     try {
       const channelDetails: ChannelDetail[] = [];
       const channelIds = client.channels;
 
       if (channelIds.length > 0) {
-        // Fetch token statuses + channel info + revenue in parallel
-        const [tokenRes, revenueRes] = await Promise.all([
-          fetch(`/api/channel-tokens?action=bulkTokenStatus&channelIds=${encodeURIComponent(channelIds.join(","))}`),
-          fetch(`/api/youtube?action=dashboardFull&channelIds=${encodeURIComponent(channelIds.join(","))}`),
-        ]);
-
+        // Fetch token statuses
+        const tokenRes = await fetch(`/api/channel-tokens?action=bulkTokenStatus&channelIds=${encodeURIComponent(channelIds.join(","))}`);
         const tokenJson = await tokenRes.json();
         const tokenStatuses = tokenJson.data?.statuses || {};
 
-        // Parse revenue data
-        let totalRevenue = 0;
-        let totalAnalyticsViews = 0;
-        let totalSubs = 0;
-        if (revenueRes.ok) {
-          const revJson = await revenueRes.json();
-          const revData = revJson.data;
-          if (revData) {
-            // Sum from main revenue
-            if (revData.currentRevenue?.rows?.length && revData.currentRevenue?.columnHeaders) {
-              const headers = revData.currentRevenue.columnHeaders.map((h: { name?: string | null }) => h.name || "");
-              const revIdx = headers.indexOf("estimatedRevenue");
-              const viewIdx = headers.indexOf("views");
-              if (revIdx !== -1) {
-                totalRevenue += revData.currentRevenue.rows.reduce((s: number, r: (string | number)[]) => s + (Number(r[revIdx]) || 0), 0);
-              }
-              if (viewIdx !== -1) {
-                totalAnalyticsViews += revData.currentRevenue.rows.reduce((s: number, r: (string | number)[]) => s + (Number(r[viewIdx]) || 0), 0);
-              }
-            }
-            // Sum from per-channel analytics
-            if (revData.perChannelAnalytics) {
-              for (const pca of Object.values(revData.perChannelAnalytics) as Array<{ revenue?: { columnHeaders?: Array<{ name?: string | null }>; rows?: Array<Array<string | number>> } | null }>) {
-                if (pca.revenue?.rows?.length && pca.revenue?.columnHeaders) {
-                  const headers = pca.revenue.columnHeaders.map((h: { name?: string | null }) => h.name || "");
-                  const revIdx = headers.indexOf("estimatedRevenue");
-                  if (revIdx !== -1) {
-                    totalRevenue += pca.revenue.rows.reduce((s: number, r: (string | number)[]) => s + (Number(r[revIdx]) || 0), 0);
-                  }
-                }
-              }
-            }
-            // Subscribers from channel data
-            if (revData.channels) {
-              totalSubs = (revData.channels as Array<{ statistics?: { subscriberCount?: string | null } }>).reduce(
-                (s: number, ch) => s + Number(ch?.statistics?.subscriberCount || 0), 0
-              );
+        // Fetch cached channel data
+        const cachedChannelMap: Record<string, { title: string; thumbnail: string; subscribers: number; views: number; videoCount: number; revenue: number }> = {};
+        try {
+          const cachedRes = await fetch(`/api/client-data?action=getCachedData&userId=${encodeURIComponent(client.email)}`);
+          if (cachedRes.ok) {
+            const cachedJson = await cachedRes.json();
+            for (const ch of (cachedJson.data?.channels || [])) {
+              cachedChannelMap[ch.channelId] = {
+                title: ch.channelTitle || ch.channelId,
+                thumbnail: ch.thumbnail || "",
+                subscribers: ch.subscribers || 0,
+                views: ch.views || 0,
+                videoCount: ch.videoCount || 0,
+                revenue: ch.estimatedRevenue || 0,
+              };
             }
           }
-        }
-
-        // Use cached data as fallback
-        if (totalRevenue === 0 && cachedRevenue?.totalRevenue) totalRevenue = cachedRevenue.totalRevenue;
-        if (totalSubs === 0 && cachedRevenue?.totalSubscribers) totalSubs = cachedRevenue.totalSubscribers;
-        if (totalAnalyticsViews === 0 && cachedRevenue?.totalViews) totalAnalyticsViews = cachedRevenue.totalViews;
-
-        const cpm = totalAnalyticsViews > 0 ? (totalRevenue / totalAnalyticsViews) * 1000 : 0;
-        const rpm = cpm;
-        setClientRevenue({ totalRevenue, totalViews: totalAnalyticsViews, totalSubscribers: totalSubs, cpm, rpm });
-
-        // Build cached channel lookup from cachedRevenue
-        const cachedChannelMap: Record<string, { title: string; thumbnail: string; subscribers: number; views: number; videoCount: number; revenue: number }> = {};
-        if (cachedRevenue) {
-          try {
-            const cachedRes2 = await fetch(`/api/client-data?action=getCachedData&userId=${encodeURIComponent(client.email)}`);
-            if (cachedRes2.ok) {
-              const cachedJson2 = await cachedRes2.json();
-              for (const ch of (cachedJson2.data?.channels || [])) {
-                cachedChannelMap[ch.channelId] = {
-                  title: ch.channelTitle || ch.channelId,
-                  thumbnail: ch.thumbnail || "",
-                  subscribers: ch.subscribers || 0,
-                  views: ch.views || 0,
-                  videoCount: ch.videoCount || 0,
-                  revenue: ch.estimatedRevenue || 0,
-                };
-              }
-            }
-          } catch { /* silent */ }
-        }
+        } catch { /* silent */ }
 
         // Fetch channel info — use cached data first, then YouTube API fallback
         for (const chId of channelIds) {
@@ -542,6 +479,73 @@ export default function AdminClientsPage() {
       setClientChannelsLoading(false);
     }
   }, []);
+
+  // Fetch revenue data for given days range
+  const fetchClientRevenue = useCallback(async (client: Client, days: number) => {
+    setRevenueLoading(true);
+    try {
+      const endDate = new Date().toISOString().split("T")[0];
+      const startDateObj = new Date();
+      startDateObj.setDate(startDateObj.getDate() - days);
+      const startDate = startDateObj.toISOString().split("T")[0];
+      const channelIds = client.channels;
+      if (channelIds.length === 0) return;
+
+      const revenueRes = await fetch(
+        `/api/youtube?action=dashboardFull&channelIds=${encodeURIComponent(channelIds.join(","))}&startDate=${startDate}&endDate=${endDate}`
+      );
+      if (!revenueRes.ok) return;
+      const revJson = await revenueRes.json();
+      const revData = revJson.data;
+      if (!revData) return;
+
+      let totalRevenue = 0;
+      let totalAnalyticsViews = 0;
+      let totalSubs = 0;
+
+      // Sum from per-channel analytics
+      if (revData.perChannelAnalytics) {
+        for (const pca of Object.values(revData.perChannelAnalytics) as Array<{ revenue?: { columnHeaders?: Array<{ name?: string | null }>; rows?: Array<Array<string | number>> } | null; revenueViews?: { columnHeaders?: Array<{ name?: string | null }>; rows?: Array<Array<string | number>> } | null }>) {
+          if (pca.revenueViews?.rows?.length && pca.revenueViews?.columnHeaders) {
+            const headers = pca.revenueViews.columnHeaders.map((h) => h.name || "");
+            const revIdx = headers.indexOf("estimatedRevenue");
+            const viewIdx = headers.indexOf("views");
+            if (revIdx !== -1) {
+              totalRevenue += pca.revenueViews.rows.reduce((s: number, r) => s + (Number(r[revIdx]) || 0), 0);
+            }
+            if (viewIdx !== -1) {
+              totalAnalyticsViews += pca.revenueViews.rows.reduce((s: number, r) => s + (Number(r[viewIdx]) || 0), 0);
+            }
+          } else if (pca.revenue?.rows?.length && pca.revenue?.columnHeaders) {
+            const headers = pca.revenue.columnHeaders.map((h) => h.name || "");
+            const revIdx = headers.indexOf("estimatedRevenue");
+            if (revIdx !== -1) {
+              totalRevenue += pca.revenue.rows.reduce((s: number, r) => s + (Number(r[revIdx]) || 0), 0);
+            }
+          }
+        }
+      }
+      // Subscribers from channel data
+      if (revData.channels) {
+        totalSubs = (revData.channels as Array<{ statistics?: { subscriberCount?: string | null } }>).reduce(
+          (s: number, ch) => s + Number(ch?.statistics?.subscriberCount || 0), 0
+        );
+      }
+
+      const cpm = totalAnalyticsViews > 0 ? (totalRevenue / totalAnalyticsViews) * 1000 : 0;
+      const rpm = cpm;
+      setClientRevenue({ totalRevenue, totalViews: totalAnalyticsViews, totalSubscribers: totalSubs, cpm, rpm });
+    } catch { /* silent */ } finally {
+      setRevenueLoading(false);
+    }
+  }, []);
+
+  // Re-fetch revenue when days filter changes
+  useEffect(() => {
+    if (viewingClient) {
+      fetchClientRevenue(viewingClient, revenueDays);
+    }
+  }, [revenueDays, viewingClient, fetchClientRevenue]);
 
   const handleToggleStatus = async (client: Client) => {
     const newStatus = client.status === "active" ? "inactive" : "active"; // pending → active, inactive → active, active → inactive
@@ -1160,7 +1164,7 @@ export default function AdminClientsPage() {
       {/* Client Detail View Modal */}
       {viewingClient && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-xl max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl w-full max-w-6xl shadow-xl max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
@@ -1241,20 +1245,39 @@ export default function AdminClientsPage() {
                 </div>
               </div>
 
+              {/* Revenue Days Filter */}
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-medium text-muted">Revenue Period:</span>
+                {[7, 28, 90, 365].map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setRevenueDays(d)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      revenueDays === d
+                        ? "bg-primary text-white"
+                        : "bg-slate-100 text-muted hover:bg-slate-200"
+                    }`}
+                  >
+                    {d === 365 ? "1 Year" : `${d} Days`}
+                  </button>
+                ))}
+                {revenueLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary ml-2" />}
+              </div>
+
               {/* Revenue & Analytics Cards */}
               {clientRevenue && (
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
                   <div className="bg-green-50 border border-green-200 rounded-xl p-4">
                     <div className="flex items-center gap-1.5">
                       <DollarSign className="w-3.5 h-3.5 text-green-500" />
-                      <p className="text-xs text-green-600 font-medium">Revenue (28d)</p>
+                      <p className="text-xs text-green-600 font-medium">Revenue ({revenueDays === 365 ? "1yr" : `${revenueDays}d`})</p>
                     </div>
                     <p className="text-lg font-bold text-green-900">${clientRevenue.totalRevenue.toFixed(2)}</p>
                   </div>
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-center gap-1.5">
                       <BarChart3 className="w-3.5 h-3.5 text-blue-500" />
-                      <p className="text-xs text-blue-600 font-medium">Views (28d)</p>
+                      <p className="text-xs text-blue-600 font-medium">Views ({revenueDays === 365 ? "1yr" : `${revenueDays}d`})</p>
                     </div>
                     <p className="text-lg font-bold text-blue-900">{clientRevenue.totalViews.toLocaleString()}</p>
                   </div>
