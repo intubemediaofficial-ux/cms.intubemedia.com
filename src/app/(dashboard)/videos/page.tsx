@@ -320,14 +320,13 @@ export default function VideosPage() {
   }, [videos, claims]);
 
   const handleExportCSV = () => {
-    const headers = ["Video Title", "Video URL", "Video ID", "Channel", "Privacy", "Claim Status", "Claim Type", "Claimant / CMS", "Views", "Likes", "Comments", "Duration", "Published Date"];
+    const headers = ["Video URL", "Video Title", "Channel", "Privacy", "Claim Status", "Claim Type", "Claimant / CMS", "Views", "Likes", "Comments", "Duration", "Published Date"];
     const rows = filteredVideos.map((v) => {
       const mStatus = getMonetizationStatus(v, claims);
       const videoUrl = v.id ? `https://www.youtube.com/watch?v=${v.id}` : "";
       return [
-        `"${(v.snippet?.title || "").replace(/"/g, '""')}"`,
         videoUrl,
-        v.id || "",
+        `"${(v.snippet?.title || "").replace(/"/g, '""')}"`,
         `"${(v.snippet?.channelTitle || v.snippet?.channelId || "").replace(/"/g, '""')}"`,
         v.status?.privacyStatus || "public",
         mStatus.label,
