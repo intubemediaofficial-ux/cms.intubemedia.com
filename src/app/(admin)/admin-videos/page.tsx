@@ -273,6 +273,21 @@ export default function AdminVideosPage() {
     }
   }, [selectedClient, clients, cachedChannelIds, fetchVideosForChannels]);
 
+  // Pre-compute privacy counts (based on channel filter only) for dropdown labels
+  const privacyCounts = useMemo(() => {
+    const channelVids = videos.filter((v) =>
+      channelFilter === "all" || v.snippet?.channelId === channelFilter
+    );
+    let pub = 0, priv = 0, unlist = 0;
+    for (const v of channelVids) {
+      const p = (v.status?.privacyStatus || "public").toLowerCase();
+      if (p === "private") priv++;
+      else if (p === "unlisted") unlist++;
+      else pub++;
+    }
+    return { all: channelVids.length, public: pub, private: priv, unlisted: unlist };
+  }, [videos, channelFilter]);
+
   const filteredVideos = useMemo(() => {
     return videos.filter((video) => {
       const title = video.snippet?.title || "";
@@ -284,7 +299,7 @@ export default function AdminVideosPage() {
 
       // Privacy filter
       if (privacyFilter !== "all") {
-        const privacy = video.status?.privacyStatus?.toLowerCase() || "public";
+        const privacy = (video.status?.privacyStatus || "public").toLowerCase();
         if (privacyFilter !== privacy) return false;
       }
 
@@ -527,10 +542,10 @@ export default function AdminVideosPage() {
               onChange={(e) => setPrivacyFilter(e.target.value)}
               className="border border-border rounded-lg px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
-              <option value="all">All Privacy ({claimStats.total})</option>
-              <option value="public">Public ({claimStats.publicCount})</option>
-              <option value="private">Private ({claimStats.privateCount})</option>
-              <option value="unlisted">Unlisted ({claimStats.unlistedCount})</option>
+              <option value="all">All Privacy ({privacyCounts.all})</option>
+              <option value="public">Public ({privacyCounts.public})</option>
+              <option value="private">Private ({privacyCounts.private})</option>
+              <option value="unlisted">Unlisted ({privacyCounts.unlisted})</option>
               <option value="draft">Draft ({claimStats.draftCount})</option>
             </select>
             {channelOptions.length > 1 && (
@@ -571,6 +586,12 @@ export default function AdminVideosPage() {
             </p>
           </div>
         ) : (
+          <>
+          {(privacyFilter !== "all" || channelFilter !== "all" || monetizationFilter !== "all" || searchQuery) && (
+            <p className="text-xs text-muted mb-3">
+              Showing {filteredVideos.length} of {videos.length} videos
+            </p>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -690,6 +711,7 @@ export default function AdminVideosPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">

@@ -282,6 +282,21 @@ export default function VideosPage() {
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [videos]);
 
+  // Pre-compute privacy counts (based on channel filter only) for dropdown labels
+  const privacyCounts = useMemo(() => {
+    const channelVids = (isReal ? videos : []).filter((v) =>
+      channelFilter === "all" || v.snippet?.channelId === channelFilter
+    );
+    let pub = 0, priv = 0, unlist = 0;
+    for (const v of channelVids) {
+      const p = (v.status?.privacyStatus || "public").toLowerCase();
+      if (p === "private") priv++;
+      else if (p === "unlisted") unlist++;
+      else pub++;
+    }
+    return { all: channelVids.length, public: pub, private: priv, unlisted: unlist };
+  }, [videos, isReal, channelFilter]);
+
   const filteredVideos = useMemo(() => {
     return (isReal ? videos : []).filter((video) => {
       const title = video.snippet?.title || "";
@@ -569,10 +584,10 @@ export default function VideosPage() {
                   }
                   className="border border-border rounded-lg px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
                 >
-                  <option value="all">All Status</option>
-                  <option value="public">Public</option>
-                  <option value="private">Private</option>
-                  <option value="unlisted">Unlisted</option>
+                  <option value="all">All Privacy ({privacyCounts.all})</option>
+                  <option value="public">Public ({privacyCounts.public})</option>
+                  <option value="private">Private ({privacyCounts.private})</option>
+                  <option value="unlisted">Unlisted ({privacyCounts.unlisted})</option>
                 </select>
                 <select
                   value={monetizationFilter}
@@ -607,6 +622,12 @@ export default function VideosPage() {
                 </button>
               </div>
             </div>
+
+            {(statusFilter !== "all" || channelFilter !== "all" || monetizationFilter !== "all" || searchQuery) && (
+              <p className="text-xs text-muted mb-3">
+                Showing {filteredVideos.length} of {videos.length} videos
+              </p>
+            )}
 
             {filteredVideos.length === 0 ? (
               <div className="text-center py-10 text-sm text-muted">
