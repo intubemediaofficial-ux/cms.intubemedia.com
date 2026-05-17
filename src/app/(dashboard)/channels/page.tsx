@@ -250,6 +250,36 @@ export default function ChannelsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
+  // Sync approval status from KV — if admin approved a pending channel, update localStorage
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetch("/api/users?action=me")
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j.data) return;
+        const kvApproved = new Set<string>(j.data.channels || []);
+        const kvPending = new Set<string>(j.data.pendingChannels || []);
+        let changed = false;
+        const updated = storedChannels.map((ch) => {
+          if (ch.status === "pending_approval" && kvApproved.has(ch.id)) {
+            changed = true;
+            return { ...ch, status: "active" as const };
+          }
+          if (ch.status === "pending_approval" && !kvPending.has(ch.id) && !kvApproved.has(ch.id)) {
+            changed = true;
+            return null; // rejected by admin — remove
+          }
+          return ch;
+        }).filter(Boolean) as StoredChannel[];
+        if (changed) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+          setStoredChannels(updated);
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
   // Fetch user's assigned networks from admin
   useEffect(() => {
     if (!isAuthenticated || isAdmin) return;

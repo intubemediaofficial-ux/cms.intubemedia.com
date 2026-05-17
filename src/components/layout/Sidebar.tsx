@@ -26,6 +26,7 @@ import {
   Globe,
   CreditCard,
   MonitorPlay,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +63,7 @@ const clientNavItems: NavItem[] = [
   { href: "/music-distribution", label: "Music Distribution", icon: Music },
   { href: "/claim-release", label: "Claim Release", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/contact-admin", label: "Contact Admin", icon: MessageSquare },
 ];
 
 const adminNavItems: NavItem[] = [
