@@ -166,6 +166,17 @@ export default function AdminVideosPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [monetizationFilter, setMonetizationFilter] = useState<MonetizationFilter>("all");
   const [privacyFilter, setPrivacyFilter] = useState<string>("all");
+  const [channelFilter, setChannelFilter] = useState<string>("all");
+
+  const channelOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of videos) {
+      const cid = v.snippet?.channelId;
+      const cname = v.snippet?.channelTitle;
+      if (cid && !map.has(cid)) map.set(cid, cname || cid);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [videos]);
 
   // Add claim modal
   const [showAddClaim, setShowAddClaim] = useState(false);
@@ -267,6 +278,9 @@ export default function AdminVideosPage() {
       const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
 
+      // Channel filter
+      if (channelFilter !== "all" && video.snippet?.channelId !== channelFilter) return false;
+
       // Privacy filter
       if (privacyFilter !== "all") {
         const privacy = video.status?.privacyStatus?.toLowerCase() || "public";
@@ -285,7 +299,7 @@ export default function AdminVideosPage() {
         default: return true;
       }
     });
-  }, [videos, searchQuery, monetizationFilter, privacyFilter, claims]);
+  }, [videos, searchQuery, monetizationFilter, privacyFilter, channelFilter, claims]);
 
   const claimStats = useMemo(() => {
     let copyrightClaims = 0;
@@ -392,7 +406,8 @@ export default function AdminVideosPage() {
     a.href = url;
     const filterLabel = monetizationFilter !== "all" ? `_${monetizationFilter}` : "";
     const clientLabel = selectedClient !== "all" ? `_${clients.find((c) => c.id === selectedClient)?.name || "client"}` : "_all_clients";
-    a.download = `admin_videos_report${clientLabel}${filterLabel}_${new Date().toISOString().slice(0, 10)}.csv`;
+    const channelLabel = channelFilter !== "all" ? `_${channelOptions.find(([id]) => id === channelFilter)?.[1]?.replace(/[^a-zA-Z0-9]/g, "_") || channelFilter}` : "";
+    a.download = `admin_videos_report${clientLabel}${channelLabel}${filterLabel}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -519,6 +534,18 @@ export default function AdminVideosPage() {
               <option value="unlisted">Unlisted ({claimStats.unlistedCount})</option>
               <option value="draft">Draft ({claimStats.draftCount})</option>
             </select>
+            {channelOptions.length > 1 && (
+              <select
+                value={channelFilter}
+                onChange={(e) => setChannelFilter(e.target.value)}
+                className="border border-border rounded-lg px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 max-w-[200px]"
+              >
+                <option value="all">All Channels</option>
+                {channelOptions.map(([id, name]) => (
+                  <option key={id} value={id}>{name}</option>
+                ))}
+              </select>
+            )}
             <button
               onClick={handleExportCSV}
               disabled={filteredVideos.length === 0}
