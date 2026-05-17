@@ -286,7 +286,7 @@ export default function VideosPage() {
     return (isReal ? videos : []).filter((video) => {
       const title = video.snippet?.title || "";
       const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase());
-      const privacy = video.status?.privacyStatus || "public";
+      const privacy = (video.status?.privacyStatus || "public").toLowerCase();
       const matchesStatus = statusFilter === "all" || privacy === statusFilter;
       const matchesChannel = channelFilter === "all" || video.snippet?.channelId === channelFilter;
 
