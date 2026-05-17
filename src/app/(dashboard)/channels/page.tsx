@@ -25,6 +25,7 @@ import {
   Key,
   Trash2,
   Eye,
+  Clock,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
@@ -866,6 +867,33 @@ export default function ChannelsPage() {
               </div>
             )}
           </div>
+
+          {/* Approved channels needing token validation banner */}
+          {activeChannels.filter((c) => c.status === "active" && c.tokenStatus !== "Valid").length > 0 && (
+            <div className="bg-green-50 border border-green-300 rounded-xl p-4 flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-green-800">Channel Approved — Token Validate Karo!</p>
+                <p className="text-xs text-green-700 mt-1">
+                  {activeChannels.filter((c) => c.status === "active" && c.tokenStatus !== "Valid").length} channel(s) approved hain lekin token validate nahi hai. 
+                  Neeche channel ke row mein &quot;Generate Invite Link&quot; button click karo → link copy karo → browser mein open karo → Google se authorize karo → token valid ho jaayega.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Pending approval banner */}
+          {activeChannels.filter((c) => c.status === "pending_approval").length > 0 && (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
+              <Clock className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">Channels Pending Approval</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  {activeChannels.filter((c) => c.status === "pending_approval").length} channel(s) admin ke approval ka wait kar rahe hain. Admin approve kare tab token validate kar sakte ho.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Filters & Search Row */}
           <div className="bg-white rounded-xl border border-border p-4">

@@ -27,13 +27,18 @@ export async function POST(request: Request) {
     // Use NEXT_PUBLIC_GOOGLE_CLIENT_ID (same as invite link) for token exchange
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    // Use x-forwarded-host/host header to get the correct public URL on Vercel
-    const forwardedHost = request.headers.get("x-forwarded-host");
-    const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
-    const requestUrl = new URL(request.url);
-    const host = forwardedHost || requestUrl.host;
-    const protocol = forwardedHost ? forwardedProto : requestUrl.protocol.replace(":", "");
-    const redirectUri = `${protocol}://${host}/callback`;
+    
+    // Prefer client-provided redirectUri (exact match with what was used in OAuth request)
+    // Fall back to computing from request headers
+    let redirectUri = body.redirectUri;
+    if (!redirectUri) {
+      const forwardedHost = request.headers.get("x-forwarded-host");
+      const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+      const requestUrl = new URL(request.url);
+      const host = forwardedHost || requestUrl.host;
+      const protocol = forwardedHost ? forwardedProto : requestUrl.protocol.replace(":", "");
+      redirectUri = `${protocol}://${host}/callback`;
+    }
 
     if (!clientId || !clientSecret) {
       return Response.json({ error: "Google OAuth not configured" }, { status: 500 });
@@ -122,8 +127,9 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Exchange error:", error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     return Response.json(
-      { error: "Failed to process authorization callback" },
+      { error: `Failed to process authorization callback: ${errMsg}` },
       { status: 500 }
     );
   }
