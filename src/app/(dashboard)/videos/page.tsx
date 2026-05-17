@@ -298,27 +298,36 @@ export default function VideosPage() {
   }, [videos, isReal, channelFilter]);
 
   const filteredVideos = useMemo(() => {
-    return (isReal ? videos : []).filter((video) => {
+    if (!isReal) return [];
+    const result: VideoItem[] = [];
+    for (const video of videos) {
+      // Channel filter
+      if (channelFilter !== "all" && video.snippet?.channelId !== channelFilter) continue;
+
+      // Search filter
       const title = video.snippet?.title || "";
-      const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase());
-      const privacy = (video.status?.privacyStatus || "public").toLowerCase();
-      const matchesStatus = statusFilter === "all" || privacy === statusFilter;
-      const matchesChannel = channelFilter === "all" || video.snippet?.channelId === channelFilter;
+      if (searchQuery && !title.toLowerCase().includes(searchQuery.toLowerCase())) continue;
 
-      if (!matchesSearch || !matchesStatus || !matchesChannel) return false;
-
-      if (monetizationFilter === "all") return true;
-
-      const mStatus = getMonetizationStatus(video, claims);
-      switch (monetizationFilter) {
-        case "monetized": return mStatus.isMonetized && !mStatus.hasActiveClaim;
-        case "not_monetized": return !mStatus.isMonetized;
-        case "copyright_claim": return mStatus.hasActiveClaim;
-        case "content_id_claim": return mStatus.hasActiveClaim && mStatus.claimType === "content_id";
-        case "no_claim": return !mStatus.hasActiveClaim;
-        default: return true;
+      // Privacy filter - strict comparison
+      if (statusFilter !== "all") {
+        const rawPrivacy = video.status?.privacyStatus;
+        const videoPrivacy = rawPrivacy ? rawPrivacy.toLowerCase() : "public";
+        if (videoPrivacy !== statusFilter) continue;
       }
-    });
+
+      // Monetization filter
+      if (monetizationFilter !== "all") {
+        const mStatus = getMonetizationStatus(video, claims);
+        if (monetizationFilter === "monetized" && !(mStatus.isMonetized && !mStatus.hasActiveClaim)) continue;
+        if (monetizationFilter === "not_monetized" && mStatus.isMonetized) continue;
+        if (monetizationFilter === "copyright_claim" && !mStatus.hasActiveClaim) continue;
+        if (monetizationFilter === "content_id_claim" && !(mStatus.hasActiveClaim && mStatus.claimType === "content_id")) continue;
+        if (monetizationFilter === "no_claim" && mStatus.hasActiveClaim) continue;
+      }
+
+      result.push(video);
+    }
+    return result;
   }, [videos, isReal, searchQuery, statusFilter, monetizationFilter, channelFilter, claims]);
 
   const claimStats = useMemo(() => {
@@ -634,7 +643,7 @@ export default function VideosPage() {
                 {videos.length === 0 ? "No videos found on your channel" : "No videos match your filters"}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" key={`vt-${statusFilter}-${channelFilter}-${monetizationFilter}`}>
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">

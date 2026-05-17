@@ -289,32 +289,35 @@ export default function AdminVideosPage() {
   }, [videos, channelFilter]);
 
   const filteredVideos = useMemo(() => {
-    return videos.filter((video) => {
-      const title = video.snippet?.title || "";
-      const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase());
-      if (!matchesSearch) return false;
-
+    const result: VideoItem[] = [];
+    for (const video of videos) {
       // Channel filter
-      if (channelFilter !== "all" && video.snippet?.channelId !== channelFilter) return false;
+      if (channelFilter !== "all" && video.snippet?.channelId !== channelFilter) continue;
 
-      // Privacy filter
+      // Search filter
+      const title = video.snippet?.title || "";
+      if (searchQuery && !title.toLowerCase().includes(searchQuery.toLowerCase())) continue;
+
+      // Privacy filter - strict comparison
       if (privacyFilter !== "all") {
-        const privacy = (video.status?.privacyStatus || "public").toLowerCase();
-        if (privacyFilter !== privacy) return false;
+        const rawPrivacy = video.status?.privacyStatus;
+        const videoPrivacy = rawPrivacy ? rawPrivacy.toLowerCase() : "public";
+        if (videoPrivacy !== privacyFilter) continue;
       }
 
       // Monetization filter
-      if (monetizationFilter === "all") return true;
-      const mStatus = getMonetizationStatus(video, claims);
-      switch (monetizationFilter) {
-        case "monetized": return mStatus.isMonetized && !mStatus.hasActiveClaim;
-        case "not_monetized": return !mStatus.isMonetized;
-        case "copyright_claim": return mStatus.hasActiveClaim;
-        case "content_id_claim": return mStatus.hasActiveClaim && mStatus.claimType === "content_id";
-        case "no_claim": return !mStatus.hasActiveClaim;
-        default: return true;
+      if (monetizationFilter !== "all") {
+        const mStatus = getMonetizationStatus(video, claims);
+        if (monetizationFilter === "monetized" && !(mStatus.isMonetized && !mStatus.hasActiveClaim)) continue;
+        if (monetizationFilter === "not_monetized" && mStatus.isMonetized) continue;
+        if (monetizationFilter === "copyright_claim" && !mStatus.hasActiveClaim) continue;
+        if (monetizationFilter === "content_id_claim" && !(mStatus.hasActiveClaim && mStatus.claimType === "content_id")) continue;
+        if (monetizationFilter === "no_claim" && mStatus.hasActiveClaim) continue;
       }
-    });
+
+      result.push(video);
+    }
+    return result;
   }, [videos, searchQuery, monetizationFilter, privacyFilter, channelFilter, claims]);
 
   const claimStats = useMemo(() => {
@@ -592,7 +595,7 @@ export default function AdminVideosPage() {
               Showing {filteredVideos.length} of {videos.length} videos
             </p>
           )}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" key={`avt-${privacyFilter}-${channelFilter}-${monetizationFilter}`}>
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
