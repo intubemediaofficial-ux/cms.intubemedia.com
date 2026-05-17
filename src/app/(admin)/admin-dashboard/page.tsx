@@ -105,6 +105,18 @@ function sumMetric(data: AnalyticsResponse | undefined | null, metricName: strin
   return data.rows.reduce((sum, row) => sum + (Number(row[idx]) || 0), 0);
 }
 
+function getDailyRevenueChartData(data: AnalyticsResponse | null | undefined) {
+  if (!data?.rows?.length || !data.columnHeaders) return [];
+  const headers = data.columnHeaders.map((h) => h.name || "");
+  const dayIdx = headers.indexOf("day");
+  const revIdx = headers.indexOf("estimatedRevenue");
+  if (dayIdx === -1 || revIdx === -1) return [];
+  return data.rows.map((row) => ({
+    date: String(row[dayIdx]).slice(5),
+    revenue: Math.round((Number(row[revIdx]) || 0) * 100) / 100,
+  }));
+}
+
 function pctChange(current: number, previous: number): number | null {
   if (previous === 0 && current === 0) return 0;
   if (previous === 0) return 100;
@@ -124,6 +136,7 @@ export default function AdminDashboardPage() {
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, { status: string; channelTitle?: string; updatedAt?: string }>>({});
+  const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7>(7);
 
   // Cached client data from KV (auto-saved when clients load their dashboards)
   interface CachedChannelData {
@@ -317,6 +330,40 @@ export default function AdminDashboardPage() {
       usedCachedData: useCachedRevenue || (totalSubscribers > 0 && cachedTotals.totalSubscribers > 0),
     };
   }, [dashData, cachedTotals]);
+
+  // Per-Channel Daily Revenue table data
+  const perChannelDailyRevenue = useMemo(() => {
+    const perChannel = dashData?.perChannelAnalytics || {};
+    const channelList = dashData?.channels || [];
+    const channelNameMap: Record<string, string> = {};
+    for (const ch of channelList) {
+      if (ch.id) channelNameMap[ch.id] = ch.snippet?.title || ch.id;
+    }
+
+    const result: { channelId: string; channelName: string; clientName: string; dailyMap: Record<string, number> }[] = [];
+    const allDates = new Set<string>();
+
+    for (const [cid, pca] of Object.entries(perChannel)) {
+      const daily = getDailyRevenueChartData(pca.dailyRevenue);
+      const dailyMap: Record<string, number> = {};
+      for (const d of daily) {
+        dailyMap[d.date] = d.revenue;
+        allDates.add(d.date);
+      }
+      const client = clients.find((c) => c.channels.includes(cid));
+      result.push({
+        channelId: cid,
+        channelName: channelNameMap[cid] || cid,
+        clientName: client?.name || "-",
+        dailyMap,
+      });
+    }
+
+    const sortedDates = Array.from(allDates).sort((a, b) => b.localeCompare(a));
+    const filteredDates = sortedDates.slice(0, dailyRevDays);
+
+    return { channels: result, dates: filteredDates };
+  }, [dashData, dailyRevDays, clients]);
 
   const stats = useMemo(() => {
     const totalClients = clients.length;
@@ -739,6 +786,83 @@ export default function AdminDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Per-Channel Daily Revenue Table */}
+      {perChannelDailyRevenue.channels.length > 0 && perChannelDailyRevenue.dates.length > 0 && (
+        <div className="bg-white rounded-xl border border-border p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-amber-500" />
+              <h2 className="text-lg font-semibold text-foreground">Per-Channel Daily Revenue</h2>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {([1, 3, 7] as const).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDailyRevDays(d)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    dailyRevDays === d
+                      ? "bg-primary text-white"
+                      : "bg-slate-100 text-muted hover:bg-slate-200"
+                  }`}
+                >
+                  {d === 1 ? "Latest" : `${d} Days`}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 pr-3 font-medium text-muted text-xs">Channel</th>
+                  <th className="text-left py-2 pr-3 font-medium text-muted text-xs">Client</th>
+                  {perChannelDailyRevenue.dates.map((date) => (
+                    <th key={date} className="text-right py-2 px-2 font-medium text-muted text-xs whitespace-nowrap">{date}</th>
+                  ))}
+                  <th className="text-right py-2 pl-3 font-semibold text-foreground text-xs">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {perChannelDailyRevenue.channels.map((ch) => {
+                  const total = perChannelDailyRevenue.dates.reduce((s, d) => s + (ch.dailyMap[d] || 0), 0);
+                  return (
+                    <tr key={ch.channelId} className="border-b border-border/50 hover:bg-slate-50">
+                      <td className="py-2 pr-3 text-foreground font-medium truncate max-w-[180px]" title={ch.channelName}>{ch.channelName}</td>
+                      <td className="py-2 pr-3 text-muted text-xs truncate max-w-[120px]" title={ch.clientName}>{ch.clientName}</td>
+                      {perChannelDailyRevenue.dates.map((date) => (
+                        <td key={date} className="text-right py-2 px-2 text-muted tabular-nums">
+                          ${(ch.dailyMap[date] || 0).toFixed(2)}
+                        </td>
+                      ))}
+                      <td className="text-right py-2 pl-3 font-semibold text-foreground tabular-nums">${total.toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-border bg-slate-50">
+                  <td className="py-2 pr-3 font-bold text-foreground" colSpan={2}>Total</td>
+                  {perChannelDailyRevenue.dates.map((date) => {
+                    const dayTotal = perChannelDailyRevenue.channels.reduce((s, ch) => s + (ch.dailyMap[date] || 0), 0);
+                    return (
+                      <td key={date} className="text-right py-2 px-2 font-bold text-foreground tabular-nums">
+                        ${dayTotal.toFixed(2)}
+                      </td>
+                    );
+                  })}
+                  <td className="text-right py-2 pl-3 font-bold text-primary tabular-nums">
+                    ${perChannelDailyRevenue.channels.reduce((s, ch) =>
+                      s + perChannelDailyRevenue.dates.reduce((ss, d) => ss + (ch.dailyMap[d] || 0), 0), 0
+                    ).toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="text-xs text-muted mt-3">YouTube revenue data is ~2 days delayed. Latest available date shown first.</p>
+        </div>
+      )}
 
       {/* Top Clients + Category Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
