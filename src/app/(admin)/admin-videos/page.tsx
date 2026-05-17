@@ -223,19 +223,24 @@ export default function AdminVideosPage() {
       return;
     }
     setLoadingVideos(true);
-    // Fetch all channels in parallel for speed
-    const results = await Promise.allSettled(
-      channelIds.map((channelId) =>
-        fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`)
-          .then((r) => r.json())
-          .then((j) => (j.data || []) as VideoItem[])
-      )
-    );
-    const allVideos: VideoItem[] = [];
-    for (const r of results) {
-      if (r.status === "fulfilled") allVideos.push(...r.value);
-    }
-    setVideos(allVideos);
+    try {
+      // Fetch all channels in parallel for speed with timeout
+      const results = await Promise.allSettled(
+        channelIds.map((channelId) =>
+          Promise.race([
+            fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`)
+              .then((r) => r.json())
+              .then((j) => (j.data || []) as VideoItem[]),
+            new Promise<VideoItem[]>((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000))
+          ])
+        )
+      );
+      const allVideos: VideoItem[] = [];
+      for (const r of results) {
+        if (r.status === "fulfilled") allVideos.push(...r.value);
+      }
+      setVideos(allVideos);
+    } catch { /* silent */ }
     setLoadingVideos(false);
   }, []);
 

@@ -15,6 +15,7 @@ import {
   XCircle,
   Send,
   ImageIcon,
+  Upload,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { usePendingGuard } from "@/components/ReadOnlyBanner";
@@ -502,28 +503,118 @@ export default function MusicDistributionPage() {
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Song File Link <span className="text-red-500">*</span>
+                    Audio File <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="url"
-                    value={formData.songFileLink}
-                    onChange={(e) => setFormData({ ...formData, songFileLink: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    placeholder="Google Drive / Dropbox link for song file"
-                  />
+                  <div
+                    className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${
+                      formData.songFileLink ? "border-green-300 bg-green-50" : "border-slate-200 hover:border-primary/40"
+                    }`}
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("border-primary", "bg-primary/5"); }}
+                    onDragLeave={(e) => { e.currentTarget.classList.remove("border-primary", "bg-primary/5"); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove("border-primary", "bg-primary/5");
+                      const file = e.dataTransfer.files[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = () => setFormData({ ...formData, songFileLink: reader.result as string });
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  >
+                    {formData.songFileLink ? (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-green-700 text-sm">
+                          <Music className="w-4 h-4" />
+                          <span>{formData.songFileLink.startsWith("data:") ? "Audio file attached" : "Link added"}</span>
+                        </div>
+                        <button type="button" onClick={() => setFormData({ ...formData, songFileLink: "" })} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer">
+                        <Upload className="w-6 h-6 mx-auto text-slate-400 mb-1" />
+                        <p className="text-sm text-slate-500">Drag & drop audio file here or <span className="text-primary font-medium">click to browse</span></p>
+                        <p className="text-xs text-slate-400 mt-1">Or paste a Google Drive / Dropbox link below</p>
+                        <input type="file" accept="audio/*" className="hidden" onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => setFormData({ ...formData, songFileLink: reader.result as string });
+                            reader.readAsDataURL(file);
+                          }
+                        }} />
+                      </label>
+                    )}
+                  </div>
+                  {!formData.songFileLink && (
+                    <input
+                      type="url"
+                      value={formData.songFileLink}
+                      onChange={(e) => setFormData({ ...formData, songFileLink: e.target.value })}
+                      className="w-full mt-2 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      placeholder="Or paste link: Google Drive / Dropbox"
+                    />
+                  )}
                 </div>
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Poster / Artwork Link
+                    Poster / Artwork
                   </label>
-                  <input
-                    type="url"
-                    value={formData.posterLink}
-                    onChange={(e) => setFormData({ ...formData, posterLink: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    placeholder="Google Drive / Dropbox link for poster/artwork"
-                  />
+                  <div
+                    className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${
+                      formData.posterLink ? "border-green-300 bg-green-50" : "border-slate-200 hover:border-primary/40"
+                    }`}
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("border-primary", "bg-primary/5"); }}
+                    onDragLeave={(e) => { e.currentTarget.classList.remove("border-primary", "bg-primary/5"); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove("border-primary", "bg-primary/5");
+                      const file = e.dataTransfer.files[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = () => setFormData({ ...formData, posterLink: reader.result as string });
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  >
+                    {formData.posterLink ? (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-green-700 text-sm">
+                          <ImageIcon className="w-4 h-4" />
+                          {formData.posterLink.startsWith("data:image") ? (
+                            <img src={formData.posterLink} alt="Poster" className="w-10 h-10 object-cover rounded" />
+                          ) : (
+                            <span>Link added</span>
+                          )}
+                        </div>
+                        <button type="button" onClick={() => setFormData({ ...formData, posterLink: "" })} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer">
+                        <ImageIcon className="w-6 h-6 mx-auto text-slate-400 mb-1" />
+                        <p className="text-sm text-slate-500">Drag & drop poster/artwork here or <span className="text-primary font-medium">click to browse</span></p>
+                        <p className="text-xs text-slate-400 mt-1">Or paste a Google Drive / Dropbox link below</p>
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => setFormData({ ...formData, posterLink: reader.result as string });
+                            reader.readAsDataURL(file);
+                          }
+                        }} />
+                      </label>
+                    )}
+                  </div>
+                  {!formData.posterLink && (
+                    <input
+                      type="url"
+                      value={formData.posterLink}
+                      onChange={(e) => setFormData({ ...formData, posterLink: e.target.value })}
+                      className="w-full mt-2 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      placeholder="Or paste link: Google Drive / Dropbox"
+                    />
+                  )}
                 </div>
 
                 <div>

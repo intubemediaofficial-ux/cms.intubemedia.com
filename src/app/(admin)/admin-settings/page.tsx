@@ -420,7 +420,7 @@ export default function AdminSettingsPage() {
               </label>
               <input
                 type="email"
-                defaultValue="vijendrachoudhary95@gmail.com"
+                defaultValue="bainslamusicofficial@gmail.com"
                 className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
@@ -443,9 +443,9 @@ export default function AdminSettingsPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-xs">V</div>
+                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-xs">B</div>
                 <div>
-                  <p className="text-sm font-medium text-foreground">vijendrachoudhary95@gmail.com</p>
+                  <p className="text-sm font-medium text-foreground">bainslamusicofficial@gmail.com</p>
                   <p className="text-xs text-muted">Super Admin</p>
                 </div>
               </div>

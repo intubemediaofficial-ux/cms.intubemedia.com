@@ -78,6 +78,7 @@ export default function ClaimReleasePage() {
     claimType: "Content ID",
     description: "",
   });
+  const [batchLinks, setBatchLinks] = useState<string[]>([""]);
 
   const fetchClaims = useCallback(async () => {
     try {
@@ -118,6 +119,7 @@ export default function ClaimReleasePage() {
       claimType: "Content ID",
       description: "",
     });
+    setBatchLinks([""]);
     setFormError(null);
     setEditingItem(null);
   };
@@ -143,8 +145,18 @@ export default function ClaimReleasePage() {
 
   const handleSave = async () => {
     if (guardPending()) return;
-    if (!formData.videoLink.trim() || !formData.songTitle.trim()) {
-      setFormError("Video Link and Song Title are required");
+    if (!formData.songTitle.trim()) {
+      setFormError("Song Title is required");
+      return;
+    }
+
+    // For editing, use single videoLink; for new, use batch links
+    const links = editingItem
+      ? [formData.videoLink.trim()]
+      : batchLinks.map((l) => l.trim()).filter(Boolean);
+
+    if (links.length === 0) {
+      setFormError("At least one video link is required");
       return;
     }
 
@@ -152,21 +164,31 @@ export default function ClaimReleasePage() {
     setFormError(null);
 
     try {
-      const method = editingItem ? "PUT" : "POST";
-      const payload = editingItem
-        ? { id: editingItem.id, ...formData }
-        : formData;
-
-      const res = await fetch("/api/claim-release", {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const json = await res.json();
-        setFormError(json.error || "Failed to save");
-        return;
+      if (editingItem) {
+        const res = await fetch("/api/claim-release", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingItem.id, ...formData }),
+        });
+        if (!res.ok) {
+          const json = await res.json();
+          setFormError(json.error || "Failed to save");
+          return;
+        }
+      } else {
+        // Submit one request per link (batch)
+        for (const link of links) {
+          const res = await fetch("/api/claim-release", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...formData, videoLink: link }),
+          });
+          if (!res.ok) {
+            const json = await res.json();
+            setFormError(json.error || `Failed to save link: ${link}`);
+            return;
+          }
+        }
       }
 
       setShowModal(false);
@@ -390,9 +412,8 @@ export default function ClaimReleasePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-slate-500">Claim Type:</span> <span className="font-medium">{viewingItem.claimType}</span></div>
-                <div><span className="text-slate-500">Original UPC:</span> <span className="font-medium font-mono">{viewingItem.originalUPC || "—"}</span></div>
+              <div className="text-sm">
+                <span className="text-slate-500">Claim Type:</span> <span className="font-medium">{viewingItem.claimType}</span>
               </div>
 
               {viewingItem.videoLink && (
@@ -436,7 +457,7 @@ export default function ClaimReleasePage() {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto mx-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
             <div className="flex items-center justify-between p-6 border-b border-slate-200">
               <h2 className="text-lg font-bold text-slate-900">
                 {editingItem ? "Edit Claim Request" : "New Claim Release Request"}
@@ -493,31 +514,63 @@ export default function ClaimReleasePage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Video / Claim Link <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="url"
-                  value={formData.videoLink}
-                  onChange={(e) => setFormData({ ...formData, videoLink: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  placeholder="YouTube video link or claim link"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Original UPC
-                </label>
-                <input
-                  type="text"
-                  value={formData.originalUPC}
-                  onChange={(e) => setFormData({ ...formData, originalUPC: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  placeholder="Original UPC code"
-                />
-              </div>
+              {editingItem ? (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Video / Claim Link <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.videoLink}
+                    onChange={(e) => setFormData({ ...formData, videoLink: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    placeholder="YouTube video link or claim link"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Video / Claim Links <span className="text-red-500">*</span>
+                    <span className="text-xs text-slate-400 ml-2">(Add up to 10 links)</span>
+                  </label>
+                  <div className="space-y-2">
+                    {batchLinks.map((link, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span className="text-xs text-slate-400 w-5 text-right">{idx + 1}.</span>
+                        <input
+                          type="url"
+                          value={link}
+                          onChange={(e) => {
+                            const updated = [...batchLinks];
+                            updated[idx] = e.target.value;
+                            setBatchLinks(updated);
+                          }}
+                          className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          placeholder="YouTube video link or claim link"
+                        />
+                        {batchLinks.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setBatchLinks(batchLinks.filter((_, i) => i !== idx))}
+                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {batchLinks.length < 10 && (
+                      <button
+                        type="button"
+                        onClick={() => setBatchLinks([...batchLinks, ""])}
+                        className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors mt-1"
+                      >
+                        <Plus className="w-3 h-3" /> Add another link
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">

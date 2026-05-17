@@ -18,6 +18,7 @@ interface SupportRequest {
 
 export default function ContactAdminPage() {
   const { data: session } = useSession();
+  const [category, setCategory] = useState("");
   const [message, setMessage] = useState("");
   const [screenshot, setScreenshot] = useState("");
   const [sending, setSending] = useState(false);
@@ -44,6 +45,7 @@ export default function ContactAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "submitSupportRequest",
+          category: category || "General",
           message: message.trim(),
           screenshot: screenshot.trim() || undefined,
           clientName: session?.user?.name || "Unknown",
@@ -89,6 +91,26 @@ export default function ContactAdminPage() {
           </div>
         </div>
         <div className="p-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">
+              Issue Category
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
+            >
+              <option value="">Select category...</option>
+              <option value="Dashboard">Dashboard</option>
+              <option value="Videos">Videos Section</option>
+              <option value="Channels">Channels</option>
+              <option value="Claim Release">Claim Release</option>
+              <option value="Music Distribution">Music Distribution</option>
+              <option value="Payments">Payments</option>
+              <option value="Token/Login">Token / Login Issue</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1.5">
               Describe your issue / problem

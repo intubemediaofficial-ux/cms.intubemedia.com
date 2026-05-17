@@ -32,7 +32,7 @@ const CHANNELS_STORAGE_KEY = "bainsla_channels";
 
 interface StoredChannel {
   id: string;
-  status: "active" | "delinked" | "transferred";
+  status: "active" | "delinked" | "transferred" | "pending_approval";
 }
 
 interface VideoItem {
@@ -92,7 +92,7 @@ function getActiveChannelIds(): string[] {
     const stored = localStorage.getItem(CHANNELS_STORAGE_KEY);
     if (!stored) return [];
     const channels: StoredChannel[] = JSON.parse(stored);
-    return channels.filter((c) => c.status === "active").map((c) => c.id);
+    return channels.filter((c) => c.status === "active" || c.status === "pending_approval").map((c) => c.id);
   } catch {
     return [];
   }
@@ -206,25 +206,46 @@ export default function VideosPage() {
     }
   }, []);
 
-  // Also fetch channel IDs from server-side cached data (more reliable than localStorage alone)
+  // Also fetch channel IDs from server-side (KV user record + cached data)
   const [serverChannelIds, setServerChannelIds] = useState<string[]>([]);
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetch("/api/client-data?action=getAllCachedData")
-      .then((r) => r.json())
-      .then((j) => {
-        const ids: string[] = [];
-        for (const cd of (j.data || [])) {
-          for (const ch of (cd.channels || [])) {
-            if (ch.channelId && !ch.channelId.startsWith("UCtest")) {
-              ids.push(ch.channelId);
+    const fetchServerIds = async () => {
+      const ids: string[] = [];
+      // Try user record in KV (has channels array)
+      try {
+        const email = session?.user?.email;
+        if (email) {
+          const res = await fetch("/api/users");
+          if (res.ok) {
+            const json = await res.json();
+            const user = (json.data || []).find((u: { email: string }) => u.email.toLowerCase() === email.toLowerCase());
+            if (user?.channels) {
+              for (const ch of user.channels) {
+                if (ch && !ch.startsWith("UCtest") && ch !== "test") ids.push(ch);
+              }
             }
           }
         }
-        setServerChannelIds(ids);
-      })
-      .catch(() => {});
-  }, [isAuthenticated]);
+      } catch { /* silent */ }
+      // Also try cached data
+      try {
+        const res = await fetch("/api/client-data?action=getAllCachedData");
+        if (res.ok) {
+          const j = await res.json();
+          for (const cd of (j.data || [])) {
+            for (const ch of (cd.channels || [])) {
+              if (ch.channelId && !ch.channelId.startsWith("UCtest")) {
+                ids.push(ch.channelId);
+              }
+            }
+          }
+        }
+      } catch { /* silent */ }
+      setServerChannelIds(ids);
+    };
+    fetchServerIds();
+  }, [isAuthenticated, session?.user?.email]);
 
   // Merge localStorage + server channel IDs
   const allChannelIds = useMemo(() => {
@@ -239,23 +260,30 @@ export default function VideosPage() {
     }
     setLoading(true);
     setError(null);
-    // Fetch all channels in parallel for speed
-    const results = await Promise.allSettled(
-      allChannelIds.map((channelId) =>
-        fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`)
-          .then((r) => r.json())
-          .then((j) => (j.data || []) as VideoItem[])
-      )
-    );
-    const allVideos: VideoItem[] = [];
-    for (const r of results) {
-      if (r.status === "fulfilled") allVideos.push(...r.value);
-    }
-    if (allVideos.length > 0) {
-      setVideos(allVideos);
-      setIsReal(true);
-    } else {
-      setError("No videos found for added channels");
+    try {
+      // Fetch all channels in parallel for speed with timeout
+      const results = await Promise.allSettled(
+        allChannelIds.map((channelId) =>
+          Promise.race([
+            fetch(`/api/youtube?action=videos&channelId=${encodeURIComponent(channelId)}`)
+              .then((r) => r.json())
+              .then((j) => (j.data || []) as VideoItem[]),
+            new Promise<VideoItem[]>((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000))
+          ])
+        )
+      );
+      const allVideos: VideoItem[] = [];
+      for (const r of results) {
+        if (r.status === "fulfilled") allVideos.push(...r.value);
+      }
+      if (allVideos.length > 0) {
+        setVideos(allVideos);
+        setIsReal(true);
+      } else {
+        setError("No videos found for added channels. Please check if channels have valid tokens.");
+      }
+    } catch {
+      setError("Failed to load videos. Please try again.");
     }
     setLoading(false);
   }, [isAuthenticated, allChannelIds]);
