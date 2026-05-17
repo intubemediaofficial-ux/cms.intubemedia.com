@@ -6,7 +6,7 @@ import { signIn, useSession } from "next-auth/react";
 import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -16,6 +16,10 @@ export default function LoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [forgotStep, setForgotStep] = useState<"email" | "otp">("email");
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [otpSending, setOtpSending] = useState(false);
   const router = useRouter();
   const { data: session } = useSession();
 
@@ -85,6 +89,67 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     await signIn("google", { callbackUrl: "/dashboard" });
+  };
+
+  const handleSendResetOtp = async () => {
+    if (!email) {
+      setError("Email is required");
+      return;
+    }
+    setOtpSending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to send OTP");
+      } else {
+        setForgotStep("otp");
+        setSuccess("OTP sent to your email! Check your inbox.");
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    }
+    setOtpSending(false);
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp || !newPassword) {
+      setError("OTP and new password are required");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to reset password");
+      } else {
+        setSuccess("Password reset successfully! You can now login.");
+        setMode("login");
+        setForgotStep("email");
+        setOtp("");
+        setNewPassword("");
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    }
+    setLoading(false);
   };
 
   return (
@@ -312,41 +377,135 @@ export default function LoginPage() {
           {/* Glassmorphism Card */}
           <div className="bg-white/[0.07] backdrop-blur-xl rounded-3xl border border-white/[0.12] p-8 shadow-2xl shadow-black/20">
             {/* Tab Toggle */}
-            <div className="flex mb-6 bg-white/[0.05] rounded-xl p-1">
-              <button
-                type="button"
-                onClick={() => { setMode("login"); setError(null); setSuccess(null); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  mode === "login"
-                    ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-500/25"
-                    : "text-white/50 hover:text-white/70"
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => { setMode("register"); setError(null); setSuccess(null); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  mode === "register"
-                    ? "bg-gradient-to-r from-green-600 to-green-500 text-white shadow-lg shadow-green-500/25"
-                    : "text-white/50 hover:text-white/70"
-                }`}
-              >
-                Create Account
-              </button>
-            </div>
+            {mode !== "forgot" && (
+              <div className="flex mb-6 bg-white/[0.05] rounded-xl p-1">
+                <button
+                  type="button"
+                  onClick={() => { setMode("login"); setError(null); setSuccess(null); }}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    mode === "login"
+                      ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-500/25"
+                      : "text-white/50 hover:text-white/70"
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMode("register"); setError(null); setSuccess(null); }}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    mode === "register"
+                      ? "bg-gradient-to-r from-green-600 to-green-500 text-white shadow-lg shadow-green-500/25"
+                      : "text-white/50 hover:text-white/70"
+                  }`}
+                >
+                  Create Account
+                </button>
+              </div>
+            )}
 
             <div className="text-center mb-6">
               <h2 className="text-xl font-bold text-white">
-                {mode === "login" ? "Welcome back" : "Create Account"}
+                {mode === "login" ? "Welcome back" : mode === "register" ? "Create Account" : "Reset Password"}
               </h2>
               <p className="text-sm text-white/40 mt-1">
-                {mode === "login" ? "Sign in to your account to continue" : "Register for a new account"}
+                {mode === "login" ? "Sign in to your account to continue" : mode === "register" ? "Register for a new account" : forgotStep === "email" ? "Enter your registered email to receive OTP" : "Enter OTP and set your new password"}
               </p>
             </div>
 
-            <form onSubmit={mode === "login" ? handleLogin : handleRegister}>
+            {/* Forgot Password Flow */}
+            {mode === "forgot" && (
+              <form onSubmit={forgotStep === "email" ? (e) => { e.preventDefault(); handleSendResetOtp(); } : handleResetPassword}>
+                {error && (
+                  <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400 text-center">
+                    {error}
+                  </div>
+                )}
+                {success && (
+                  <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-sm text-green-400 text-center">
+                    {success}
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-white/70 mb-1.5">Email address</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Enter your registered email"
+                      disabled={forgotStep === "otp"}
+                      className="w-full px-4 py-3 bg-white/[0.06] border border-white/[0.1] rounded-xl text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40 transition-all disabled:opacity-50"
+                    />
+                  </div>
+
+                  {forgotStep === "otp" && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-white/70 mb-1.5">OTP Code</label>
+                        <input
+                          type="text"
+                          value={otp}
+                          onChange={(e) => setOtp(e.target.value)}
+                          placeholder="Enter 6-digit OTP"
+                          maxLength={6}
+                          className="w-full px-4 py-3 bg-white/[0.06] border border-white/[0.1] rounded-xl text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40 transition-all text-center tracking-[0.5em] text-lg font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-white/70 mb-1.5">New Password</label>
+                        <input
+                          type="password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Enter new password (min 6 characters)"
+                          className="w-full px-4 py-3 bg-white/[0.06] border border-white/[0.1] rounded-xl text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40 transition-all"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || otpSending}
+                  className="w-full mt-6 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-semibold py-3 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25"
+                >
+                  {otpSending ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Sending OTP...</>
+                  ) : loading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Resetting password...</>
+                  ) : forgotStep === "email" ? (
+                    "Send OTP"
+                  ) : (
+                    "Reset Password"
+                  )}
+                </button>
+
+                {forgotStep === "otp" && (
+                  <button
+                    type="button"
+                    onClick={handleSendResetOtp}
+                    disabled={otpSending}
+                    className="w-full mt-2 text-xs text-amber-400/70 hover:text-amber-400 transition-colors disabled:opacity-50"
+                  >
+                    Didn&apos;t receive OTP? Send again
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => { setMode("login"); setError(null); setSuccess(null); setForgotStep("email"); setOtp(""); setNewPassword(""); }}
+                  className="w-full mt-3 text-sm text-white/40 hover:text-white/60 transition-colors"
+                >
+                  ← Back to Sign In
+                </button>
+              </form>
+            )}
+
+            {/* Login / Register Form */}
+            {mode !== "forgot" && <form onSubmit={mode === "login" ? handleLogin : handleRegister}>
               {error && (
                 <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400 text-center">
                   {error}
@@ -450,6 +609,18 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              {mode === "login" && (
+                <div className="text-right mt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setMode("forgot"); setError(null); setSuccess(null); setForgotStep("email"); }}
+                    className="text-xs text-amber-400/70 hover:text-amber-400 transition-colors"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={loading}
@@ -468,18 +639,18 @@ export default function LoginPage() {
                   mode === "login" ? "Sign in" : "Create Account"
                 )}
               </button>
-            </form>
+            </form>}
 
-            <div className="relative my-6">
+            {mode !== "forgot" && (<div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-white/[0.08]" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
                 <span className="bg-transparent px-3 text-white/30">or</span>
               </div>
-            </div>
+            </div>)}
 
-            <button
+            {mode !== "forgot" && <button
               onClick={handleGoogleLogin}
               disabled={googleLoading}
               className="w-full flex items-center justify-center gap-3 bg-white/[0.06] border border-white/[0.1] hover:bg-white/[0.1] py-3 rounded-xl text-sm font-medium text-white/80 transition-all disabled:opacity-60"
@@ -503,7 +674,7 @@ export default function LoginPage() {
                 />
               </svg>
               {googleLoading ? "Connecting..." : "Sign in with Google"}
-            </button>
+            </button>}
           </div>
 
           <p className="text-center text-xs text-white/25 mt-4">

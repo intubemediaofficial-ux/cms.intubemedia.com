@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Search,
   ExternalLink,
@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  RefreshCw,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -100,6 +101,7 @@ export default function AdminChannelsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [pendingActionLoading, setPendingActionLoading] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -196,17 +198,18 @@ export default function AdminChannelsPage() {
       
       const allIds = clients.flatMap((c) => c.channels);
 
-      // Then try YouTube API for channels not in cache
+      // Then try YouTube API for channels not in cache — parallel
       const remainingIds = allIds.filter((id) => !newMap[id]);
-      for (const id of remainingIds) {
-        try {
-          const res = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}&allChannelIds=${allIds.join(",")}`);
-          const json = await res.json();
-          if (res.ok && json.data?.length) {
-            newMap[id] = json.data[0];
-          }
-        } catch {
-          // skip
+      const results = await Promise.allSettled(
+        remainingIds.map((id) =>
+          fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}&allChannelIds=${allIds.join(",")}`)
+            .then((r) => r.json())
+            .then((json) => ({ id, data: json.data?.[0] as YouTubeChannel | undefined }))
+        )
+      );
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value.data) {
+          newMap[r.value.id] = r.value.data;
         }
       }
 
@@ -218,6 +221,33 @@ export default function AdminChannelsPage() {
     fetchAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, clients]);
+
+  // Auto-refresh channel stats every 60s
+  const refreshChannelStats = useCallback(async () => {
+    const allIds = clients.flatMap((c) => c.channels).filter((id) => !id.startsWith("UCtest") && id !== "test");
+    if (allIds.length === 0) return;
+    const results = await Promise.allSettled(
+      allIds.map((id) =>
+        fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}`)
+          .then((r) => r.json())
+          .then((j) => ({ id, data: j.data?.[0] as YouTubeChannel | undefined }))
+      )
+    );
+    const newMap: Record<string, YouTubeChannel> = { ...channelDataMap };
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value.data) {
+        newMap[r.value.id] = r.value.data;
+      }
+    }
+    setChannelDataMap(newMap);
+    setLastRefresh(new Date());
+  }, [clients, channelDataMap]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const interval = setInterval(refreshChannelStats, 60000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, refreshChannelStats]);
 
   const allChannelRows: ChannelRow[] = useMemo(() => {
     const rows: ChannelRow[] = [];
@@ -509,6 +539,23 @@ export default function AdminChannelsPage() {
             <p className="text-2xl font-bold text-amber-900">{allChannelRows.filter(c => c.tokenStatus === "valid").length} / {allChannelRows.length}</p>
           </div>
         </div>
+      </div>
+
+      {/* Live Stats Indicator */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 text-xs text-green-600">
+          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <span>Live Stats</span>
+          <span className="text-muted">· Updated {lastRefresh.toLocaleTimeString()}</span>
+        </div>
+        <button
+          onClick={refreshChannelStats}
+          className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+          title="Refresh channel stats now"
+        >
+          <RefreshCw className="w-3 h-3" />
+          Refresh
+        </button>
       </div>
 
       {/* Pending Channels Approval Section */}
