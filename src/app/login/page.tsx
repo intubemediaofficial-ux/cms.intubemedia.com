@@ -41,7 +41,7 @@ export default function LoginPage() {
     });
     setLoading(false);
     if (result?.error) {
-      setError("Invalid email or password. Account may be pending approval.");
+      setError("Invalid email or password. If you signed up with Google, please use 'Sign in with Google' or create an account to set a password.");
     } else {
       router.push("/dashboard");
       router.refresh();
@@ -71,10 +71,9 @@ export default function LoginPage() {
       if (!res.ok) {
         setError(data.error || "Registration failed");
       } else {
-        setSuccess("Account created! Admin will verify your account. You can login after approval.");
+        setSuccess(data.message || "Account created! Admin will verify your account. You can login after approval.");
+        setMode("login");
         setName("");
-        setEmail("");
-        setPassword("");
         setPhone("");
       }
     } catch {
