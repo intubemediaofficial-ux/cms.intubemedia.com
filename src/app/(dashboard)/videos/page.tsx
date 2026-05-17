@@ -307,19 +307,18 @@ export default function VideosPage() {
   }, [videos, isReal, searchQuery, statusFilter, monetizationFilter, channelFilter, claims]);
 
   const claimStats = useMemo(() => {
-    const vids = channelFilter === "all" ? videos : videos.filter((v) => v.snippet?.channelId === channelFilter);
-    const total = vids.length;
+    const total = filteredVideos.length;
     let copyrightClaims = 0;
     let contentIdClaims = 0;
     let monetized = 0;
-    for (const v of vids) {
+    for (const v of filteredVideos) {
       const status = getMonetizationStatus(v, claims);
       if (status.claimType === "copyright") copyrightClaims++;
       else if (status.claimType === "content_id") contentIdClaims++;
       if (status.isMonetized && !status.hasActiveClaim) monetized++;
     }
     return { total, copyrightClaims, contentIdClaims, monetized, noClaim: total - copyrightClaims - contentIdClaims };
-  }, [videos, claims, channelFilter]);
+  }, [filteredVideos, claims]);
 
   const handleExportCSV = () => {
     const headers = ["Video URL", "Video Title", "Channel", "Privacy", "Claim Status", "Claim Type", "Claimant / CMS", "Views", "Likes", "Comments", "Duration", "Published Date"];
