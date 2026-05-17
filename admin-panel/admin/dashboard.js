@@ -131,6 +131,7 @@ function showSection(s) {
     case 'settings': renderSettings(area); break;
     case 'directors': renderDirectors(area); break;
   }
+  initUploadZones(area);
 }
 
 /* ═══════ HELPERS ═══════ */
@@ -149,40 +150,50 @@ function imageUploadField(label, name, value, folder) {
   const dropId = 'drop_' + uid;
   const statusId = 'status_' + uid;
   return `<div class="form-group"><label>${label}</label>
-    <input type="file" id="${inputId}" accept="image/*" style="display:none">
+    <input type="file" id="${inputId}" accept="image/*" style="display:none" data-upload-folder="${folder}" data-upload-name="${name}">
     <input type="hidden" name="${name}" value="${value || ''}">
-    <div id="${dropId}" class="upload-drop-zone" style="border:2px dashed var(--border2);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(245,158,11,.03);min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center"
-      onclick="document.getElementById('${inputId}').click()">
+    <div id="${dropId}" class="upload-drop-zone" data-file-input="${inputId}" data-preview="${previewId}" data-status="${statusId}" data-folder="${folder}" data-hidden-name="${name}" style="border:2px dashed var(--border2);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(245,158,11,.03);min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center">
       <div id="${previewId}">${value ? `<img src="${value}" style="max-height:100px;border-radius:6px;margin-bottom:8px">` : '<div style="font-size:36px;margin-bottom:8px">📷</div>'}</div>
       <div style="font-size:13px;font-weight:600;color:#f59e0b">Click to upload or drag & drop</div>
       <div style="font-size:11px;color:#666;margin-top:4px">JPG, PNG or WEBP. Max 5MB.</div>
       <div id="${statusId}" style="font-size:11px;margin-top:6px;color:#999"></div>
     </div>
-    <script>(function(){
-      var inp=document.getElementById('${inputId}');
-      var drop=document.getElementById('${dropId}');
-      var prev=document.getElementById('${previewId}');
-      var stat=document.getElementById('${statusId}');
-      var hidden=drop.parentElement.querySelector('input[name="${name}"]');
-      async function handleFile(file){
-        if(!file||!file.type.startsWith('image/'))return;
-        if(file.size>5*1024*1024){stat.textContent='File too large (max 5MB)';stat.style.color='#ef4444';return;}
-        var reader=new FileReader();
-        reader.onload=function(e){prev.innerHTML='<img src="'+e.target.result+'" style="max-height:100px;border-radius:6px;margin-bottom:8px">';};
-        reader.readAsDataURL(file);
-        stat.textContent='Uploading...';stat.style.color='#f59e0b';
-        try{
-          var r=await uploadImage(file,'${folder}');
-          if(r.url){hidden.value=r.url;stat.textContent='Uploaded!';stat.style.color='#22c55e';drop.style.borderColor='#22c55e';}
-          else{stat.textContent='Error: '+(r.error||'Upload failed');stat.style.color='#ef4444';}
-        }catch(e){stat.textContent='Upload failed';stat.style.color='#ef4444';}
-      }
-      inp.addEventListener('change',function(){if(this.files[0])handleFile(this.files[0]);});
-      drop.addEventListener('dragover',function(e){e.preventDefault();e.stopPropagation();this.style.borderColor='#f59e0b';this.style.background='rgba(245,158,11,.08)';});
-      drop.addEventListener('dragleave',function(e){e.preventDefault();e.stopPropagation();this.style.borderColor='var(--border2)';this.style.background='rgba(245,158,11,.03)';});
-      drop.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();this.style.borderColor='var(--border2)';this.style.background='rgba(245,158,11,.03)';if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
-    })();</script>
   </div>`;
+}
+
+function initUploadZones(container) {
+  (container || document).querySelectorAll('.upload-drop-zone').forEach(function(drop) {
+    if (drop._uploadInit) return;
+    drop._uploadInit = true;
+    var inputId = drop.dataset.fileInput;
+    var previewId = drop.dataset.preview;
+    var statusId = drop.dataset.status;
+    var folder = drop.dataset.folder;
+    var hiddenName = drop.dataset.hiddenName;
+    var inp = document.getElementById(inputId);
+    var prev = document.getElementById(previewId);
+    var stat = document.getElementById(statusId);
+    var hidden = drop.parentElement.querySelector('input[name="' + hiddenName + '"]');
+    if (!inp || !prev || !stat || !hidden) return;
+    async function handleFile(file) {
+      if (!file || !file.type.startsWith('image/')) return;
+      if (file.size > 5*1024*1024) { stat.textContent = 'File too large (max 5MB)'; stat.style.color = '#ef4444'; return; }
+      var reader = new FileReader();
+      reader.onload = function(e) { prev.innerHTML = '<img src="' + e.target.result + '" style="max-height:100px;border-radius:6px;margin-bottom:8px">'; };
+      reader.readAsDataURL(file);
+      stat.textContent = 'Uploading...'; stat.style.color = '#f59e0b';
+      try {
+        var r = await uploadImage(file, folder);
+        if (r.url) { hidden.value = r.url; stat.textContent = 'Uploaded!'; stat.style.color = '#22c55e'; drop.style.borderColor = '#22c55e'; }
+        else { stat.textContent = 'Error: ' + (r.error || 'Upload failed'); stat.style.color = '#ef4444'; }
+      } catch(e) { stat.textContent = 'Upload failed'; stat.style.color = '#ef4444'; }
+    }
+    drop.addEventListener('click', function() { inp.click(); });
+    inp.addEventListener('change', function() { if (this.files[0]) handleFile(this.files[0]); });
+    drop.addEventListener('dragover', function(e) { e.preventDefault(); e.stopPropagation(); this.style.borderColor = '#f59e0b'; this.style.background = 'rgba(245,158,11,.08)'; });
+    drop.addEventListener('dragleave', function(e) { e.preventDefault(); e.stopPropagation(); this.style.borderColor = 'var(--border2)'; this.style.background = 'rgba(245,158,11,.03)'; });
+    drop.addEventListener('drop', function(e) { e.preventDefault(); e.stopPropagation(); this.style.borderColor = 'var(--border2)'; this.style.background = 'rgba(245,158,11,.03)'; if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+  });
 }
 
 function field(label, name, value, type = 'text', required = false) {
@@ -226,6 +237,7 @@ function showModal(title, formHtml, onSubmit) {
   modal.innerHTML = `<h3>${title}</h3>${formHtml}`;
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
+  initUploadZones(modal);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   modal.querySelector('.cancel-btn')?.addEventListener('click', () => overlay.remove());
   modal.querySelector('form')?.addEventListener('submit', async (e) => {
