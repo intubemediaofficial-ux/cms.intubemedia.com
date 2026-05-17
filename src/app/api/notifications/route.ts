@@ -11,7 +11,7 @@ export interface Notification {
   id: string;
   userId: string;
   userEmail: string;
-  type: "payment_paid" | "payment_created" | "withdraw_approved" | "withdraw_rejected" | "channel_transfer" | "info";
+  type: "payment_paid" | "payment_created" | "withdraw_approved" | "withdraw_rejected" | "channel_transfer" | "channel_approved" | "info";
   title: string;
   message: string;
   read: boolean;

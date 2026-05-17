@@ -451,6 +451,22 @@ export default function AdminChannelsPage() {
         body: JSON.stringify({ type: "approve_channel", userId, channelId }),
       });
       if (res.ok) {
+        // Find client info for notification
+        const client = clients.find((c) => c.id === userId);
+        // Send notification to client
+        if (client) {
+          fetch("/api/notifications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: client.id,
+              userEmail: client.email,
+              type: "channel_approved",
+              title: "Channel Approved!",
+              message: `Your channel ${channelId} has been approved. Please validate your token now — go to Channels page, copy the invite link, and validate to start seeing data.`,
+            }),
+          }).catch(() => {});
+        }
         // Update local state
         setClients((prev) => prev.map((c) => {
           if (c.id === userId) {
