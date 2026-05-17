@@ -16,6 +16,7 @@ import {
   lookupChannel,
 } from "@/lib/youtube";
 import { getValidAccessToken, getTokenStatus, getAnyValidAccessToken } from "@/lib/channel-tokens";
+import { getAllCachedClientData } from "@/lib/client-data-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -203,6 +204,21 @@ export async function GET(request: Request) {
               console.error("[YouTube] API key lookup failed:", apiKeyError);
             }
           }
+          // Last resort: try cached data even without token
+          try {
+            const allCached = await getAllCachedClientData();
+            for (const cd of allCached) {
+              for (const ch of (cd.channels || [])) {
+                if (ch.channelId === query) {
+                  return Response.json({ data: [{
+                    id: ch.channelId,
+                    snippet: { title: ch.channelTitle || ch.channelId, thumbnails: { default: { url: ch.thumbnail || "" }, medium: { url: ch.thumbnail || "" } } },
+                    statistics: { subscriberCount: String(ch.subscribers || 0), videoCount: String(ch.videoCount || 0), viewCount: String(ch.views || 0) },
+                  }], _cached: true });
+                }
+              }
+            }
+          } catch { /* ignore */ }
           return Response.json({ error: "No token available for channel lookup. Please validate at least one channel token first." }, { status: 401 });
         }
         try {
@@ -210,6 +226,21 @@ export async function GET(request: Request) {
           return Response.json({ data: results });
         } catch (lookupErr) {
           console.warn("[lookupChannel] Failed (quota?):", lookupErr instanceof Error ? lookupErr.message : lookupErr);
+          // Fall back to cached data
+          try {
+            const allCached = await getAllCachedClientData();
+            for (const cd of allCached) {
+              for (const ch of (cd.channels || [])) {
+                if (ch.channelId === query) {
+                  return Response.json({ data: [{
+                    id: ch.channelId,
+                    snippet: { title: ch.channelTitle || ch.channelId, thumbnails: { default: { url: ch.thumbnail || "" }, medium: { url: ch.thumbnail || "" } } },
+                    statistics: { subscriberCount: String(ch.subscribers || 0), videoCount: String(ch.videoCount || 0), viewCount: String(ch.views || 0) },
+                  }], _cached: true });
+                }
+              }
+            }
+          } catch { /* ignore cache errors */ }
           return Response.json({ data: [], warning: "YouTube API quota exceeded — channel data temporarily unavailable" });
         }
       }
@@ -284,6 +315,31 @@ export async function GET(request: Request) {
           channels = await channelsPromise;
         } catch (chErr) {
           console.warn("[dashboardFull] Channel stats lookup failed (quota?):", chErr instanceof Error ? chErr.message : chErr);
+        }
+
+        // If YouTube API returned no channel data, fall back to KV cache
+        if (channels.length === 0 && channelIds.length > 0) {
+          try {
+            const allCached = await getAllCachedClientData();
+            const cachedChannelMap = new Map<string, { id: string; snippet: { title: string; thumbnails: { default: { url: string } } }; statistics: { subscriberCount: string; videoCount: string; viewCount: string } }>();
+            for (const cd of allCached) {
+              for (const ch of (cd.channels || [])) {
+                if (channelIds.includes(ch.channelId)) {
+                  cachedChannelMap.set(ch.channelId, {
+                    id: ch.channelId,
+                    snippet: { title: ch.channelTitle || ch.channelId, thumbnails: { default: { url: ch.thumbnail || "" } } },
+                    statistics: { subscriberCount: String(ch.subscribers || 0), videoCount: String(ch.videoCount || 0), viewCount: String(ch.views || 0) },
+                  });
+                }
+              }
+            }
+            if (cachedChannelMap.size > 0) {
+              channels = Array.from(cachedChannelMap.values());
+              console.log(`[dashboardFull] Using cached data for ${cachedChannelMap.size} channels`);
+            }
+          } catch (cacheErr) {
+            console.warn("[dashboardFull] Cache fallback failed:", cacheErr instanceof Error ? cacheErr.message : cacheErr);
+          }
         }
         const currentPerformance = null;
         const prevPerformance = null;
