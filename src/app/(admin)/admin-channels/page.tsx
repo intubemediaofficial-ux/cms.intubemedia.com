@@ -253,7 +253,10 @@ export default function AdminChannelsPage() {
     const rows: ChannelRow[] = [];
     const seenIds = new Set<string>();
     for (const client of clients) {
-      for (const chId of client.channels) {
+      // Include both approved and pending channels
+      const allClientChannels = [...client.channels, ...(client.pendingChannels || [])];
+      for (const chId of allClientChannels) {
+        if (seenIds.has(chId)) continue;
         // Skip test/placeholder channel IDs if we have real cached data
         if ((chId.startsWith("UCtest") || chId === "test") && Object.keys(channelDataMap).some((k) => !k.startsWith("UCtest") && k !== "test")) {
           continue;
@@ -448,6 +451,22 @@ export default function AdminChannelsPage() {
         body: JSON.stringify({ type: "approve_channel", userId, channelId }),
       });
       if (res.ok) {
+        // Find client info for notification
+        const client = clients.find((c) => c.id === userId);
+        // Send notification to client
+        if (client) {
+          fetch("/api/notifications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: client.id,
+              userEmail: client.email,
+              type: "channel_approved",
+              title: "Channel Approved!",
+              message: `Your channel ${channelId} has been approved. Please validate your token now — go to Channels page, copy the invite link, and validate to start seeing data.`,
+            }),
+          }).catch(() => {});
+        }
         // Update local state
         setClients((prev) => prev.map((c) => {
           if (c.id === userId) {
@@ -698,11 +717,18 @@ export default function AdminChannelsPage() {
                   </td>
                   <td className="px-4 py-3 text-foreground">{channel.category}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                      channel.tokenStatus === "valid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                    }`}>
-                      {channel.tokenStatus === "valid" ? "Valid" : "Not Validated"}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        channel.tokenStatus === "valid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                      }`}>
+                        {channel.tokenStatus === "valid" ? "Valid" : "Not Validated"}
+                      </span>
+                      {clients.some((c) => (c.pendingChannels || []).includes(channel.channelId)) && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                          Pending Approval
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
@@ -907,6 +933,60 @@ export default function AdminChannelsPage() {
                 <ArrowRightLeft className="w-4 h-4 text-amber-500" />
                 Transfer to Client
               </button>
+              {(() => {
+                const owner = clients.find((c) => c.channels.includes(channel.channelId));
+                const isPending = clients.some((c) => (c.pendingChannels || []).includes(channel.channelId));
+                if (isPending && owner) {
+                  return (
+                    <button
+                      className="w-full px-4 py-2.5 text-left text-sm hover:bg-green-50 flex items-center gap-2 text-green-600"
+                      onClick={() => {
+                        handleApproveChannel(owner.id, channel.channelId);
+                        setActiveActionMenu(null);
+                        setMenuPosition(null);
+                      }}
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Approve Channel
+                    </button>
+                  );
+                }
+                if (!isPending && owner) {
+                  return (
+                    <button
+                      className="w-full px-4 py-2.5 text-left text-sm hover:bg-amber-50 flex items-center gap-2 text-amber-600"
+                      onClick={async () => {
+                        // Move from approved to pending (unapprove)
+                        try {
+                          const res = await fetch("/api/users", {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ type: "unapprove_channel", userId: owner.id, channelId: channel.channelId }),
+                          });
+                          if (res.ok) {
+                            setClients((prev) => prev.map((c) => {
+                              if (c.id === owner.id) {
+                                return {
+                                  ...c,
+                                  channels: c.channels.filter((ch) => ch !== channel.channelId),
+                                  pendingChannels: [...(c.pendingChannels || []), channel.channelId],
+                                };
+                              }
+                              return c;
+                            }));
+                          }
+                        } catch { /* silent */ }
+                        setActiveActionMenu(null);
+                        setMenuPosition(null);
+                      }}
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Unapprove Channel
+                    </button>
+                  );
+                }
+                return null;
+              })()}
               <div className="border-t border-border my-1" />
               <button
                 className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-600"
