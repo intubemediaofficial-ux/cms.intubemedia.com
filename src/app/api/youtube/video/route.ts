@@ -10,8 +10,9 @@ const ADMIN_EMAILS = [
   "bainslamusicofficial@gmail.com",
 ];
 
-async function getAccessTokenForChannel(channelId: string, sessionToken?: string): Promise<string | null> {
-  if (sessionToken) return sessionToken;
+async function getAccessTokenForChannel(channelId: string): Promise<string | null> {
+  // Always use per-channel OAuth token (has YouTube API scope)
+  // Session tokens from credentials login don't have YouTube scope
   const token = await getValidAccessToken(channelId);
   return token;
 }
@@ -30,9 +31,9 @@ export async function PUT(request: Request) {
       return Response.json({ error: "videoId and channelId required" }, { status: 400 });
     }
 
-    const accessToken = await getAccessTokenForChannel(channelId, session.accessToken || undefined);
+    const accessToken = await getAccessTokenForChannel(channelId);
     if (!accessToken) {
-      return Response.json({ error: "No valid token for this channel" }, { status: 401 });
+      return Response.json({ error: "No valid token for this channel. Please validate the channel token first." }, { status: 401 });
     }
 
     // Get current video details first
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
 
     if (action === "bulkDelete") {
       for (const { videoId, channelId } of videos) {
-        const accessToken = await getAccessTokenForChannel(channelId, session.accessToken || undefined);
+        const accessToken = await getAccessTokenForChannel(channelId);
         if (!accessToken) {
           results.push({ videoId, success: false, error: "No valid token" });
           continue;
@@ -139,7 +140,7 @@ export async function POST(request: Request) {
         return Response.json({ error: "privacyStatus required for bulkPrivacy" }, { status: 400 });
       }
       for (const { videoId, channelId } of videos) {
-        const accessToken = await getAccessTokenForChannel(channelId, session.accessToken || undefined);
+        const accessToken = await getAccessTokenForChannel(channelId);
         if (!accessToken) {
           results.push({ videoId, success: false, error: "No valid token" });
           continue;
@@ -205,7 +206,7 @@ export async function DELETE(request: Request) {
       return Response.json({ error: "videoId and channelId required" }, { status: 400 });
     }
 
-    const accessToken = await getAccessTokenForChannel(channelId, session.accessToken || undefined);
+    const accessToken = await getAccessTokenForChannel(channelId);
     if (!accessToken) {
       return Response.json({ error: "No valid token for this channel. Please validate the channel token first." }, { status: 401 });
     }
