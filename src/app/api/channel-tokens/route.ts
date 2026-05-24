@@ -7,6 +7,7 @@ import {
   getTokenStatus,
   isKVConfigured,
 } from "@/lib/channel-tokens";
+import { kv } from "@vercel/kv";
 
 export const dynamic = "force-dynamic";
 
@@ -133,6 +134,99 @@ export async function GET(request: Request) {
 
       await deleteChannelToken(channelId);
       return Response.json({ data: { success: true, channelId } });
+    }
+
+    case "bulkExpireTokens": {
+      if (!isAdminUser) {
+        return Response.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const clientId = url.searchParams.get("clientId");
+      const channelIdsParam = url.searchParams.get("channelIds") || "";
+      const channelIds = channelIdsParam.split(",").filter(Boolean);
+
+      if (!clientId || channelIds.length === 0) {
+        return Response.json({ error: "clientId and channelIds required" }, { status: 400 });
+      }
+
+      const results: { channelId: string; success: boolean; error?: string }[] = [];
+      for (const cid of channelIds) {
+        try {
+          await deleteChannelToken(cid);
+          results.push({ channelId: cid, success: true });
+        } catch (err) {
+          results.push({ channelId: cid, success: false, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+
+      const successCount = results.filter((r) => r.success).length;
+      console.log(`[bulkExpireTokens] Admin ${session.user.email} expired tokens for client ${clientId}: ${successCount}/${channelIds.length} channels`);
+
+      return Response.json({
+        data: {
+          success: true,
+          clientId,
+          affectedChannels: channelIds,
+          results,
+          adminEmail: session.user.email,
+          actionDate: new Date().toISOString(),
+        },
+      });
+    }
+
+    case "permanentRemoveChannel": {
+      if (!isAdminUser) {
+        return Response.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const channelId = url.searchParams.get("channelId");
+      if (!channelId) {
+        return Response.json({ error: "channelId required" }, { status: 400 });
+      }
+
+      // Delete token
+      await deleteChannelToken(channelId);
+
+      // Remove from all client data in KV
+      try {
+        const { removeChannelFromAllCaches } = await import("@/lib/client-data-cache");
+        await removeChannelFromAllCaches(channelId);
+      } catch (err) {
+        console.warn("[permanentRemoveChannel] Cache cleanup error:", err);
+      }
+
+      // Remove from user's channel list in KV
+      try {
+        const usersRes = await fetch(new URL("/api/users?action=list", request.url).toString());
+        if (usersRes.ok) {
+          const usersJson = await usersRes.json();
+          const users = usersJson.data || [];
+          for (const user of users) {
+            if (user.channels?.includes(channelId)) {
+              user.channels = user.channels.filter((c: string) => c !== channelId);
+              await kv.set(`user:${user.id}`, user);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[permanentRemoveChannel] User cleanup error:", err);
+      }
+
+      // Clear cached videos and stats for this channel
+      try {
+        await kv.del(`yt_videos:${channelId}`);
+        await kv.del(`yt_channel_stats:${channelId}`);
+        await kv.del(`yt_dashboard:${channelId}`);
+      } catch { /* ignore */ }
+
+      console.log(`[permanentRemoveChannel] Admin ${session.user.email} permanently removed channel ${channelId}`);
+
+      return Response.json({
+        data: {
+          success: true,
+          channelId,
+          adminEmail: session.user.email,
+          actionDate: new Date().toISOString(),
+        },
+      });
     }
 
     default:

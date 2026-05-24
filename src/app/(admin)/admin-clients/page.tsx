@@ -1331,10 +1331,38 @@ export default function AdminClientsPage() {
               {/* Channels Tab */}
               {clientDetailTab === "channels" && (
               <>
-              <h3 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Radio className="w-4 h-4 text-purple-500" />
-                Channels ({viewingClient.channels.length})
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-purple-500" />
+                  Channels ({viewingClient.channels.length})
+                </h3>
+                {clientChannels.length > 0 && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Are you sure you want to expire/revoke tokens for ALL ${clientChannels.length} channels connected to ${viewingClient.name}?\n\nThe user will need to reconnect their YouTube account/channels.`)) return;
+                      try {
+                        const channelIds = clientChannels.map((ch) => ch.id).join(",");
+                        const res = await fetch(`/api/channel-tokens?action=bulkExpireTokens&clientId=${viewingClient.id}&channelIds=${channelIds}`);
+                        if (res.ok) {
+                          const json = await res.json();
+                          alert(`Tokens expired for ${json.data.affectedChannels.length} channels. Client will need to re-validate.`);
+                          // Refresh channel data
+                          setViewingClient({ ...viewingClient });
+                        } else {
+                          alert("Failed to expire tokens");
+                        }
+                      } catch (err) {
+                        console.error("Bulk expire error:", err);
+                        alert("Failed to expire tokens");
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-medium hover:bg-red-100 border border-red-200"
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                    Expire All Channel Tokens
+                  </button>
+                )}
+              </div>
 
               {clientChannelsLoading ? (
                 <div className="flex items-center justify-center py-8">

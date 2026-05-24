@@ -34,6 +34,7 @@ import DateRangeFilter, { computeRange } from "@/components/dashboard/DateRangeF
 import type { DateRange } from "@/components/dashboard/DateRangeFilter";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
+import { useExchangeRate, toINR } from "@/lib/hooks/useExchangeRate";
 
 const CHANNELS_STORAGE_KEY = "bainsla_channels";
 
@@ -159,8 +160,6 @@ function getDailyRevenueChartData(data: AnalyticsResponse | null | undefined) {
   }));
 }
 
-const INR_RATE = 83.5;
-
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const hasAccessToken = !!session?.accessToken;
@@ -171,6 +170,8 @@ export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
   const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all">(7);
+
+  const { rate: INR_RATE } = useExchangeRate("USD");
 
   // Channel detail modal month filter
   const [channelModalPeriod, setChannelModalPeriod] = useState<string>("current");
