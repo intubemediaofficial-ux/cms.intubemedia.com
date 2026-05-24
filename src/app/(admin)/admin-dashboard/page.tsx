@@ -29,6 +29,7 @@ import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import DateRangeFilter, { computeRange } from "@/components/dashboard/DateRangeFilter";
 import type { DateRange } from "@/components/dashboard/DateRangeFilter";
+import { useExchangeRate } from "@/lib/hooks/useExchangeRate";
 
 interface ClientUser {
   id: string;
@@ -139,6 +140,7 @@ export default function AdminDashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, { status: string; channelTitle?: string; updatedAt?: string }>>({});
   const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all">(7);
+  const { rate: INR_RATE } = useExchangeRate("USD");
 
   // Cached client data from KV (auto-saved when clients load their dashboards)
   interface CachedChannelData {
@@ -866,7 +868,7 @@ export default function AdminDashboardPage() {
                       ))}
                       <td className="text-right py-2 px-2 font-semibold text-amber-700 tabular-nums">${ch.monthTotal.toFixed(2)}</td>
                       <td className="text-right py-2 pl-3 font-semibold text-foreground tabular-nums">${total.toFixed(2)}</td>
-                      <td className="text-right py-2 pl-3 font-semibold text-amber-600 tabular-nums">₹{formatNumber(Math.round(total * 83.5))}</td>
+                      <td className="text-right py-2 pl-3 font-semibold text-amber-600 tabular-nums">₹{formatNumber(Math.round(total * INR_RATE))}</td>
                     </tr>
                   );
                 })}
@@ -892,7 +894,7 @@ export default function AdminDashboardPage() {
                     return (
                       <>
                         <td className="text-right py-2 pl-3 font-bold text-primary tabular-nums">${grandTotal.toFixed(2)}</td>
-                        <td className="text-right py-2 pl-3 font-bold text-amber-600 tabular-nums">₹{formatNumber(Math.round(grandTotal * 83.5))}</td>
+                        <td className="text-right py-2 pl-3 font-bold text-amber-600 tabular-nums">₹{formatNumber(Math.round(grandTotal * INR_RATE))}</td>
                       </>
                     );
                   })()}

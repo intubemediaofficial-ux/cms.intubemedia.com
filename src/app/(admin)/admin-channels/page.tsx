@@ -1027,6 +1027,26 @@ export default function AdminChannelsPage() {
                 <Trash2 className="w-4 h-4" />
                 Delete Channel
               </button>
+              <button
+                className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-700 font-medium"
+                onClick={async () => {
+                  if (!confirm(`PERMANENT REMOVE: Are you sure you want to permanently remove ${channel.name} (${channel.channelId})?\n\nThis will:\n- Delete token\n- Remove all cached data\n- Remove from client's account\n\nThis action CANNOT be undone!`)) return;
+                  try {
+                    const res = await fetch(`/api/channel-tokens?action=permanentRemoveChannel&channelId=${encodeURIComponent(channel.channelId)}`);
+                    if (res.ok) {
+                      alert(`Channel ${channel.name} permanently removed.`);
+                      window.location.reload();
+                    } else {
+                      alert("Failed to permanently remove channel");
+                    }
+                  } catch { alert("Error removing channel"); }
+                  setActiveActionMenu(null);
+                  setMenuPosition(null);
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+                Permanent Remove
+              </button>
             </div>
           </>
         );

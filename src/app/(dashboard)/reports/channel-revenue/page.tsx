@@ -13,6 +13,7 @@ import { useSession } from "next-auth/react";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import { downloadCSV } from "@/lib/csv-export";
+import { useExchangeRate } from "@/lib/hooks/useExchangeRate";
 
 const CHANNELS_STORAGE_KEY = "bainsla_channels";
 
@@ -59,8 +60,6 @@ function getActiveChannelIds(): string[] {
     return [];
   }
 }
-
-const INR_RATE = 83.5;
 
 function getMonthOptions() {
   const months: { value: string; label: string }[] = [];
@@ -119,6 +118,7 @@ export default function ChannelRevenuePage() {
 
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState("28d");
+  const { rate: INR_RATE } = useExchangeRate("USD");
 
   useEffect(() => {
     setActiveChannelIds(getActiveChannelIds());
