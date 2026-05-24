@@ -24,6 +24,9 @@ import {
   CheckCircle,
   XCircle,
   Filter,
+  Copy,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
@@ -43,6 +46,7 @@ interface VideoItem {
     channelId?: string | null;
     channelTitle?: string | null;
     publishedAt?: string | null;
+    tags?: string[] | null;
     thumbnails?: {
       medium?: { url?: string | null } | null;
       default?: { url?: string | null } | null;
@@ -62,6 +66,7 @@ interface VideoItem {
     license?: string | null;
     madeForKids?: boolean | null;
     rejectionReason?: string | null;
+    uploadStatus?: string | null;
   } | null;
 }
 
@@ -84,6 +89,13 @@ function parseDuration(isoDuration: string | null | undefined): string {
   const seconds = parseInt(match[3] || "0", 10);
   if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function parseDurationSeconds(isoDuration: string | null | undefined): number {
+  if (!isoDuration) return 0;
+  const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  return parseInt(match[1] || "0", 10) * 3600 + parseInt(match[2] || "0", 10) * 60 + parseInt(match[3] || "0", 10);
 }
 
 function getActiveChannelIds(): string[] {
@@ -113,7 +125,6 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
   );
   const hasManualClaim = activeClaims.length > 0;
 
-  // Manual claims from admin take priority
   if (hasManualClaim) {
     const claim = activeClaims[0];
     const typeLabel = claim.claimType === "copyright" ? "Copyright Claim" :
@@ -128,7 +139,6 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
     };
   }
 
-  // Auto-detect copyright rejection from YouTube API
   const rejectionReason = video.status?.rejectionReason;
   if (rejectionReason === "copyright" || rejectionReason === "duplicate") {
     return {
@@ -141,8 +151,18 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
     };
   }
 
-  // licensedContent = true means video contains licensed content (e.g. licensed music)
-  // This does NOT mean there is an active claim — just that content is licensed
+  // Check upload status for rejected videos
+  if (video.status?.uploadStatus === "rejected") {
+    return {
+      isMonetized: false,
+      hasActiveClaim: true,
+      claimType: "copyright",
+      claimant: "YouTube",
+      label: "Rejected",
+      color: "bg-red-100 text-red-700",
+    };
+  }
+
   const isLicensed = video.contentDetails?.licensedContent === true;
   if (isLicensed) {
     return {
@@ -165,6 +185,13 @@ function getMonetizationStatus(video: VideoItem, claims: VideoClaim[]): {
   };
 }
 
+interface DuplicateGroup {
+  title: string;
+  count: number;
+  videos: VideoItem[];
+  sameCount: number;
+}
+
 export default function VideosPage() {
   const { data: session, status: sessionStatus } = useSession();
   const isAuthenticated = sessionStatus === "authenticated";
@@ -181,14 +208,24 @@ export default function VideosPage() {
   const [editVideo, setEditVideo] = useState<VideoItem | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
+  const [editTags, setEditTags] = useState("");
   const [editPrivacy, setEditPrivacy] = useState("public");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
   const [deleteVideo, setDeleteVideo] = useState<VideoItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  // Multi-select state
+  const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
+  const [bulkActionInProgress, setBulkActionInProgress] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
+
+  // Duplicate detector
+  const [showDuplicates, setShowDuplicates] = useState(false);
 
   useEffect(() => {
     setActiveChannelIds(getActiveChannelIds());
@@ -206,13 +243,11 @@ export default function VideosPage() {
     }
   }, []);
 
-  // Also fetch channel IDs from server-side (KV user record + cached data)
   const [serverChannelIds, setServerChannelIds] = useState<string[]>([]);
   useEffect(() => {
     if (!isAuthenticated) return;
     const fetchServerIds = async () => {
       const ids: string[] = [];
-      // Try own user record via /api/users?action=me (works for clients)
       try {
         const res = await fetch("/api/users?action=me");
         if (res.ok) {
@@ -230,7 +265,6 @@ export default function VideosPage() {
           }
         }
       } catch { /* silent */ }
-      // Also try cached data for own email
       try {
         const email = session?.user?.email;
         if (email) {
@@ -252,7 +286,6 @@ export default function VideosPage() {
     fetchServerIds();
   }, [isAuthenticated, session?.user?.email]);
 
-  // Merge localStorage + server channel IDs
   const allChannelIds = useMemo(() => {
     const set = new Set([...activeChannelIds, ...serverChannelIds].filter((id) => !id.startsWith("UCtest") && id !== "test"));
     return Array.from(set);
@@ -266,7 +299,6 @@ export default function VideosPage() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch all channels in parallel for speed with timeout
       let latestCacheTime: string | null = null;
       let anyFromCache = false;
       const results = await Promise.allSettled(
@@ -330,7 +362,6 @@ export default function VideosPage() {
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [videos]);
 
-  // Pre-compute privacy counts (based on channel filter only) for dropdown labels
   const privacyCounts = useMemo(() => {
     const channelVids = (isReal ? videos : []).filter((v) =>
       channelFilter === "all" || v.snippet?.channelId === channelFilter
@@ -349,21 +380,14 @@ export default function VideosPage() {
     if (!isReal) return [];
     const result: VideoItem[] = [];
     for (const video of videos) {
-      // Channel filter
       if (channelFilter !== "all" && video.snippet?.channelId !== channelFilter) continue;
-
-      // Search filter
       const title = video.snippet?.title || "";
       if (searchQuery && !title.toLowerCase().includes(searchQuery.toLowerCase())) continue;
-
-      // Privacy filter - strict comparison
       if (statusFilter !== "all") {
         const rawPrivacy = video.status?.privacyStatus;
         const videoPrivacy = rawPrivacy ? rawPrivacy.toLowerCase() : "public";
         if (videoPrivacy !== statusFilter) continue;
       }
-
-      // Monetization filter
       if (monetizationFilter !== "all") {
         const mStatus = getMonetizationStatus(video, claims);
         if (monetizationFilter === "monetized" && !(mStatus.isMonetized && !mStatus.hasActiveClaim)) continue;
@@ -372,13 +396,11 @@ export default function VideosPage() {
         if (monetizationFilter === "content_id_claim" && !(mStatus.hasActiveClaim && mStatus.claimType === "content_id")) continue;
         if (monetizationFilter === "no_claim" && mStatus.hasActiveClaim) continue;
       }
-
       result.push(video);
     }
     return result;
   }, [videos, isReal, searchQuery, statusFilter, monetizationFilter, channelFilter, claims]);
 
-  // Reset page when filters change
   useEffect(() => { setCurrentPage(1); }, [searchQuery, statusFilter, monetizationFilter, channelFilter]);
 
   const totalPages = Math.ceil(filteredVideos.length / VIDEOS_PER_PAGE);
@@ -400,6 +422,44 @@ export default function VideosPage() {
     }
     return { total, copyrightClaims, contentIdClaims, monetized, noClaim: total - copyrightClaims - contentIdClaims };
   }, [filteredVideos, claims]);
+
+  // Duplicate video detection
+  const duplicateGroups = useMemo((): DuplicateGroup[] => {
+    if (!isReal || videos.length === 0) return [];
+    const titleMap = new Map<string, VideoItem[]>();
+    for (const v of videos) {
+      const title = (v.snippet?.title || "").trim().toLowerCase();
+      if (!title) continue;
+      if (!titleMap.has(title)) titleMap.set(title, []);
+      titleMap.get(title)!.push(v);
+    }
+    const groups: DuplicateGroup[] = [];
+    for (const [title, vids] of titleMap) {
+      if (vids.length < 2) continue;
+      // Check for same duration (within 2 seconds)
+      const durationMap = new Map<number, VideoItem[]>();
+      for (const v of vids) {
+        const dur = parseDurationSeconds(v.contentDetails?.duration);
+        let found = false;
+        for (const [existDur, existVids] of durationMap) {
+          if (Math.abs(dur - existDur) <= 2) {
+            existVids.push(v);
+            found = true;
+            break;
+          }
+        }
+        if (!found) durationMap.set(dur, [v]);
+      }
+      const sameDurCount = Array.from(durationMap.values()).filter((arr) => arr.length > 1).reduce((s, arr) => s + arr.length, 0);
+      groups.push({
+        title: vids[0].snippet?.title || title,
+        count: vids.length,
+        videos: vids,
+        sameCount: sameDurCount,
+      });
+    }
+    return groups.sort((a, b) => b.count - a.count);
+  }, [videos, isReal]);
 
   const handleExportCSV = () => {
     const headers = ["Video URL", "Video Title", "Channel", "Privacy", "Claim Status", "Claim Type", "Claimant / CMS", "Views", "Likes", "Comments", "Duration", "Published Date"];
@@ -441,6 +501,7 @@ export default function VideosPage() {
     setEditVideo(video);
     setEditTitle(video.snippet?.title || "");
     setEditDesc(video.snippet?.description || "");
+    setEditTags((video.snippet?.tags || []).join(", "));
     setEditPrivacy(video.status?.privacyStatus || "public");
     setEditError("");
     setOpenMenuId(null);
@@ -451,6 +512,7 @@ export default function VideosPage() {
     setEditSaving(true);
     setEditError("");
     try {
+      const tagsArray = editTags.split(",").map((t) => t.trim()).filter(Boolean);
       const res = await fetch("/api/youtube/video", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -459,18 +521,19 @@ export default function VideosPage() {
           channelId: editVideo.snippet.channelId,
           title: editTitle,
           description: editDesc,
+          tags: tagsArray,
           privacyStatus: editPrivacy,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setEditError(data.error || "Failed to update video");
+        setEditError(data.error || "Failed to update video. Please ensure channel token is valid.");
         return;
       }
       setEditVideo(null);
       fetchVideos();
     } catch {
-      setEditError("Network error");
+      setEditError("Network error — check your connection and try again");
     } finally {
       setEditSaving(false);
     }
@@ -480,7 +543,7 @@ export default function VideosPage() {
     if (!video.id || !video.snippet?.channelId) return;
     setOpenMenuId(null);
     try {
-      await fetch("/api/youtube/video", {
+      const res = await fetch("/api/youtube/video", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -489,7 +552,7 @@ export default function VideosPage() {
           privacyStatus: newPrivacy,
         }),
       });
-      fetchVideos();
+      if (res.ok) fetchVideos();
     } catch {
       // silent
     }
@@ -498,19 +561,99 @@ export default function VideosPage() {
   const handleDelete = async () => {
     if (!deleteVideo?.id || !deleteVideo.snippet?.channelId) return;
     setDeleting(true);
+    setDeleteError("");
     try {
       const res = await fetch(
         `/api/youtube/video?videoId=${deleteVideo.id}&channelId=${deleteVideo.snippet.channelId}`,
         { method: "DELETE" }
       );
+      const data = await res.json();
       if (res.ok) {
         setVideos(videos.filter((v) => v.id !== deleteVideo.id));
+        setDeleteVideo(null);
+      } else {
+        setDeleteError(data.error || "Failed to delete video. Please ensure channel token is valid.");
       }
-      setDeleteVideo(null);
     } catch {
-      // silent
+      setDeleteError("Network error — check your connection and try again");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  // Multi-select handlers
+  const toggleSelect = (videoId: string) => {
+    setSelectedVideos((prev) => {
+      const next = new Set(prev);
+      if (next.has(videoId)) next.delete(videoId);
+      else next.add(videoId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedVideos.size === paginatedVideos.length) {
+      setSelectedVideos(new Set());
+    } else {
+      setSelectedVideos(new Set(paginatedVideos.map((v) => v.id!).filter(Boolean)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedVideos.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedVideos.size} video(s)? This cannot be undone.`)) return;
+    setBulkActionInProgress(true);
+    setBulkResult(null);
+    const videosToDelete = videos
+      .filter((v) => v.id && selectedVideos.has(v.id))
+      .map((v) => ({ videoId: v.id!, channelId: v.snippet?.channelId || "" }));
+    try {
+      const res = await fetch("/api/youtube/video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bulkDelete", videos: videosToDelete }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const successIds = new Set(data.data.results.filter((r: { success: boolean }) => r.success).map((r: { videoId: string }) => r.videoId));
+        setVideos(videos.filter((v) => !successIds.has(v.id!)));
+        setBulkResult(`${data.data.successCount}/${data.data.totalCount} videos deleted successfully`);
+        setSelectedVideos(new Set());
+      } else {
+        setBulkResult(data.error || "Bulk delete failed");
+      }
+    } catch {
+      setBulkResult("Network error during bulk delete");
+    } finally {
+      setBulkActionInProgress(false);
+    }
+  };
+
+  const handleBulkPrivacy = async (privacyStatus: string) => {
+    if (selectedVideos.size === 0) return;
+    setBulkActionInProgress(true);
+    setBulkResult(null);
+    const videosToUpdate = videos
+      .filter((v) => v.id && selectedVideos.has(v.id))
+      .map((v) => ({ videoId: v.id!, channelId: v.snippet?.channelId || "" }));
+    try {
+      const res = await fetch("/api/youtube/video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bulkPrivacy", videos: videosToUpdate, privacyStatus }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBulkResult(`${data.data.successCount}/${data.data.totalCount} videos updated to ${privacyStatus}`);
+        setSelectedVideos(new Set());
+        fetchVideos();
+      } else {
+        setBulkResult(data.error || "Bulk privacy change failed");
+      }
+    } catch {
+      setBulkResult("Network error during bulk privacy change");
+    } finally {
+      setBulkActionInProgress(false);
     }
   };
 
@@ -547,6 +690,16 @@ export default function VideosPage() {
         <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>Showing cached data — Last updated: {new Date(cacheLastUpdated).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}</span>
+        </div>
+      )}
+
+      {bulkResult && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{bulkResult}</span>
+          <button onClick={() => setBulkResult(null)} className="ml-auto p-1 hover:bg-blue-100 rounded">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
@@ -605,7 +758,7 @@ export default function VideosPage() {
       {isAuthenticated && !hasNoChannelsAdded && !isLoading && isReal && (
         <>
           {/* Monetization Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
             <div className="bg-white rounded-xl border border-border p-4">
               <div className="flex items-center gap-2 mb-1">
                 <Play className="w-4 h-4 text-blue-500" />
@@ -634,7 +787,96 @@ export default function VideosPage() {
               </div>
               <p className="text-xl font-bold text-orange-600">{claimStats.contentIdClaims}</p>
             </div>
+            <div className="bg-white rounded-xl border border-border p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Copy className="w-4 h-4 text-purple-500" />
+                <span className="text-xs font-medium text-muted">Duplicates</span>
+              </div>
+              <p className="text-xl font-bold text-purple-600">{duplicateGroups.reduce((s, g) => s + g.count, 0)}</p>
+            </div>
           </div>
+
+          {/* Duplicate Detector */}
+          {duplicateGroups.length > 0 && (
+            <div className="bg-white rounded-xl border border-border p-5">
+              <button
+                onClick={() => setShowDuplicates(!showDuplicates)}
+                className="flex items-center gap-2 text-sm font-semibold text-foreground hover:text-primary transition-colors"
+              >
+                <Copy className="w-4 h-4 text-purple-500" />
+                Duplicate Videos Detected ({duplicateGroups.length} groups, {duplicateGroups.reduce((s, g) => s + g.count, 0)} videos)
+                <span className="text-xs text-muted font-normal ml-2">{showDuplicates ? "Hide" : "Show"}</span>
+              </button>
+              {showDuplicates && (
+                <div className="mt-4 space-y-3 max-h-[400px] overflow-y-auto">
+                  {duplicateGroups.map((group, idx) => (
+                    <div key={idx} className="border border-border rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-medium text-foreground truncate max-w-[70%]">&quot;{group.title}&quot;</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                            {group.count}x uploaded
+                          </span>
+                          {group.sameCount > 0 && (
+                            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                              {group.sameCount} same duration
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        {group.videos.map((v) => (
+                          <div key={v.id} className="flex items-center gap-2 text-xs text-muted">
+                            <span className="truncate max-w-[200px]">{v.snippet?.channelTitle || v.snippet?.channelId}</span>
+                            <span>• {parseDuration(v.contentDetails?.duration)}</span>
+                            <span>• {v.status?.privacyStatus || "public"}</span>
+                            <span>• {formatNumber(Number(v.statistics?.viewCount || 0))} views</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Bulk Actions Bar */}
+          {selectedVideos.size > 0 && (
+            <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <span className="text-sm font-medium text-blue-700">{selectedVideos.size} selected</span>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={() => handleBulkPrivacy("private")}
+                  disabled={bulkActionInProgress}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border rounded-lg text-xs font-medium text-foreground hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <Lock className="w-3.5 h-3.5" /> Make Private
+                </button>
+                <button
+                  onClick={() => handleBulkPrivacy("public")}
+                  disabled={bulkActionInProgress}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border rounded-lg text-xs font-medium text-foreground hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <Globe className="w-3.5 h-3.5" /> Make Public
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkActionInProgress}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 disabled:opacity-50"
+                >
+                  {bulkActionInProgress ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  Delete Selected
+                </button>
+                <button
+                  onClick={() => setSelectedVideos(new Set())}
+                  className="px-3 py-1.5 text-xs text-muted hover:bg-slate-100 rounded-lg"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Filters and Table */}
           <div className="bg-white rounded-xl border border-border p-5">
@@ -711,6 +953,15 @@ export default function VideosPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
+                      <th className="text-left py-3 px-2 w-10">
+                        <button onClick={toggleSelectAll} className="p-1 hover:bg-slate-100 rounded">
+                          {selectedVideos.size === paginatedVideos.length && paginatedVideos.length > 0 ? (
+                            <CheckSquare className="w-4 h-4 text-primary" />
+                          ) : (
+                            <Square className="w-4 h-4 text-muted" />
+                          )}
+                        </button>
+                      </th>
                       <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wider">
                         Video
                       </th>
@@ -742,12 +993,25 @@ export default function VideosPage() {
                         ? new Date(video.snippet.publishedAt).toLocaleDateString()
                         : "-";
                       const mStatus = getMonetizationStatus(video, claims);
+                      const isSelected = video.id ? selectedVideos.has(video.id) : false;
 
                       return (
                         <tr
                           key={video.id}
-                          className="border-b border-border/50 hover:bg-slate-50 transition-colors"
+                          className={`border-b border-border/50 hover:bg-slate-50 transition-colors ${isSelected ? "bg-blue-50" : ""}`}
                         >
+                          <td className="py-3 px-2">
+                            <button
+                              onClick={() => video.id && toggleSelect(video.id)}
+                              className="p-1 hover:bg-slate-100 rounded"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-4 h-4 text-primary" />
+                              ) : (
+                                <Square className="w-4 h-4 text-muted" />
+                              )}
+                            </button>
+                          </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
                               <div className="w-20 h-12 bg-slate-200 rounded-lg overflow-hidden shrink-0">
@@ -900,8 +1164,8 @@ export default function VideosPage() {
       {/* Edit Video Modal */}
       {editVideo && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg shadow-xl">
-            <div className="flex items-center justify-between p-5 border-b border-border">
+          <div className="bg-white rounded-xl w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-border sticky top-0 bg-white">
               <h2 className="text-lg font-semibold text-foreground">Edit Video</h2>
               <button onClick={() => setEditVideo(null)} className="p-1 hover:bg-slate-100 rounded-lg">
                 <X className="w-5 h-5 text-muted" />
@@ -930,6 +1194,17 @@ export default function VideosPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Tags (comma separated)</label>
+                <input
+                  type="text"
+                  value={editTags}
+                  onChange={(e) => setEditTags(e.target.value)}
+                  placeholder="tag1, tag2, tag3"
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <p className="text-xs text-muted mt-1">Separate tags with commas</p>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Privacy Status</label>
                 <select
                   value={editPrivacy}
@@ -945,7 +1220,7 @@ export default function VideosPage() {
                 To change the thumbnail, click &quot;Change Thumbnail&quot; in the actions menu — it will open YouTube Studio where you can upload a new thumbnail.
               </div>
             </div>
-            <div className="flex justify-end gap-3 p-5 border-t border-border">
+            <div className="flex justify-end gap-3 p-5 border-t border-border sticky bottom-0 bg-white">
               <button
                 onClick={() => setEditVideo(null)}
                 className="px-4 py-2 text-sm text-muted hover:bg-slate-100 rounded-lg"
@@ -976,12 +1251,15 @@ export default function VideosPage() {
             <p className="text-sm font-medium text-foreground mb-4 truncate">
               &quot;{deleteVideo.snippet?.title}&quot;
             </p>
+            {deleteError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">{deleteError}</div>
+            )}
             <p className="text-xs text-red-500 mb-4">
               This action cannot be undone. The video will be permanently removed from YouTube.
             </p>
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setDeleteVideo(null)}
+                onClick={() => { setDeleteVideo(null); setDeleteError(""); }}
                 className="px-4 py-2 text-sm text-muted hover:bg-slate-100 rounded-lg"
               >
                 Cancel
