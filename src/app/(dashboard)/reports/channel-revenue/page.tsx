@@ -60,10 +60,40 @@ function getActiveChannelIds(): string[] {
   }
 }
 
+const INR_RATE = 83.5;
+
+function getMonthOptions() {
+  const months: { value: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleString("en-US", { month: "long", year: "numeric" });
+    months.push({ value, label });
+  }
+  return months;
+}
+
 function getDateRange(range: string) {
   const end = new Date();
   end.setDate(end.getDate() - 1);
   const start = new Date(end);
+
+  // Check if it's a month range (YYYY-MM format)
+  if (/^\d{4}-\d{2}$/.test(range)) {
+    const [year, month] = range.split("-").map(Number);
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0); // last day of month
+    // Don't go beyond yesterday
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const effectiveEnd = monthEnd > yesterday ? yesterday : monthEnd;
+    return {
+      startDate: monthStart.toISOString().split("T")[0],
+      endDate: effectiveEnd.toISOString().split("T")[0],
+    };
+  }
+
   switch (range) {
     case "7d": start.setDate(start.getDate() - 7); break;
     case "28d": start.setDate(start.getDate() - 28); break;
@@ -140,6 +170,11 @@ export default function ChannelRevenuePage() {
             <option value="28d">Last 28 days</option>
             <option value="90d">Last 90 days</option>
             <option value="365d">Last 365 days</option>
+            <optgroup label="By Month">
+              {getMonthOptions().map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </optgroup>
           </select>
           <button
             onClick={() => {
@@ -214,6 +249,7 @@ export default function ChannelRevenuePage() {
                 <th className="text-right px-4 py-3 font-semibold text-foreground">Videos</th>
                 <th className="text-right px-4 py-3 font-semibold text-foreground">Views</th>
                 <th className="text-right px-4 py-3 font-semibold text-foreground">Est. Revenue</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground">Revenue (INR)</th>
                 <th className="text-right px-4 py-3 font-semibold text-foreground">RPM</th>
               </tr>
             </thead>
@@ -249,6 +285,11 @@ export default function ChannelRevenuePage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
+                      <span className={`font-medium ${revenue > 0 ? "text-amber-600" : "text-muted"}`}>
+                        ₹{formatNumber(Math.round(revenue * INR_RATE))}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
                       <span className={`${rpm > 0 ? "text-foreground" : "text-muted"}`}>
                         ${rpm > 0 ? rpm.toFixed(2) : "0.00"}
                       </span>
@@ -271,6 +312,9 @@ export default function ChannelRevenuePage() {
                   <td className="px-4 py-3 text-right text-green-600">
                     {formatCurrency(totalRevenue)}
                   </td>
+                  <td className="px-4 py-3 text-right text-amber-600 font-bold">
+                    ₹{formatNumber(Math.round(totalRevenue * INR_RATE))}
+                  </td>
                   <td className="px-4 py-3 text-right text-foreground">
                     ${totalViews > 0 ? ((totalRevenue / totalViews) * 1000).toFixed(2) : "0.00"}
                   </td>
@@ -278,7 +322,7 @@ export default function ChannelRevenuePage() {
               )}
               {channels.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={7} className="px-4 py-12 text-center text-muted">
                     No channels found. Add channels first to see revenue data.
                   </td>
                 </tr>

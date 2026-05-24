@@ -349,6 +349,7 @@ export default function DashboardPage() {
 
     const result: { channelId: string; channelName: string; dailyMap: Record<string, number>; monthTotal: number }[] = [];
     const allDates = new Set<string>();
+    const dateToFullDate = new Map<string, string>();
 
     // Get current month prefix for filtering
     const now = new Date();
@@ -361,7 +362,7 @@ export default function DashboardPage() {
       for (const d of daily) {
         dailyMap[d.date] = d.revenue;
         allDates.add(d.date);
-        // Sum current month revenue
+        if (d.fullDate) dateToFullDate.set(d.date, d.fullDate);
         if (d.fullDate && d.fullDate.startsWith(currentMonthPrefix)) {
           monthTotal += d.revenue;
         }
@@ -375,8 +376,18 @@ export default function DashboardPage() {
     }
 
     const sortedDates = Array.from(allDates).sort((a, b) => b.localeCompare(a));
-    const daysToShow = dailyRevDays === "all" || dailyRevDays === 30 ? sortedDates.length : dailyRevDays;
-    const filteredDates = sortedDates.slice(0, daysToShow);
+    let filteredDates: string[];
+    if (dailyRevDays === 30) {
+      // Show only current month dates (not 28 days)
+      filteredDates = sortedDates.filter((d) => {
+        const fd = dateToFullDate.get(d);
+        return fd ? fd.startsWith(currentMonthPrefix) : false;
+      });
+    } else if (dailyRevDays === "all") {
+      filteredDates = sortedDates;
+    } else {
+      filteredDates = sortedDates.slice(0, dailyRevDays);
+    }
 
     const currentMonthName = now.toLocaleString("en-US", { month: "short", year: "numeric" });
 
@@ -535,7 +546,7 @@ export default function DashboardPage() {
   }, [cacheData]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -816,7 +827,7 @@ export default function DashboardPage() {
 
           {/* ===== PER-CHANNEL DAILY REVENUE TABLE (moved above Top 5) ===== */}
           {perChannelDailyRevenue.channels.length > 0 && perChannelDailyRevenue.dates.length > 0 && (
-            <div className="bg-white rounded-xl border border-border p-5">
+            <div className="bg-white rounded-xl border border-border p-5 max-w-full overflow-hidden">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-foreground text-sm">Per-Channel Daily Revenue</h3>
                 <div className="flex items-center gap-1.5">
