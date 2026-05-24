@@ -484,10 +484,11 @@ export default function AdminClientsPage() {
   const fetchClientRevenue = useCallback(async (client: Client, days: number) => {
     setRevenueLoading(true);
     try {
-      const endDate = new Date().toISOString().split("T")[0];
+      const endD = new Date();
+      const endDate = `${endD.getFullYear()}-${String(endD.getMonth()+1).padStart(2,"0")}-${String(endD.getDate()).padStart(2,"0")}`;
       const startDateObj = new Date();
       startDateObj.setDate(startDateObj.getDate() - days);
-      const startDate = startDateObj.toISOString().split("T")[0];
+      const startDate = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth()+1).padStart(2,"0")}-${String(startDateObj.getDate()).padStart(2,"0")}`;
       const channelIds = client.channels;
       if (channelIds.length === 0) return;
 
