@@ -15,6 +15,8 @@ import {
   DollarSign,
   TrendingUp,
   Video,
+  Download,
+  X,
 } from "lucide-react";
 import {
   LineChart,
@@ -152,9 +154,12 @@ function getDailyRevenueChartData(data: AnalyticsResponse | null | undefined) {
   if (dayIdx === -1 || revIdx === -1) return [];
   return data.rows.map((row) => ({
     date: String(row[dayIdx]).slice(5),
+    fullDate: String(row[dayIdx]),
     revenue: Math.round((Number(row[revIdx]) || 0) * 100) / 100,
   }));
 }
+
+const INR_RATE = 83.5;
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -165,20 +170,21 @@ export default function DashboardPage() {
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
-  const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7>(7);
+  const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30>(7);
 
   const [serverChannelIds, setServerChannelIds] = useState<string[]>([]);
+
+  // Channel detail modal
+  const [selectedChannel, setSelectedChannel] = useState<ChannelItem | null>(null);
 
   useEffect(() => {
     setActiveChannelIds(getActiveChannelIds());
   }, []);
 
-  // Fetch channel IDs from server-side (user record + cached data)
   useEffect(() => {
     if (!isAuthenticated) return;
     const fetchIds = async () => {
       const ids: string[] = [];
-      // Get own user record (works for clients via action=me)
       try {
         const res = await fetch("/api/users?action=me");
         if (res.ok) {
@@ -196,7 +202,6 @@ export default function DashboardPage() {
           }
         }
       } catch { /* silent */ }
-      // Also try cached data for own email
       try {
         const email = session?.user?.email;
         if (email) {
@@ -218,13 +223,11 @@ export default function DashboardPage() {
     fetchIds();
   }, [isAuthenticated, session?.user?.email]);
 
-  // Merge localStorage + server channel IDs
   const allChannelIds = useMemo(() => {
     const set = new Set([...activeChannelIds, ...serverChannelIds].filter((id) => !id.startsWith("UCtest") && id !== "test"));
     return Array.from(set);
   }, [activeChannelIds, serverChannelIds]);
 
-  // Sync localStorage channels to KV on dashboard load (so admin sees real channel IDs)
   useEffect(() => {
     if (!isAuthenticated || isAdminSession) return;
     const ids = getActiveChannelIds();
@@ -253,16 +256,13 @@ export default function DashboardPage() {
   const channels = dashData?.channels || [];
   const hasNoChannelsAdded = allChannelIds.length === 0;
 
-  // Cumulative metrics — aggregate across ALL added channels
   const totalViews = channels.reduce((sum, ch) => sum + Number(ch?.statistics?.viewCount || 0), 0);
   const totalSubscribers = channels.reduce((sum, ch) => sum + Number(ch?.statistics?.subscriberCount || 0), 0);
   const totalVideos = channels.reduce((sum, ch) => sum + Number(ch?.statistics?.videoCount || 0), 0);
 
-  // Aggregate per-channel analytics data
   const perChannelAnalytics = dashData?.perChannelAnalytics || {};
   const perChannelEntries = Object.values(perChannelAnalytics);
 
-  // Revenue metrics — aggregate admin's own + all per-channel token data
   let curEstRevenue = sumRevenueMetric(dashData?.currentRevenue, "estimatedRevenue");
   let curAdRevenue = sumRevenueMetric(dashData?.currentRevenue, "estimatedAdRevenue");
   let curGrossRevenue = sumRevenueMetric(dashData?.currentRevenue, "grossRevenue");
@@ -282,7 +282,6 @@ export default function DashboardPage() {
   const curPremiumRevenue = Math.max(0, curGrossRevenue - curAdRevenue);
   const prevPremiumRevenue = Math.max(0, prevGrossRevenue - prevAdRevenue);
 
-  // Performance metrics — aggregate admin's own + per-channel token data
   let curViews = sumMetric(dashData?.currentPerformance, "views");
   let prevViews = sumMetric(dashData?.prevPerformance, "views");
   let curSubs = sumMetric(dashData?.currentPerformance, "subscribersGained") - sumMetric(dashData?.currentPerformance, "subscribersLost");
@@ -299,23 +298,18 @@ export default function DashboardPage() {
     prevLikes += sumMetric(pca.prevPerformance, "likes");
   }
 
-
-  // CPM and RPM
   const curCPM = curViews > 0 ? (curEstRevenue / curViews) * 1000 : 0;
   const prevCPM = prevViews > 0 ? (prevEstRevenue / prevViews) * 1000 : 0;
   const curRPM = curViews > 0 ? (curEstRevenue / curViews) * 1000 : 0;
   const prevRPM = prevViews > 0 ? (prevEstRevenue / prevViews) * 1000 : 0;
 
-  // Revenue per channel
   const channelCount = channels.length || 1;
   const curRevenuePerChannel = curEstRevenue / channelCount;
   const prevRevenuePerChannel = prevEstRevenue / (channelCount || 1);
 
-  // Videos from performance data
-  const curVideos = sumMetric(dashData?.currentPerformance, "videosPublished") || sumMetric(dashData?.currentPerformance, "videos");
+  const curVideosPublished = sumMetric(dashData?.currentPerformance, "videosPublished") || sumMetric(dashData?.currentPerformance, "videos");
   const prevVideosPerf = sumMetric(dashData?.prevPerformance, "videosPublished") || sumMetric(dashData?.prevPerformance, "videos");
 
-  // Daily revenue chart — aggregate admin's own + per-channel token daily data
   const adminDailyData = getDailyRevenueChartData(dashData?.dailyRevenue);
   const perChannelDailyDataArrays = perChannelEntries
     .map((pca) => getDailyRevenueChartData(pca.dailyRevenue))
@@ -330,14 +324,14 @@ export default function DashboardPage() {
     }
     dailyRevenueData = Object.entries(dailyMap)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, revenue]) => ({ date, revenue: Math.round(revenue * 100) / 100 }));
+      .map(([date, revenue]) => ({ date, fullDate: "", revenue: Math.round(revenue * 100) / 100 }));
   }
 
   const avgDailyRevenue = dailyRevenueData.length > 0
     ? dailyRevenueData.reduce((s, d) => s + d.revenue, 0) / dailyRevenueData.length
     : 0;
 
-  // Per-Channel Daily Revenue table data
+  // Per-Channel Daily Revenue table data with current month support
   const perChannelDailyRevenue = useMemo(() => {
     const perChannel = dashData?.perChannelAnalytics || {};
     const channelList = dashData?.channels || [];
@@ -346,31 +340,40 @@ export default function DashboardPage() {
       if (ch.id) channelNameMap[ch.id] = ch.snippet?.title || ch.id;
     }
 
-    // Build per-channel daily data: { channelId, channelName, dailyData: { date: revenue } }
-    const result: { channelId: string; channelName: string; dailyMap: Record<string, number> }[] = [];
+    const result: { channelId: string; channelName: string; dailyMap: Record<string, number>; monthTotal: number }[] = [];
     const allDates = new Set<string>();
+
+    // Get current month prefix for filtering
+    const now = new Date();
+    const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
     for (const [cid, pca] of Object.entries(perChannel)) {
       const daily = getDailyRevenueChartData(pca.dailyRevenue);
       const dailyMap: Record<string, number> = {};
+      let monthTotal = 0;
       for (const d of daily) {
-        // d.date is in "MM-DD" format from getDailyRevenueChartData (sliced from index 5)
-        // We need the full date for sorting — reconstruct from dailyRevenue raw data
         dailyMap[d.date] = d.revenue;
         allDates.add(d.date);
+        // Sum current month revenue
+        if (d.fullDate && d.fullDate.startsWith(currentMonthPrefix)) {
+          monthTotal += d.revenue;
+        }
       }
       result.push({
         channelId: cid,
         channelName: channelNameMap[cid] || cid,
         dailyMap,
+        monthTotal,
       });
     }
 
-    // Sort dates descending (latest first) and take last N days
     const sortedDates = Array.from(allDates).sort((a, b) => b.localeCompare(a));
-    const filteredDates = sortedDates.slice(0, dailyRevDays);
+    const daysToShow = dailyRevDays === 30 ? sortedDates.length : dailyRevDays;
+    const filteredDates = sortedDates.slice(0, daysToShow);
 
-    return { channels: result, dates: filteredDates };
+    const currentMonthName = now.toLocaleString("en-US", { month: "short", year: "numeric" });
+
+    return { channels: result, dates: filteredDates, currentMonthName };
   }, [dashData, dailyRevDays]);
 
   // Top videos
@@ -393,7 +396,6 @@ export default function DashboardPage() {
     }
   }
 
-  // Sort top videos by different metrics for leaderboards
   const videosSortedByViews = [...topVideos]
     .map((v) => ({ ...v, analyticsViews: videoAnalyticsMap[v.id || ""]?.views || Number(v.statistics?.viewCount || 0) }))
     .sort((a, b) => b.analyticsViews - a.analyticsViews)
@@ -403,30 +405,12 @@ export default function DashboardPage() {
     .sort((a, b) => b.analyticsSubs - a.analyticsSubs)
     .slice(0, 5);
 
-  // Channel leaderboard data
   const channelRevenueMap = dashData?.channelRevenueMap || {};
   const lastDayRevenue = dashData?.lastDayRevenue || 0;
   const lastDayDate = dashData?.lastDayDate || "";
 
-  // Revenue Channels (channels that have revenue > 0)
   const curRevenueChannels = Object.values(channelRevenueMap).filter((info) => info.revenue > 0).length;
 
-  // Carry Forward Revenue = total revenue from channels linked before this period
-  const curCarryForwardRevenue = curEstRevenue;
-  const prevCarryForwardRevenue = prevEstRevenue;
-
-  // New Channel Revenue = revenue from newly linked channels in this period
-  const curNewChannelRevenue = 0;
-  const prevNewChannelRevenue = 0;
-
-  // New Linked Channels = channels added in the selected date range
-  const newLinkedChannels = 0;
-
-  // Revenue Per New Channel
-  const curRevenuePerNewChannel = newLinkedChannels > 0 ? curNewChannelRevenue / newLinkedChannels : 0;
-  const prevRevenuePerNewChannel = 0;
-
-  // Top 5 Channels by Revenue Generated
   const channelsSortedByRevenue = [...channels]
     .map((ch) => ({
       ...ch,
@@ -435,7 +419,6 @@ export default function DashboardPage() {
     .sort((a, b) => b.channelRevenue - a.channelRevenue)
     .slice(0, 5);
 
-  // Top 5 Channels by RPM
   const channelsSortedByRPM = [...channels]
     .map((ch) => {
       const revInfo = channelRevenueMap[ch.id || ""];
@@ -446,7 +429,6 @@ export default function DashboardPage() {
     .sort((a, b) => b.channelRPM - a.channelRPM)
     .slice(0, 5);
 
-  // Top 5 Channels by Videos Published
   const channelsSortedByVideos = [...channels]
     .map((ch) => ({
       ...ch,
@@ -457,12 +439,39 @@ export default function DashboardPage() {
 
   const displayStart = dateRange.startDate.split("-").reverse().join("-");
   const displayEnd = dateRange.endDate.split("-").reverse().join("-");
-  const prevDisplayStart = dateRange.prevStartDate.split("-").reverse().join("-");
-  const prevDisplayEnd = dateRange.prevEndDate.split("-").reverse().join("-");
 
   const handleDateChange = (preset: string, range: DateRange) => {
     setDatePreset(preset);
     setDateRange(range);
+  };
+
+  // Month-wise Revenue Excel Download
+  const handleMonthRevenueExcel = () => {
+    const headers = ["Channel Name", "Channel ID (UC Link)", "Revenue ($)", `Revenue (INR @ ${INR_RATE})`];
+    const rows: string[][] = [];
+    for (const ch of channels) {
+      const revInfo = channelRevenueMap[ch.id || ""];
+      const revenue = revInfo?.revenue || 0;
+      rows.push([
+        `"${(ch.snippet?.title || "Unknown").replace(/"/g, '""')}"`,
+        ch.id || "",
+        revenue.toFixed(2),
+        (revenue * INR_RATE).toFixed(2),
+      ]);
+    }
+    // Add totals
+    const totalRev = rows.reduce((s, r) => s + Number(r[2]), 0);
+    rows.push([`"TOTAL"`, "", totalRev.toFixed(2), (totalRev * INR_RATE).toFixed(2)]);
+
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `channel_revenue_${dateRange.startDate}_to_${dateRange.endDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Auto-cache client YouTube data to KV for admin access
@@ -632,8 +641,17 @@ export default function DashboardPage() {
             <span>All date ranges end at {displayEnd} (today minus 3 days) due to YouTube&apos;s data reporting delay.</span>
           </div>
 
-          {/* ===== DATE RANGE FILTER ===== */}
-          <DateRangeFilter value={datePreset} onChange={handleDateChange} />
+          {/* ===== DATE RANGE FILTER + DOWNLOAD ===== */}
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <DateRangeFilter value={datePreset} onChange={handleDateChange} />
+            <button
+              onClick={handleMonthRevenueExcel}
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm text-foreground hover:bg-slate-50 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Revenue Excel
+            </button>
+          </div>
 
           {/* ===== COMBINED DASHBOARD OVERVIEW ===== */}
           <div className="relative bg-slate-50 rounded-xl border border-border p-5">
@@ -689,7 +707,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Row 2: Channel & Revenue Breakdown */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
               <MetricCard
                 title="Total Channels"
                 value={String(channelCount)}
@@ -704,29 +722,21 @@ export default function DashboardPage() {
                 color="#f97316"
               />
               <MetricCard
-                title="Carry Forward Revenue"
-                value={formatCurrency(curCarryForwardRevenue)}
-                change={pctChange(curCarryForwardRevenue, prevCarryForwardRevenue)}
-                tooltip="Revenue from channels linked before this period"
-                color="#8b5cf6"
-              />
-              <MetricCard
                 title="Revenue Channels"
                 value={String(curRevenueChannels)}
                 tooltip="Channels with revenue > $0 in selected period"
                 color="#22c55e"
               />
               <MetricCard
-                title="New Channel Revenue"
-                value={formatCurrency(curNewChannelRevenue)}
-                change={pctChange(curNewChannelRevenue, prevNewChannelRevenue)}
-                tooltip="Revenue from newly linked channels in this period"
+                title="Revenue (INR)"
+                value={`₹${(curEstRevenue * INR_RATE).toFixed(0)}`}
+                tooltip={`Estimated revenue in INR (1$ = ₹${INR_RATE})`}
                 color="#f59e0b"
               />
             </div>
 
             {/* Row 3: Engagement Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
               <MetricCard
                 title="Views"
                 value={formatNumber(curViews || totalViews)}
@@ -743,8 +753,8 @@ export default function DashboardPage() {
               />
               <MetricCard
                 title="Videos"
-                value={formatNumber(curVideos || totalVideos)}
-                change={pctChange(curVideos || totalVideos, prevVideosPerf || totalVideos)}
+                value={formatNumber(curVideosPublished || totalVideos)}
+                change={pctChange(curVideosPublished || totalVideos, prevVideosPerf || totalVideos)}
                 tooltip="Total videos in selected period"
                 color="#84cc16"
               />
@@ -754,13 +764,6 @@ export default function DashboardPage() {
                 change={pctChange(curLikes, prevLikes)}
                 tooltip="Total likes in selected period"
                 color="#ef4444"
-              />
-              <MetricCard
-                title="New Linked Channels"
-                value={String(newLinkedChannels)}
-                change={pctChange(newLinkedChannels, 0)}
-                tooltip="New channels linked during the selected period"
-                color="#06b6d4"
               />
             </div>
 
@@ -781,7 +784,136 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* ===== SECTION 3: Top 5 Leaderboards ===== */}
+          {/* ===== PER-CHANNEL DAILY REVENUE TABLE (moved above Top 5) ===== */}
+          {perChannelDailyRevenue.channels.length > 0 && perChannelDailyRevenue.dates.length > 0 && (
+            <div className="bg-white rounded-xl border border-border p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-foreground text-sm">Per-Channel Daily Revenue</h3>
+                <div className="flex items-center gap-1.5">
+                  {([1, 3, 7, 30] as const).map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setDailyRevDays(d)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        dailyRevDays === d
+                          ? "bg-primary text-white"
+                          : "bg-slate-100 text-muted hover:bg-slate-200"
+                      }`}
+                    >
+                      {d === 1 ? "Latest" : d === 30 ? "Month" : `${d} Days`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 pr-4 font-medium text-muted text-xs">Channel</th>
+                      {perChannelDailyRevenue.dates.map((date) => (
+                        <th key={date} className="text-right py-2 px-2 font-medium text-muted text-xs whitespace-nowrap">{date}</th>
+                      ))}
+                      <th className="text-right py-2 px-2 font-semibold text-amber-700 text-xs whitespace-nowrap">{perChannelDailyRevenue.currentMonthName}</th>
+                      <th className="text-right py-2 pl-3 font-semibold text-foreground text-xs">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {perChannelDailyRevenue.channels.map((ch) => {
+                      const total = perChannelDailyRevenue.dates.reduce((s, d) => s + (ch.dailyMap[d] || 0), 0);
+                      return (
+                        <tr key={ch.channelId} className="border-b border-border/50 hover:bg-slate-50">
+                          <td className="py-2 pr-4 text-foreground font-medium truncate max-w-[200px]" title={ch.channelName}>{ch.channelName}</td>
+                          {perChannelDailyRevenue.dates.map((date) => (
+                            <td key={date} className="text-right py-2 px-2 text-muted tabular-nums">
+                              ${(ch.dailyMap[date] || 0).toFixed(2)}
+                            </td>
+                          ))}
+                          <td className="text-right py-2 px-2 font-semibold text-amber-700 tabular-nums">
+                            ${ch.monthTotal.toFixed(2)}
+                          </td>
+                          <td className="text-right py-2 pl-3 font-semibold text-foreground tabular-nums">${total.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-slate-50">
+                      <td className="py-2 pr-4 font-bold text-foreground">Total</td>
+                      {perChannelDailyRevenue.dates.map((date) => {
+                        const dayTotal = perChannelDailyRevenue.channels.reduce((s, ch) => s + (ch.dailyMap[date] || 0), 0);
+                        return (
+                          <td key={date} className="text-right py-2 px-2 font-bold text-foreground tabular-nums">
+                            ${dayTotal.toFixed(2)}
+                          </td>
+                        );
+                      })}
+                      <td className="text-right py-2 px-2 font-bold text-amber-700 tabular-nums">
+                        ${perChannelDailyRevenue.channels.reduce((s, ch) => s + ch.monthTotal, 0).toFixed(2)}
+                      </td>
+                      <td className="text-right py-2 pl-3 font-bold text-primary tabular-nums">
+                        ${perChannelDailyRevenue.channels.reduce((s, ch) =>
+                          s + perChannelDailyRevenue.dates.reduce((ss, d) => ss + (ch.dailyMap[d] || 0), 0), 0
+                        ).toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="text-xs text-muted mt-3">YouTube revenue data is ~2 days delayed. Latest available date shown first.</p>
+            </div>
+          )}
+
+          {/* ===== REVENUE TREND CHART ===== */}
+          {dailyRevenueData.length > 0 && (
+            <div className="bg-white rounded-xl border border-border p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-foreground text-sm">Revenue Trend</h3>
+                <span className="text-xs text-muted">{dateRange.label}</span>
+              </div>
+              <div className="h-[280px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={dailyRevenueData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fill: "#64748b", fontSize: 11 }}
+                      axisLine={{ stroke: "#e2e8f0" }}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      tick={{ fill: "#64748b", fontSize: 11 }}
+                      axisLine={{ stroke: "#e2e8f0" }}
+                      tickFormatter={(v) => `$${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: "8px",
+                        border: "1px solid #e2e8f0",
+                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                      }}
+                      formatter={(value) => [`$${Number(value).toFixed(2)}`, "Revenue"]}
+                    />
+                    <ReferenceLine
+                      y={avgDailyRevenue}
+                      stroke="#94a3b8"
+                      strokeDasharray="5 5"
+                      label={{ value: `Avg: $${avgDailyRevenue.toFixed(2)}`, fill: "#64748b", fontSize: 11, position: "right" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#f59e0b"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* ===== TOP 5 VIDEO LEADERBOARDS ===== */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* Top 5 by Revenue */}
             {curEstRevenue > 0 && (
@@ -856,7 +988,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ===== SECTION 3B: Top 5 Channel Leaderboards ===== */}
+          {/* ===== TOP 5 CHANNEL LEADERBOARDS (clickable) ===== */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             {/* Top 5 Channels by Revenue Generated */}
             <div className="bg-white rounded-xl border border-border p-5">
@@ -868,7 +1000,11 @@ export default function DashboardPage() {
                 {channelsSortedByRevenue.length > 0 ? channelsSortedByRevenue.map((ch, i) => {
                   const thumbnail = ch.snippet?.thumbnails?.default?.url || "";
                   return (
-                    <div key={ch.id || i} className="flex items-center gap-3 py-1.5">
+                    <div
+                      key={ch.id || i}
+                      className="flex items-center gap-3 py-1.5 cursor-pointer hover:bg-slate-50 rounded-lg px-1 -mx-1 transition-colors"
+                      onClick={() => setSelectedChannel(ch)}
+                    >
                       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-muted"}`}>
                         {i + 1}
                       </span>
@@ -893,7 +1029,11 @@ export default function DashboardPage() {
                 {channelsSortedByRPM.length > 0 ? channelsSortedByRPM.map((ch, i) => {
                   const thumbnail = ch.snippet?.thumbnails?.default?.url || "";
                   return (
-                    <div key={ch.id || i} className="flex items-center gap-3 py-1.5">
+                    <div
+                      key={ch.id || i}
+                      className="flex items-center gap-3 py-1.5 cursor-pointer hover:bg-slate-50 rounded-lg px-1 -mx-1 transition-colors"
+                      onClick={() => setSelectedChannel(ch)}
+                    >
                       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-muted"}`}>
                         {i + 1}
                       </span>
@@ -918,7 +1058,11 @@ export default function DashboardPage() {
                 {channelsSortedByVideos.length > 0 ? channelsSortedByVideos.map((ch, i) => {
                   const thumbnail = ch.snippet?.thumbnails?.default?.url || "";
                   return (
-                    <div key={ch.id || i} className="flex items-center gap-3 py-1.5">
+                    <div
+                      key={ch.id || i}
+                      className="flex items-center gap-3 py-1.5 cursor-pointer hover:bg-slate-50 rounded-lg px-1 -mx-1 transition-colors"
+                      onClick={() => setSelectedChannel(ch)}
+                    >
                       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-muted"}`}>
                         {i + 1}
                       </span>
@@ -934,129 +1078,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ===== SECTION 4: Revenue Trend Chart ===== */}
-          {dailyRevenueData.length > 0 && (
-            <div className="bg-white rounded-xl border border-border p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-foreground text-sm">Revenue Trend</h3>
-                <span className="text-xs text-muted">{dateRange.label}</span>
-              </div>
-              <div className="h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dailyRevenueData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fill: "#64748b", fontSize: 11 }}
-                      axisLine={{ stroke: "#e2e8f0" }}
-                      interval="preserveStartEnd"
-                    />
-                    <YAxis
-                      tick={{ fill: "#64748b", fontSize: 11 }}
-                      axisLine={{ stroke: "#e2e8f0" }}
-                      tickFormatter={(v) => `$${v}`}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: "8px",
-                        border: "1px solid #e2e8f0",
-                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                      }}
-                      formatter={(value) => [`$${Number(value).toFixed(2)}`, "Revenue"]}
-                    />
-                    <ReferenceLine
-                      y={avgDailyRevenue}
-                      stroke="#94a3b8"
-                      strokeDasharray="5 5"
-                      label={{ value: `Avg: $${avgDailyRevenue.toFixed(2)}`, fill: "#64748b", fontSize: 11, position: "right" }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="revenue"
-                      stroke="#f59e0b"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 4 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-
-          {/* ===== SECTION 4B: Per-Channel Daily Revenue Table ===== */}
-          {perChannelDailyRevenue.channels.length > 0 && perChannelDailyRevenue.dates.length > 0 && (
-            <div className="bg-white rounded-xl border border-border p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-foreground text-sm">Per-Channel Daily Revenue</h3>
-                <div className="flex items-center gap-1.5">
-                  {([1, 3, 7] as const).map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => setDailyRevDays(d)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                        dailyRevDays === d
-                          ? "bg-primary text-white"
-                          : "bg-slate-100 text-muted hover:bg-slate-200"
-                      }`}
-                    >
-                      {d === 1 ? "Latest" : `${d} Days`}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-2 pr-4 font-medium text-muted text-xs">Channel</th>
-                      {perChannelDailyRevenue.dates.map((date) => (
-                        <th key={date} className="text-right py-2 px-2 font-medium text-muted text-xs whitespace-nowrap">{date}</th>
-                      ))}
-                      <th className="text-right py-2 pl-3 font-semibold text-foreground text-xs">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {perChannelDailyRevenue.channels.map((ch) => {
-                      const total = perChannelDailyRevenue.dates.reduce((s, d) => s + (ch.dailyMap[d] || 0), 0);
-                      return (
-                        <tr key={ch.channelId} className="border-b border-border/50 hover:bg-slate-50">
-                          <td className="py-2 pr-4 text-foreground font-medium truncate max-w-[200px]" title={ch.channelName}>{ch.channelName}</td>
-                          {perChannelDailyRevenue.dates.map((date) => (
-                            <td key={date} className="text-right py-2 px-2 text-muted tabular-nums">
-                              ${(ch.dailyMap[date] || 0).toFixed(2)}
-                            </td>
-                          ))}
-                          <td className="text-right py-2 pl-3 font-semibold text-foreground tabular-nums">${total.toFixed(2)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-border bg-slate-50">
-                      <td className="py-2 pr-4 font-bold text-foreground">Total</td>
-                      {perChannelDailyRevenue.dates.map((date) => {
-                        const dayTotal = perChannelDailyRevenue.channels.reduce((s, ch) => s + (ch.dailyMap[date] || 0), 0);
-                        return (
-                          <td key={date} className="text-right py-2 px-2 font-bold text-foreground tabular-nums">
-                            ${dayTotal.toFixed(2)}
-                          </td>
-                        );
-                      })}
-                      <td className="text-right py-2 pl-3 font-bold text-primary tabular-nums">
-                        ${perChannelDailyRevenue.channels.reduce((s, ch) =>
-                          s + perChannelDailyRevenue.dates.reduce((ss, d) => ss + (ch.dailyMap[d] || 0), 0), 0
-                        ).toFixed(2)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              <p className="text-xs text-muted mt-3">YouTube revenue data is ~2 days delayed. Latest available date shown first.</p>
-            </div>
-          )}
-
-          {/* ===== SECTION 5: Top Videos Table ===== */}
+          {/* ===== TOP VIDEOS TABLE ===== */}
           {topVideos.length > 0 && (
             <div className="bg-white rounded-xl border border-border p-5">
               <div className="flex items-center justify-between mb-4">
@@ -1101,6 +1123,67 @@ export default function DashboardPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Channel Detail Modal */}
+      {selectedChannel && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">Channel Analysis</h2>
+              <button onClick={() => setSelectedChannel(null)} className="p-1 hover:bg-slate-100 rounded-lg">
+                <X className="w-5 h-5 text-muted" />
+              </button>
+            </div>
+            <div className="p-5">
+              <div className="flex items-center gap-3 mb-5">
+                {selectedChannel.snippet?.thumbnails?.default?.url && (
+                  <img src={selectedChannel.snippet.thumbnails.default.url} alt="" className="w-12 h-12 rounded-full object-cover" referrerPolicy="no-referrer" />
+                )}
+                <div>
+                  <h3 className="font-semibold text-foreground">{selectedChannel.snippet?.title || "Unknown"}</h3>
+                  <p className="text-xs text-muted">{selectedChannel.id}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-muted mb-1">Subscribers</p>
+                  <p className="text-lg font-bold text-foreground">{formatNumber(Number(selectedChannel.statistics?.subscriberCount || 0))}</p>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-muted mb-1">Total Views</p>
+                  <p className="text-lg font-bold text-foreground">{formatNumber(Number(selectedChannel.statistics?.viewCount || 0))}</p>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-muted mb-1">Videos</p>
+                  <p className="text-lg font-bold text-foreground">{formatNumber(Number(selectedChannel.statistics?.videoCount || 0))}</p>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-muted mb-1">Revenue ({dateRange.label})</p>
+                  <p className="text-lg font-bold text-amber-600">{formatCurrency(channelRevenueMap[selectedChannel.id || ""]?.revenue || 0)}</p>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-muted mb-1">RPM</p>
+                  <p className="text-lg font-bold text-purple-600">{formatCurrency(channelRevenueMap[selectedChannel.id || ""]?.rpm || 0)}</p>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-muted mb-1">Revenue (INR)</p>
+                  <p className="text-lg font-bold text-amber-600">₹{((channelRevenueMap[selectedChannel.id || ""]?.revenue || 0) * INR_RATE).toFixed(0)}</p>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-border">
+                <a
+                  href={`https://www.youtube.com/channel/${selectedChannel.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  View on YouTube →
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
