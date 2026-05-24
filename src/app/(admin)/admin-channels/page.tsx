@@ -102,6 +102,9 @@ export default function AdminChannelsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [pendingActionLoading, setPendingActionLoading] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [revenuePeriod, setRevenuePeriod] = useState<string>("cached");
+  const [periodRevenueMap, setPeriodRevenueMap] = useState<Record<string, number>>({});
+  const [periodRevenueLoading, setPeriodRevenueLoading] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -249,6 +252,51 @@ export default function AdminChannelsPage() {
     return () => clearInterval(interval);
   }, [isAuthenticated, refreshChannelStats]);
 
+  // Fetch revenue for specific month/period when selected
+  useEffect(() => {
+    if (revenuePeriod === "cached" || !isAuthenticated) return;
+    const allIds = clients.flatMap((c) => c.channels).filter((id) => !id.startsWith("UCtest") && id !== "test");
+    if (allIds.length === 0) return;
+
+    let startDate: string;
+    let endDate: string;
+
+    if (revenuePeriod.match(/^\d{4}-\d{2}$/)) {
+      // Month filter
+      const [year, month] = revenuePeriod.split("-").map(Number);
+      startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const now = new Date();
+      const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === month;
+      const endDay = isCurrentMonth ? now.getDate() : lastDay;
+      endDate = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+    } else {
+      const numDays = parseInt(revenuePeriod) || 28;
+      const endD = new Date();
+      endDate = `${endD.getFullYear()}-${String(endD.getMonth()+1).padStart(2,"0")}-${String(endD.getDate()).padStart(2,"0")}`;
+      const startD = new Date();
+      startD.setDate(startD.getDate() - numDays);
+      startDate = `${startD.getFullYear()}-${String(startD.getMonth()+1).padStart(2,"0")}-${String(startD.getDate()).padStart(2,"0")}`;
+    }
+
+    setPeriodRevenueLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/youtube?action=dashboardFull&channelIds=${encodeURIComponent(allIds.join(","))}&startDate=${startDate}&endDate=${endDate}`);
+        if (res.ok) {
+          const json = await res.json();
+          const crMap = json.data?.channelRevenueMap || {};
+          const newRevMap: Record<string, number> = {};
+          for (const [cid, val] of Object.entries(crMap)) {
+            newRevMap[cid] = (val as { revenue: number }).revenue || 0;
+          }
+          setPeriodRevenueMap(newRevMap);
+        }
+      } catch { /* silent */ }
+      setPeriodRevenueLoading(false);
+    })();
+  }, [revenuePeriod, isAuthenticated, clients]);
+
   const allChannelRows: ChannelRow[] = useMemo(() => {
     const rows: ChannelRow[] = [];
     const seenIds = new Set<string>();
@@ -270,7 +318,7 @@ export default function AdminChannelsPage() {
           subscribers: Number(data?.statistics?.subscriberCount || 0),
           videos: Number(data?.statistics?.videoCount || 0),
           views: Number(data?.statistics?.viewCount || 0),
-          revenue: channelRevenueMap[chId] || 0,
+          revenue: (revenuePeriod !== "cached" ? periodRevenueMap[chId] : channelRevenueMap[chId]) || 0,
           clientName: client.name,
           category: client.category,
           tokenStatus: tokenStatuses[chId] || "none",
@@ -292,14 +340,14 @@ export default function AdminChannelsPage() {
         subscribers: Number(data?.statistics?.subscriberCount || 0),
         videos: Number(data?.statistics?.videoCount || 0),
         views: Number(data?.statistics?.viewCount || 0),
-        revenue: channelRevenueMap[chId] || 0,
+        revenue: (revenuePeriod !== "cached" ? periodRevenueMap[chId] : channelRevenueMap[chId]) || 0,
         clientName: cachedClientName || "Unknown",
         category: matchedClient?.category || "-",
         tokenStatus: tokenStatuses[chId] || "none",
       });
     }
     return rows;
-  }, [clients, channelDataMap, channelRevenueMap, channelClientMap, tokenStatuses]);
+  }, [clients, channelDataMap, channelRevenueMap, channelClientMap, tokenStatuses, revenuePeriod, periodRevenueMap]);
 
   const filteredChannels = useMemo(() => {
     let result = allChannelRows;
@@ -557,6 +605,49 @@ export default function AdminChannelsPage() {
             <p className="text-sm text-amber-600 font-medium">Valid Tokens</p>
             <p className="text-2xl font-bold text-amber-900">{allChannelRows.filter(c => c.tokenStatus === "valid").length} / {allChannelRows.length}</p>
           </div>
+        </div>
+      </div>
+
+      {/* Revenue Period Filter */}
+      <div className="bg-white rounded-xl border border-border p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted">Revenue Period:</span>
+          <button
+            onClick={() => { setRevenuePeriod("cached"); setPeriodRevenueMap({}); }}
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${revenuePeriod === "cached" ? "bg-primary text-white" : "bg-slate-100 text-muted hover:bg-slate-200"}`}
+          >
+            Cached
+          </button>
+          {["7", "28", "90"].map((d) => (
+            <button
+              key={d}
+              onClick={() => setRevenuePeriod(d)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${revenuePeriod === d ? "bg-primary text-white" : "bg-slate-100 text-muted hover:bg-slate-200"}`}
+            >
+              {d} Days
+            </button>
+          ))}
+          <span className="text-xs text-muted mx-1">|</span>
+          {(() => {
+            const months: { value: string; label: string }[] = [];
+            const now = new Date();
+            for (let i = 0; i < 6; i++) {
+              const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+              const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+              const label = d.toLocaleString("en-US", { month: "short", year: "numeric" });
+              months.push({ value: val, label });
+            }
+            return months.map((m) => (
+              <button
+                key={m.value}
+                onClick={() => setRevenuePeriod(m.value)}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${revenuePeriod === m.value ? "bg-primary text-white" : "bg-slate-100 text-muted hover:bg-slate-200"}`}
+              >
+                {m.label}
+              </button>
+            ));
+          })()}
+          {periodRevenueLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary ml-2" />}
         </div>
       </div>
 

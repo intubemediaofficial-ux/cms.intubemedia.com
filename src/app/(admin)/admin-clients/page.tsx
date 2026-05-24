@@ -129,7 +129,7 @@ export default function AdminClientsPage() {
   const [clientChannelsLoading, setClientChannelsLoading] = useState(false);
   const [clientRevenue, setClientRevenue] = useState<ClientRevenueData | null>(null);
   const [clientDetailTab, setClientDetailTab] = useState<"channels" | "bank" | "agreements">("channels");
-  const [revenueDays, setRevenueDays] = useState<number>(28);
+  const [revenueDays, setRevenueDays] = useState<number | string>(28);
   const [revenueLoading, setRevenueLoading] = useState(false);
 
   // Bank details for viewed client
@@ -481,14 +481,28 @@ export default function AdminClientsPage() {
   }, []);
 
   // Fetch revenue data for given days range
-  const fetchClientRevenue = useCallback(async (client: Client, days: number) => {
+  const fetchClientRevenue = useCallback(async (client: Client, days: number | string) => {
     setRevenueLoading(true);
     try {
-      const endD = new Date();
-      const endDate = `${endD.getFullYear()}-${String(endD.getMonth()+1).padStart(2,"0")}-${String(endD.getDate()).padStart(2,"0")}`;
-      const startDateObj = new Date();
-      startDateObj.setDate(startDateObj.getDate() - days);
-      const startDate = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth()+1).padStart(2,"0")}-${String(startDateObj.getDate()).padStart(2,"0")}`;
+      let startDate: string;
+      let endDate: string;
+      if (typeof days === "string" && days.match(/^\d{4}-\d{2}$/)) {
+        // Month filter like "2026-05"
+        const [year, month] = days.split("-").map(Number);
+        startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const now = new Date();
+        const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === month;
+        const endDay = isCurrentMonth ? now.getDate() : lastDay;
+        endDate = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+      } else {
+        const numDays = typeof days === "number" ? days : 28;
+        const endD = new Date();
+        endDate = `${endD.getFullYear()}-${String(endD.getMonth()+1).padStart(2,"0")}-${String(endD.getDate()).padStart(2,"0")}`;
+        const startDateObj = new Date();
+        startDateObj.setDate(startDateObj.getDate() - numDays);
+        startDate = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth()+1).padStart(2,"0")}-${String(startDateObj.getDate()).padStart(2,"0")}`;
+      }
       const channelIds = client.channels;
       if (channelIds.length === 0) return;
 
@@ -1247,7 +1261,7 @@ export default function AdminClientsPage() {
               </div>
 
               {/* Revenue Days Filter */}
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
                 <span className="text-xs font-medium text-muted">Revenue Period:</span>
                 {[7, 28, 90, 365].map((d) => (
                   <button
@@ -1262,6 +1276,30 @@ export default function AdminClientsPage() {
                     {d === 365 ? "1 Year" : `${d} Days`}
                   </button>
                 ))}
+                <span className="text-xs text-muted mx-1">|</span>
+                {(() => {
+                  const months: { value: string; label: string }[] = [];
+                  const now = new Date();
+                  for (let i = 0; i < 6; i++) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+                    const label = d.toLocaleString("en-US", { month: "short", year: "numeric" });
+                    months.push({ value: val, label });
+                  }
+                  return months.map((m) => (
+                    <button
+                      key={m.value}
+                      onClick={() => setRevenueDays(m.value)}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        revenueDays === m.value
+                          ? "bg-primary text-white"
+                          : "bg-slate-100 text-muted hover:bg-slate-200"
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ));
+                })()}
                 {revenueLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary ml-2" />}
               </div>
 
@@ -1271,14 +1309,14 @@ export default function AdminClientsPage() {
                   <div className="bg-green-50 border border-green-200 rounded-xl p-4">
                     <div className="flex items-center gap-1.5">
                       <DollarSign className="w-3.5 h-3.5 text-green-500" />
-                      <p className="text-xs text-green-600 font-medium">Revenue ({revenueDays === 365 ? "1yr" : `${revenueDays}d`})</p>
+                      <p className="text-xs text-green-600 font-medium">Revenue ({typeof revenueDays === "string" ? new Date(revenueDays + "-01").toLocaleString("en-US", { month: "short", year: "numeric" }) : revenueDays === 365 ? "1yr" : `${revenueDays}d`})</p>
                     </div>
                     <p className="text-lg font-bold text-green-900">${clientRevenue.totalRevenue.toFixed(2)}</p>
                   </div>
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-center gap-1.5">
                       <BarChart3 className="w-3.5 h-3.5 text-blue-500" />
-                      <p className="text-xs text-blue-600 font-medium">Views ({revenueDays === 365 ? "1yr" : `${revenueDays}d`})</p>
+                      <p className="text-xs text-blue-600 font-medium">Views ({typeof revenueDays === "string" ? new Date(revenueDays + "-01").toLocaleString("en-US", { month: "short", year: "numeric" }) : revenueDays === 365 ? "1yr" : `${revenueDays}d`})</p>
                     </div>
                     <p className="text-lg font-bold text-blue-900">{clientRevenue.totalViews.toLocaleString()}</p>
                   </div>
