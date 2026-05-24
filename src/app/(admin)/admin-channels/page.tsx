@@ -883,6 +883,20 @@ export default function AdminChannelsPage() {
                   <ExternalLink className="w-4 h-4" />
                   View on YouTube
                 </a>
+                {selectedChannel.tokenStatus === "valid" && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Expire token for ${selectedChannel.name}? Client will need to re-authorize.`)) return;
+                      await fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(selectedChannel.channelId)}`);
+                      setTokenStatuses((prev) => ({ ...prev, [selectedChannel.channelId]: "none" }));
+                      setSelectedChannel({ ...selectedChannel, tokenStatus: "none" });
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-sm"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Expire Token
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -987,6 +1001,20 @@ export default function AdminChannelsPage() {
                 }
                 return null;
               })()}
+              {tokenStatuses[channel.channelId] === "valid" && (
+                <button
+                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-amber-50 flex items-center gap-2 text-amber-600"
+                  onClick={async () => {
+                    await fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channel.channelId)}`);
+                    setTokenStatuses((prev) => ({ ...prev, [channel.channelId]: "none" }));
+                    setActiveActionMenu(null);
+                    setMenuPosition(null);
+                  }}
+                >
+                  <XCircle className="w-4 h-4" />
+                  Expire Token
+                </button>
+              )}
               <div className="border-t border-border my-1" />
               <button
                 className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-600"

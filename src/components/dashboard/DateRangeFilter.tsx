@@ -81,7 +81,8 @@ function computeRange(preset: string): DateRange {
         const [y, m] = preset.split("-").map(Number);
         const start = new Date(y, m - 1, 1);
         const monthEnd = new Date(y, m, 0);
-        const actualEnd = monthEnd < end ? monthEnd : end;
+        const yesterday = subtractDays(new Date(), 1);
+        const actualEnd = monthEnd < yesterday ? monthEnd : yesterday;
         const prevStart = new Date(y, m - 2, 1);
         const prevEnd = new Date(y, m - 1, 0);
         const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -99,7 +100,7 @@ function getRecentMonths(): { value: string; label: string }[] {
   const now = new Date();
   const months: { value: string; label: string }[] = [];
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  for (let i = 1; i <= 3; i++) {
+  for (let i = 0; i <= 5; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push({
       value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,

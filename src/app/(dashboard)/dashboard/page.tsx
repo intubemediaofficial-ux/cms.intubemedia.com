@@ -416,9 +416,10 @@ export default function DashboardPage() {
     }
   }
 
+  const hasAnalyticsRevenue = Object.values(videoAnalyticsMap).some((v) => v.revenue > 0);
   const videosSortedByRevenue = [...topVideos]
     .map((v) => ({ ...v, analyticsRevenue: videoAnalyticsMap[v.id || ""]?.revenue || 0 }))
-    .sort((a, b) => b.analyticsRevenue - a.analyticsRevenue)
+    .sort((a, b) => hasAnalyticsRevenue ? b.analyticsRevenue - a.analyticsRevenue : Number(b.statistics?.viewCount || 0) - Number(a.statistics?.viewCount || 0))
     .slice(0, 5);
   const videosSortedByViews = [...topVideos]
     .map((v) => ({ ...v, analyticsViews: videoAnalyticsMap[v.id || ""]?.views || Number(v.statistics?.viewCount || 0) }))
@@ -974,6 +975,9 @@ export default function DashboardPage() {
                 <DollarSign className="w-4 h-4 text-amber-500" />
                 Top 5 Videos by Revenue
               </h3>
+              {!hasAnalyticsRevenue && videosSortedByRevenue.length > 0 && (
+                <p className="text-xs text-amber-600 mb-1">Showing by views (revenue data unavailable)</p>
+              )}
               <div className="space-y-2">
                 {videosSortedByRevenue.length > 0 ? videosSortedByRevenue.map((video, i) => {
                   const thumbnail = video.snippet?.thumbnails?.default?.url || "";
@@ -984,11 +988,11 @@ export default function DashboardPage() {
                       </span>
                       {thumbnail && <img src={thumbnail} alt="" className="w-8 h-8 rounded-full object-cover" />}
                       <span className="flex-1 text-sm text-foreground truncate">{video.snippet?.title || "Untitled"}</span>
-                      <span className="text-sm font-semibold text-amber-600">{formatCurrency(video.analyticsRevenue)}</span>
+                      <span className="text-sm font-semibold text-amber-600">{hasAnalyticsRevenue ? formatCurrency(video.analyticsRevenue) : formatNumber(Number(video.statistics?.viewCount || 0)) + " views"}</span>
                     </div>
                   );
                 }) : (
-                  <p className="text-xs text-muted py-4 text-center">No revenue data available</p>
+                  <p className="text-xs text-muted py-4 text-center">No video data available</p>
                 )}
               </div>
             </div>

@@ -207,6 +207,7 @@ export default function AdminVideosPage() {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [selectedDupVideos, setSelectedDupVideos] = useState<Set<string>>(new Set());
   const [dupPrivacyFilter, setDupPrivacyFilter] = useState<string>("all");
+  const [dupChannelFilter, setDupChannelFilter] = useState<string>("all");
   const [dupDeleting, setDupDeleting] = useState(false);
 
   // Add claim modal
@@ -646,6 +647,12 @@ export default function AdminVideosPage() {
             </button>
             {showDuplicates && (
               <div className="flex items-center gap-2">
+                <select value={dupChannelFilter} onChange={(e) => setDupChannelFilter(e.target.value)} className="border border-border rounded-lg px-2 py-1 text-xs">
+                  <option value="all">All Channels</option>
+                  {channelDuplicateGroups.map((cg) => (
+                    <option key={cg.channelId} value={cg.channelId}>{cg.channelName}</option>
+                  ))}
+                </select>
                 <select value={dupPrivacyFilter} onChange={(e) => setDupPrivacyFilter(e.target.value)} className="border border-border rounded-lg px-2 py-1 text-xs">
                   <option value="all">All Privacy</option>
                   <option value="public">Public</option>
@@ -663,7 +670,7 @@ export default function AdminVideosPage() {
           </div>
           {showDuplicates && (
             <div className="mt-4 space-y-5 max-h-[600px] overflow-y-auto">
-              {channelDuplicateGroups.map((chGroup) => {
+              {channelDuplicateGroups.filter((cg) => dupChannelFilter === "all" || cg.channelId === dupChannelFilter).map((chGroup) => {
                 const filteredGroups = chGroup.groups.map((g) => ({
                   ...g,
                   videos: dupPrivacyFilter === "all" ? g.videos : g.videos.filter((v) => (v.status?.privacyStatus || "public") === dupPrivacyFilter),
