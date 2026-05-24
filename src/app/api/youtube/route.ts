@@ -363,8 +363,6 @@ export async function GET(request: Request) {
         const currentRevenue = null;
         const prevRevenue = null;
         const dailyRevenue = null;
-        const topVideosByViews = { analytics: null, videos: [] as unknown[] };
-
         // Fetch analytics for each tokenized channel using their own OAuth tokens
         const perChannelAnalytics: Record<string, {
           performance: Record<string, unknown> | null;
@@ -375,17 +373,23 @@ export async function GET(request: Request) {
           revenueViews: Record<string, unknown> | null;
         }> = {};
 
+        // Collect top video analytics across all channels
+        const allVideoAnalyticsRows: unknown[][] = [];
+        const allVideoAnalyticsHeaders: Array<{ name?: string | null }> = [];
+        const allVideoIds: string[] = [];
+
         const perChannelErrors: Record<string, string> = {};
         for (const [cid, token] of Object.entries(channelTokenMap)) {
           // Process all tokenized channels
           try {
-            const [perf, prevPerf, rev, prevRev, daily, revViews] = await Promise.all([
+            const [perf, prevPerf, rev, prevRev, daily, revViews, videoAnalytics] = await Promise.all([
               getAnalyticsData(token, startDate, endDate, performanceMetrics, "").catch((e) => { console.error(`[dashboardFull] ${cid} perf error:`, e?.message || e); return null; }),
               getAnalyticsData(token, prevStartDate, prevEndDate, performanceMetrics, "").catch(() => null),
               getRevenueData(token, startDate, endDate).catch((e) => { console.error(`[dashboardFull] ${cid} rev error:`, e?.message || e); return null; }),
               getRevenueData(token, prevStartDate, prevEndDate).catch(() => null),
-              getAnalyticsData(token, startDate, endDate, "estimatedRevenue", "day").catch(() => null),
+              getAnalyticsData(token, (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split("T")[0]; })(), endDate, "estimatedRevenue", "day").catch(() => null),
               getAnalyticsData(token, startDate, endDate, "estimatedRevenue,views", "").catch(() => null),
+              getAnalyticsData(token, startDate, endDate, "views,likes,subscribersGained,estimatedRevenue", "video").catch(() => null),
             ]);
             perChannelAnalytics[cid] = {
               performance: perf as Record<string, unknown> | null,
@@ -395,13 +399,50 @@ export async function GET(request: Request) {
               dailyRevenue: daily as Record<string, unknown> | null,
               revenueViews: revViews as Record<string, unknown> | null,
             };
-            console.log(`[dashboardFull] ${cid}: perf=${!!perf}, rev=${!!rev}, revViews=${!!revViews}`);
+            // Collect video analytics rows
+            const va = videoAnalytics as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;
+            if (va?.rows?.length && va.columnHeaders) {
+              if (allVideoAnalyticsHeaders.length === 0) {
+                allVideoAnalyticsHeaders.push(...va.columnHeaders);
+              }
+              allVideoAnalyticsRows.push(...va.rows);
+              const vidIdx = va.columnHeaders.findIndex((h) => h.name === "video");
+              if (vidIdx !== -1) {
+                for (const row of va.rows) {
+                  allVideoIds.push(String(row[vidIdx]));
+                }
+              }
+            }
+            console.log(`[dashboardFull] ${cid}: perf=${!!perf}, rev=${!!rev}, revViews=${!!revViews}, videos=${va?.rows?.length || 0}`);
           } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
             console.error(`[dashboardFull] ${cid} analytics failed:`, errMsg);
             perChannelErrors[cid] = errMsg;
           }
         }
+
+        // Fetch video details for top videos (up to 50)
+        let topVideoItems: unknown[] = [];
+        if (allVideoIds.length > 0) {
+          try {
+            const anyToken = Object.values(channelTokenMap)[0];
+            if (anyToken) {
+              const { google: g } = await import("googleapis");
+              const auth = new g.auth.OAuth2();
+              auth.setCredentials({ access_token: anyToken });
+              const yt = g.youtube({ version: "v3", auth });
+              const top50Ids = allVideoIds.slice(0, 50);
+              const vRes = await yt.videos.list({ part: ["snippet", "statistics", "contentDetails"], id: top50Ids });
+              topVideoItems = vRes.data.items || [];
+            }
+          } catch (vErr) {
+            console.warn("[dashboardFull] top video details fetch failed:", vErr instanceof Error ? vErr.message : vErr);
+          }
+        }
+        const topVideosByViews = {
+          analytics: allVideoAnalyticsRows.length > 0 ? { rows: allVideoAnalyticsRows, columnHeaders: allVideoAnalyticsHeaders } : null,
+          videos: topVideoItems,
+        };
 
         // Build per-channel revenue map
         const channelRevenueMap: Record<string, { revenue: number; views: number; rpm: number }> = {};
