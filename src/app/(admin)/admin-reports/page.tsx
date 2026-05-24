@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Shield,
   BarChart3,
   DollarSign,
   FileText,
   Download,
+  Loader2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { formatNumber } from "@/lib/utils";
+import { useExchangeRate } from "@/lib/hooks/useExchangeRate";
 
 interface Client {
   id: string;
@@ -19,16 +22,36 @@ interface Client {
   category: string;
 }
 
-const CLIENTS_KEY = "bainsla_admin_clients";
-
-function getClients(): Client[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(CLIENTS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
+function getMonthOptions() {
+  const months: { value: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleString("en-US", { month: "long", year: "numeric" });
+    months.push({ value: val, label });
   }
+  return months;
+}
+
+function getDateRangeForFilter(filter: string): { startDate: string; endDate: string } {
+  if (filter.match(/^\d{4}-\d{2}$/)) {
+    const [year, month] = filter.split("-").map(Number);
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const now = new Date();
+    const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === month;
+    const endDay = isCurrentMonth ? now.getDate() : lastDay;
+    const endDate = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+    return { startDate, endDate };
+  }
+  const numDays = parseInt(filter.replace("d", "")) || 28;
+  const endD = new Date();
+  const endDate = `${endD.getFullYear()}-${String(endD.getMonth()+1).padStart(2,"0")}-${String(endD.getDate()).padStart(2,"0")}`;
+  const startD = new Date();
+  startD.setDate(startD.getDate() - numDays);
+  const startDate = `${startD.getFullYear()}-${String(startD.getMonth()+1).padStart(2,"0")}-${String(startD.getDate()).padStart(2,"0")}`;
+  return { startDate, endDate };
 }
 
 export default function AdminReportsPage() {
@@ -36,6 +59,9 @@ export default function AdminReportsPage() {
   const router = useRouter();
   const [clients, setClients] = useState<Client[]>([]);
   const [dateRange, setDateRange] = useState("28d");
+  const [clientRevenueData, setClientRevenueData] = useState<Record<string, number>>({});
+  const [revenueLoading, setRevenueLoading] = useState(false);
+  const { rate: INR_RATE } = useExchangeRate("USD");
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -44,9 +70,51 @@ export default function AdminReportsPage() {
   }, [status, session, router]);
 
   useEffect(() => {
-    setClients(getClients());
-  }, []);
+    const fetchClients = async () => {
+      try {
+        const res = await fetch("/api/users?action=list");
+        if (res.ok) {
+          const json = await res.json();
+          setClients(json.data || []);
+        }
+      } catch { /* silent */ }
+    };
+    if (status === "authenticated") fetchClients();
+  }, [status]);
 
+  const monthOptions = useMemo(() => getMonthOptions(), []);
+
+  const fetchRevenue = useCallback(async () => {
+    const allChannelIds = clients.flatMap((c) => c.channels).filter(Boolean);
+    if (allChannelIds.length === 0) return;
+    setRevenueLoading(true);
+    try {
+      const { startDate, endDate } = getDateRangeForFilter(dateRange);
+      const res = await fetch(`/api/youtube?action=dashboardFull&channelIds=${encodeURIComponent(allChannelIds.join(","))}&startDate=${startDate}&endDate=${endDate}`);
+      if (res.ok) {
+        const json = await res.json();
+        const crMap = json.data?.channelRevenueMap || {};
+        // Map channel revenue to client
+        const clientRevMap: Record<string, number> = {};
+        for (const client of clients) {
+          let total = 0;
+          for (const chId of client.channels) {
+            const chRev = crMap[chId] as { revenue: number } | undefined;
+            total += chRev?.revenue || 0;
+          }
+          clientRevMap[client.id] = total;
+        }
+        setClientRevenueData(clientRevMap);
+      }
+    } catch { /* silent */ }
+    setRevenueLoading(false);
+  }, [clients, dateRange]);
+
+  useEffect(() => {
+    if (clients.length > 0) fetchRevenue();
+  }, [fetchRevenue, clients.length]);
+
+  const totalRevenue = Object.values(clientRevenueData).reduce((s, r) => s + r, 0);
   const totalChannels = clients.reduce((sum, c) => sum + c.channels.length, 0);
 
   return (
@@ -75,7 +143,13 @@ export default function AdminReportsPage() {
             <option value="28d">Last 28 days</option>
             <option value="90d">Last 90 days</option>
             <option value="365d">Last 365 days</option>
+            <optgroup label="By Month">
+              {monthOptions.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </optgroup>
           </select>
+          {revenueLoading && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
         </div>
       </div>
 
@@ -88,8 +162,8 @@ export default function AdminReportsPage() {
             </div>
             <div>
               <p className="text-xs text-muted">Total Revenue</p>
-              <p className="text-xl font-bold text-foreground">--</p>
-              <p className="text-xs text-muted">Connect YouTube Analytics</p>
+              <p className="text-xl font-bold text-foreground">${totalRevenue.toFixed(2)}</p>
+              <p className="text-xs text-muted">₹{formatNumber(Math.round(totalRevenue * INR_RATE))}</p>
             </div>
           </div>
         </div>
@@ -124,7 +198,7 @@ export default function AdminReportsPage() {
             </div>
             <div>
               <p className="text-xs text-muted">Avg Revenue/Channel</p>
-              <p className="text-xl font-bold text-foreground">--</p>
+              <p className="text-xl font-bold text-foreground">${totalChannels > 0 ? (totalRevenue / totalChannels).toFixed(2) : "0.00"}</p>
             </div>
           </div>
         </div>
@@ -147,7 +221,8 @@ export default function AdminReportsPage() {
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Category</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Channels</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Status</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Est. Revenue</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground">Revenue ($)</th>
+                <th className="text-right px-4 py-3 font-semibold text-foreground">Revenue (INR)</th>
               </tr>
             </thead>
             <tbody>
@@ -174,17 +249,30 @@ export default function AdminReportsPage() {
                       {client.status === "active" ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-muted">--</td>
+                  <td className="px-4 py-3 text-right font-medium text-green-700">${(clientRevenueData[client.id] || 0).toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-amber-700">₹{formatNumber(Math.round((clientRevenueData[client.id] || 0) * INR_RATE))}</td>
                 </tr>
               ))}
               {clients.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={6} className="px-4 py-12 text-center text-muted">
                     No clients found. Add clients first to see revenue data.
                   </td>
                 </tr>
               )}
             </tbody>
+            {clients.length > 0 && (
+              <tfoot>
+                <tr className="bg-slate-50 font-semibold border-t-2 border-border">
+                  <td className="px-4 py-3 text-foreground">Total</td>
+                  <td className="px-4 py-3"></td>
+                  <td className="px-4 py-3 text-foreground">{totalChannels}</td>
+                  <td className="px-4 py-3"></td>
+                  <td className="px-4 py-3 text-right text-green-700">${totalRevenue.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right text-amber-700">₹{formatNumber(Math.round(totalRevenue * INR_RATE))}</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>

@@ -139,7 +139,7 @@ export default function AdminDashboardPage() {
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, { status: string; channelTitle?: string; updatedAt?: string }>>({});
-  const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all">(7);
+  const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all" | string>(7);
   const { rate: INR_RATE } = useExchangeRate("USD");
 
   // Cached client data from KV (auto-saved when clients load their dashboards)
@@ -374,12 +374,15 @@ export default function AdminDashboardPage() {
 
     const sortedDates = Array.from(allFullDates).sort((a, b) => b.localeCompare(a));
     let filteredDates: string[];
-    if (dailyRevDays === 30) {
+    if (typeof dailyRevDays === "string" && dailyRevDays.match(/^\d{4}-\d{2}$/)) {
+      // Month filter like "2026-05"
+      filteredDates = sortedDates.filter((d) => d.startsWith(dailyRevDays as string));
+    } else if (dailyRevDays === 30) {
       filteredDates = sortedDates.filter((d) => d.startsWith(currentMonthPrefix));
     } else if (dailyRevDays === "all") {
       filteredDates = sortedDates;
     } else {
-      filteredDates = sortedDates.slice(0, dailyRevDays);
+      filteredDates = sortedDates.slice(0, typeof dailyRevDays === "number" ? dailyRevDays : 7);
     }
 
     const currentMonthName = now.toLocaleString("en-US", { month: "short", year: "numeric" });
@@ -824,8 +827,8 @@ export default function AdminDashboardPage() {
               <DollarSign className="w-5 h-5 text-amber-500" />
               <h2 className="text-lg font-semibold text-foreground">Per-Channel Daily Revenue</h2>
             </div>
-            <div className="flex items-center gap-1.5">
-              {([1, 3, 7, 30, "all"] as const).map((d) => (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([1, 3, 7, "all"] as const).map((d) => (
                 <button
                   key={d}
                   onClick={() => setDailyRevDays(d)}
@@ -835,9 +838,33 @@ export default function AdminDashboardPage() {
                       : "bg-slate-100 text-muted hover:bg-slate-200"
                   }`}
                 >
-                  {d === 1 ? "Latest" : d === 30 ? ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][new Date().getMonth()] : d === "all" ? "All" : `${d} Days`}
+                  {d === 1 ? "Latest" : d === "all" ? "All" : `${d} Days`}
                 </button>
               ))}
+              <span className="text-xs text-muted mx-0.5">|</span>
+              {(() => {
+                const months: { value: string; label: string }[] = [];
+                const now = new Date();
+                for (let i = 0; i < 6; i++) {
+                  const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                  const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+                  const label = d.toLocaleString("en-US", { month: "short" });
+                  months.push({ value: val, label });
+                }
+                return months.map((m) => (
+                  <button
+                    key={m.value}
+                    onClick={() => setDailyRevDays(m.value)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      dailyRevDays === m.value
+                        ? "bg-primary text-white"
+                        : "bg-slate-100 text-muted hover:bg-slate-200"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ));
+              })()}
             </div>
           </div>
           <div className="overflow-x-auto">
