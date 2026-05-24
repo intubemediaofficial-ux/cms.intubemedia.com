@@ -192,6 +192,13 @@ interface DuplicateGroup {
   sameCount: number;
 }
 
+interface ChannelDuplicateGroup {
+  channelId: string;
+  channelName: string;
+  groups: DuplicateGroup[];
+  totalDuplicates: number;
+}
+
 export default function VideosPage() {
   const { data: session, status: sessionStatus } = useSession();
   const isAuthenticated = sessionStatus === "authenticated";
@@ -423,43 +430,66 @@ export default function VideosPage() {
     return { total, copyrightClaims, contentIdClaims, monetized, noClaim: total - copyrightClaims - contentIdClaims };
   }, [filteredVideos, claims]);
 
-  // Duplicate video detection
-  const duplicateGroups = useMemo((): DuplicateGroup[] => {
+  // Duplicate video detection — channel-wise
+  const channelDuplicateGroups = useMemo((): ChannelDuplicateGroup[] => {
     if (!isReal || videos.length === 0) return [];
-    const titleMap = new Map<string, VideoItem[]>();
+    // Group videos by channel
+    const channelMap = new Map<string, { name: string; videos: VideoItem[] }>();
     for (const v of videos) {
-      const title = (v.snippet?.title || "").trim().toLowerCase();
-      if (!title) continue;
-      if (!titleMap.has(title)) titleMap.set(title, []);
-      titleMap.get(title)!.push(v);
+      const cid = v.snippet?.channelId || "unknown";
+      const cname = v.snippet?.channelTitle || cid;
+      if (!channelMap.has(cid)) channelMap.set(cid, { name: cname, videos: [] });
+      channelMap.get(cid)!.videos.push(v);
     }
-    const groups: DuplicateGroup[] = [];
-    for (const [title, vids] of titleMap) {
-      if (vids.length < 2) continue;
-      // Check for same duration (within 2 seconds)
-      const durationMap = new Map<number, VideoItem[]>();
-      for (const v of vids) {
-        const dur = parseDurationSeconds(v.contentDetails?.duration);
-        let found = false;
-        for (const [existDur, existVids] of durationMap) {
-          if (Math.abs(dur - existDur) <= 2) {
-            existVids.push(v);
-            found = true;
-            break;
-          }
-        }
-        if (!found) durationMap.set(dur, [v]);
+
+    const result: ChannelDuplicateGroup[] = [];
+    for (const [cid, { name, videos: chVids }] of channelMap) {
+      const titleMap = new Map<string, VideoItem[]>();
+      for (const v of chVids) {
+        const title = (v.snippet?.title || "").trim().toLowerCase();
+        if (!title) continue;
+        if (!titleMap.has(title)) titleMap.set(title, []);
+        titleMap.get(title)!.push(v);
       }
-      const sameDurCount = Array.from(durationMap.values()).filter((arr) => arr.length > 1).reduce((s, arr) => s + arr.length, 0);
-      groups.push({
-        title: vids[0].snippet?.title || title,
-        count: vids.length,
-        videos: vids,
-        sameCount: sameDurCount,
-      });
+      const groups: DuplicateGroup[] = [];
+      for (const [title, vids] of titleMap) {
+        if (vids.length < 2) continue;
+        const durationMap = new Map<number, VideoItem[]>();
+        for (const v of vids) {
+          const dur = parseDurationSeconds(v.contentDetails?.duration);
+          let found = false;
+          for (const [existDur, existVids] of durationMap) {
+            if (Math.abs(dur - existDur) <= 2) {
+              existVids.push(v);
+              found = true;
+              break;
+            }
+          }
+          if (!found) durationMap.set(dur, [v]);
+        }
+        const sameDurCount = Array.from(durationMap.values()).filter((arr) => arr.length > 1).reduce((s, arr) => s + arr.length, 0);
+        groups.push({
+          title: vids[0].snippet?.title || title,
+          count: vids.length,
+          videos: vids,
+          sameCount: sameDurCount,
+        });
+      }
+      if (groups.length > 0) {
+        result.push({
+          channelId: cid,
+          channelName: name,
+          groups: groups.sort((a, b) => b.count - a.count),
+          totalDuplicates: groups.reduce((s, g) => s + g.count, 0),
+        });
+      }
     }
-    return groups.sort((a, b) => b.count - a.count);
+    return result.sort((a, b) => b.totalDuplicates - a.totalDuplicates);
   }, [videos, isReal]);
+
+  const duplicateGroups = useMemo((): DuplicateGroup[] => {
+    return channelDuplicateGroups.flatMap((cg) => cg.groups);
+  }, [channelDuplicateGroups]);
 
   const handleExportCSV = () => {
     const headers = ["Video URL", "Video Title", "Channel", "Privacy", "Claim Status", "Claim Type", "Claimant / CMS", "Views", "Likes", "Comments", "Duration", "Published Date"];
@@ -796,41 +826,53 @@ export default function VideosPage() {
             </div>
           </div>
 
-          {/* Duplicate Detector */}
-          {duplicateGroups.length > 0 && (
+          {/* Duplicate Detector — Channel-wise */}
+          {channelDuplicateGroups.length > 0 && (
             <div className="bg-white rounded-xl border border-border p-5">
               <button
                 onClick={() => setShowDuplicates(!showDuplicates)}
                 className="flex items-center gap-2 text-sm font-semibold text-foreground hover:text-primary transition-colors"
               >
                 <Copy className="w-4 h-4 text-purple-500" />
-                Duplicate Videos Detected ({duplicateGroups.length} groups, {duplicateGroups.reduce((s, g) => s + g.count, 0)} videos)
+                Duplicate Videos Detected ({channelDuplicateGroups.length} channel{channelDuplicateGroups.length !== 1 ? "s" : ""}, {duplicateGroups.length} groups, {duplicateGroups.reduce((s, g) => s + g.count, 0)} videos)
                 <span className="text-xs text-muted font-normal ml-2">{showDuplicates ? "Hide" : "Show"}</span>
               </button>
               {showDuplicates && (
-                <div className="mt-4 space-y-3 max-h-[400px] overflow-y-auto">
-                  {duplicateGroups.map((group, idx) => (
-                    <div key={idx} className="border border-border rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-sm font-medium text-foreground truncate max-w-[70%]">&quot;{group.title}&quot;</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
-                            {group.count}x uploaded
-                          </span>
-                          {group.sameCount > 0 && (
-                            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
-                              {group.sameCount} same duration
-                            </span>
-                          )}
-                        </div>
+                <div className="mt-4 space-y-5 max-h-[500px] overflow-y-auto">
+                  {channelDuplicateGroups.map((chGroup) => (
+                    <div key={chGroup.channelId}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm font-bold text-foreground">{chGroup.channelName}</span>
+                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                          {chGroup.totalDuplicates} duplicate videos in {chGroup.groups.length} group{chGroup.groups.length !== 1 ? "s" : ""}
+                        </span>
                       </div>
-                      <div className="space-y-1">
-                        {group.videos.map((v) => (
-                          <div key={v.id} className="flex items-center gap-2 text-xs text-muted">
-                            <span className="truncate max-w-[200px]">{v.snippet?.channelTitle || v.snippet?.channelId}</span>
-                            <span>• {parseDuration(v.contentDetails?.duration)}</span>
-                            <span>• {v.status?.privacyStatus || "public"}</span>
-                            <span>• {formatNumber(Number(v.statistics?.viewCount || 0))} views</span>
+                      <div className="space-y-2 ml-2">
+                        {chGroup.groups.map((group, idx) => (
+                          <div key={idx} className="border border-border rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-sm font-medium text-foreground truncate max-w-[70%]">&quot;{group.title}&quot;</p>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                                  {group.count}x uploaded
+                                </span>
+                                {group.sameCount > 0 && (
+                                  <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                                    {group.sameCount} same duration
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              {group.videos.map((v) => (
+                                <div key={v.id} className="flex items-center gap-2 text-xs text-muted">
+                                  <span>• {parseDuration(v.contentDetails?.duration)}</span>
+                                  <span>• {v.status?.privacyStatus || "public"}</span>
+                                  <span>• {formatNumber(Number(v.statistics?.viewCount || 0))} views</span>
+                                  {v.snippet?.publishedAt && <span>• {new Date(v.snippet.publishedAt).toLocaleDateString()}</span>}
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>

@@ -170,7 +170,10 @@ export default function DashboardPage() {
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
-  const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30>(7);
+  const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all">(7);
+
+  // Channel detail modal month filter
+  const [channelModalPeriod, setChannelModalPeriod] = useState<string>("current");
 
   const [serverChannelIds, setServerChannelIds] = useState<string[]>([]);
 
@@ -368,7 +371,7 @@ export default function DashboardPage() {
     }
 
     const sortedDates = Array.from(allDates).sort((a, b) => b.localeCompare(a));
-    const daysToShow = dailyRevDays === 30 ? sortedDates.length : dailyRevDays;
+    const daysToShow = dailyRevDays === "all" || dailyRevDays === 30 ? sortedDates.length : dailyRevDays;
     const filteredDates = sortedDates.slice(0, daysToShow);
 
     const currentMonthName = now.toLocaleString("en-US", { month: "short", year: "numeric" });
@@ -379,23 +382,29 @@ export default function DashboardPage() {
   // Top videos
   const topVideos = isReal ? (dashData?.topVideos?.videos || []) : [];
   const topVideoAnalytics = dashData?.topVideos?.analytics;
-  const videoAnalyticsMap: Record<string, { views: number; likes: number; subs: number }> = {};
+  const videoAnalyticsMap: Record<string, { views: number; likes: number; subs: number; revenue: number }> = {};
   if (topVideoAnalytics?.rows && topVideoAnalytics.columnHeaders) {
     const headers = topVideoAnalytics.columnHeaders.map((h) => h.name || "");
     const videoIdx = headers.indexOf("video");
     const viewsIdx = headers.indexOf("views");
     const likesIdx = headers.indexOf("likes");
     const subsIdx = headers.indexOf("subscribersGained");
+    const revIdx = headers.indexOf("estimatedRevenue");
     for (const row of topVideoAnalytics.rows) {
       const videoId = String(row[videoIdx]);
       videoAnalyticsMap[videoId] = {
         views: viewsIdx !== -1 ? Number(row[viewsIdx]) || 0 : 0,
         likes: likesIdx !== -1 ? Number(row[likesIdx]) || 0 : 0,
         subs: subsIdx !== -1 ? Number(row[subsIdx]) || 0 : 0,
+        revenue: revIdx !== -1 ? Number(row[revIdx]) || 0 : 0,
       };
     }
   }
 
+  const videosSortedByRevenue = [...topVideos]
+    .map((v) => ({ ...v, analyticsRevenue: videoAnalyticsMap[v.id || ""]?.revenue || 0 }))
+    .sort((a, b) => b.analyticsRevenue - a.analyticsRevenue)
+    .slice(0, 5);
   const videosSortedByViews = [...topVideos]
     .map((v) => ({ ...v, analyticsViews: videoAnalyticsMap[v.id || ""]?.views || Number(v.statistics?.viewCount || 0) }))
     .sort((a, b) => b.analyticsViews - a.analyticsViews)
@@ -443,6 +452,10 @@ export default function DashboardPage() {
   const handleDateChange = (preset: string, range: DateRange) => {
     setDatePreset(preset);
     setDateRange(range);
+    // Auto-show all dates when month is selected
+    if (/^\d{4}-\d{2}$/.test(preset)) {
+      setDailyRevDays("all");
+    }
   };
 
   // Month-wise Revenue Excel Download
@@ -729,8 +742,8 @@ export default function DashboardPage() {
               />
               <MetricCard
                 title="Revenue (INR)"
-                value={`₹${(curEstRevenue * INR_RATE).toFixed(0)}`}
-                tooltip={`Estimated revenue in INR (1$ = ₹${INR_RATE})`}
+                value={`₹${formatNumber(Math.round(curEstRevenue * INR_RATE))}`}
+                tooltip={`Estimated revenue in INR (1 USD = ₹${INR_RATE}). Total: $${curEstRevenue.toFixed(2)} × ${INR_RATE}`}
                 color="#f59e0b"
               />
             </div>
@@ -790,7 +803,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-foreground text-sm">Per-Channel Daily Revenue</h3>
                 <div className="flex items-center gap-1.5">
-                  {([1, 3, 7, 30] as const).map((d) => (
+                  {([1, 3, 7, 30, "all"] as const).map((d) => (
                     <button
                       key={d}
                       onClick={() => setDailyRevDays(d)}
@@ -800,7 +813,7 @@ export default function DashboardPage() {
                           : "bg-slate-100 text-muted hover:bg-slate-200"
                       }`}
                     >
-                      {d === 1 ? "Latest" : d === 30 ? "Month" : `${d} Days`}
+                      {d === 1 ? "Latest" : d === 30 ? "Month" : d === "all" ? "All" : `${d} Days`}
                     </button>
                   ))}
                 </div>
@@ -815,6 +828,7 @@ export default function DashboardPage() {
                       ))}
                       <th className="text-right py-2 px-2 font-semibold text-amber-700 text-xs whitespace-nowrap">{perChannelDailyRevenue.currentMonthName}</th>
                       <th className="text-right py-2 pl-3 font-semibold text-foreground text-xs">Total</th>
+                      <th className="text-right py-2 pl-3 font-semibold text-amber-600 text-xs">INR</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -832,6 +846,7 @@ export default function DashboardPage() {
                             ${ch.monthTotal.toFixed(2)}
                           </td>
                           <td className="text-right py-2 pl-3 font-semibold text-foreground tabular-nums">${total.toFixed(2)}</td>
+                          <td className="text-right py-2 pl-3 font-semibold text-amber-600 tabular-nums">₹{formatNumber(Math.round(total * INR_RATE))}</td>
                         </tr>
                       );
                     })}
@@ -850,11 +865,21 @@ export default function DashboardPage() {
                       <td className="text-right py-2 px-2 font-bold text-amber-700 tabular-nums">
                         ${perChannelDailyRevenue.channels.reduce((s, ch) => s + ch.monthTotal, 0).toFixed(2)}
                       </td>
-                      <td className="text-right py-2 pl-3 font-bold text-primary tabular-nums">
-                        ${perChannelDailyRevenue.channels.reduce((s, ch) =>
+                      {(() => {
+                        const grandTotal = perChannelDailyRevenue.channels.reduce((s, ch) =>
                           s + perChannelDailyRevenue.dates.reduce((ss, d) => ss + (ch.dailyMap[d] || 0), 0), 0
-                        ).toFixed(2)}
-                      </td>
+                        );
+                        return (
+                          <>
+                            <td className="text-right py-2 pl-3 font-bold text-primary tabular-nums">
+                              ${grandTotal.toFixed(2)}
+                            </td>
+                            <td className="text-right py-2 pl-3 font-bold text-amber-600 tabular-nums">
+                              ₹{formatNumber(Math.round(grandTotal * INR_RATE))}
+                            </td>
+                          </>
+                        );
+                      })()}
                     </tr>
                   </tfoot>
                 </table>
@@ -916,30 +941,29 @@ export default function DashboardPage() {
           {/* ===== TOP 5 VIDEO LEADERBOARDS ===== */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* Top 5 by Revenue */}
-            {curEstRevenue > 0 && (
-              <div className="bg-white rounded-xl border border-border p-5">
-                <h3 className="font-semibold text-foreground text-sm mb-3 flex items-center gap-2">
-                  <span className="text-amber-500">$</span>
-                  Top 5 Videos by Revenue
-                </h3>
-                <div className="space-y-2">
-                  {videosSortedByViews.slice(0, 5).map((video, i) => {
-                    const thumbnail = video.snippet?.thumbnails?.default?.url || "";
-                    const revenue = videoAnalyticsMap[video.id || ""]?.views || 0;
-                    return (
-                      <div key={video.id || i} className="flex items-center gap-3 py-1.5">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-muted"}`}>
-                          {i + 1}
-                        </span>
-                        {thumbnail && <img src={thumbnail} alt="" className="w-8 h-8 rounded-full object-cover" />}
-                        <span className="flex-1 text-sm text-foreground truncate">{video.snippet?.title || "Untitled"}</span>
-                        <span className="text-sm font-semibold text-foreground">{formatNumber(revenue)} views</span>
-                      </div>
-                    );
-                  })}
-                </div>
+            <div className="bg-white rounded-xl border border-border p-5">
+              <h3 className="font-semibold text-foreground text-sm mb-3 flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-amber-500" />
+                Top 5 Videos by Revenue
+              </h3>
+              <div className="space-y-2">
+                {videosSortedByRevenue.length > 0 ? videosSortedByRevenue.map((video, i) => {
+                  const thumbnail = video.snippet?.thumbnails?.default?.url || "";
+                  return (
+                    <div key={video.id || i} className="flex items-center gap-3 py-1.5">
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-muted"}`}>
+                        {i + 1}
+                      </span>
+                      {thumbnail && <img src={thumbnail} alt="" className="w-8 h-8 rounded-full object-cover" />}
+                      <span className="flex-1 text-sm text-foreground truncate">{video.snippet?.title || "Untitled"}</span>
+                      <span className="text-sm font-semibold text-amber-600">{formatCurrency(video.analyticsRevenue)}</span>
+                    </div>
+                  );
+                }) : (
+                  <p className="text-xs text-muted py-4 text-center">No revenue data available</p>
+                )}
               </div>
-            )}
+            </div>
 
             {/* Top 5 by Views */}
             <div className="bg-white rounded-xl border border-border p-5">
@@ -948,7 +972,7 @@ export default function DashboardPage() {
                 Top 5 Videos by Views
               </h3>
               <div className="space-y-2">
-                {videosSortedByViews.slice(0, 5).map((video, i) => {
+                {videosSortedByViews.length > 0 ? videosSortedByViews.map((video, i) => {
                   const thumbnail = video.snippet?.thumbnails?.default?.url || "";
                   return (
                     <div key={video.id || i} className="flex items-center gap-3 py-1.5">
@@ -960,7 +984,9 @@ export default function DashboardPage() {
                       <span className="text-sm font-semibold text-foreground">{formatNumber(video.analyticsViews)}</span>
                     </div>
                   );
-                })}
+                }) : (
+                  <p className="text-xs text-muted py-4 text-center">No video data available</p>
+                )}
               </div>
             </div>
 
@@ -971,7 +997,7 @@ export default function DashboardPage() {
                 Top 5 Videos by Subscriber Gain
               </h3>
               <div className="space-y-2">
-                {videosSortedBySubs.slice(0, 5).map((video, i) => {
+                {videosSortedBySubs.length > 0 ? videosSortedBySubs.map((video, i) => {
                   const thumbnail = video.snippet?.thumbnails?.default?.url || "";
                   return (
                     <div key={video.id || i} className="flex items-center gap-3 py-1.5">
@@ -983,7 +1009,9 @@ export default function DashboardPage() {
                       <span className="text-sm font-semibold text-foreground">{formatNumber(video.analyticsSubs)}</span>
                     </div>
                   );
-                })}
+                }) : (
+                  <p className="text-xs text-muted py-4 text-center">No subscriber data available</p>
+                )}
               </div>
             </div>
           </div>
@@ -1126,65 +1154,163 @@ export default function DashboardPage() {
       )}
 
       {/* Channel Detail Modal */}
-      {selectedChannel && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between p-5 border-b border-border">
-              <h2 className="text-lg font-semibold text-foreground">Channel Analysis</h2>
-              <button onClick={() => setSelectedChannel(null)} className="p-1 hover:bg-slate-100 rounded-lg">
-                <X className="w-5 h-5 text-muted" />
-              </button>
-            </div>
-            <div className="p-5">
-              <div className="flex items-center gap-3 mb-5">
-                {selectedChannel.snippet?.thumbnails?.default?.url && (
-                  <img src={selectedChannel.snippet.thumbnails.default.url} alt="" className="w-12 h-12 rounded-full object-cover" referrerPolicy="no-referrer" />
+      {selectedChannel && (() => {
+        const chId = selectedChannel.id || "";
+        const chPca = perChannelAnalytics[chId];
+        const chDailyData = chPca ? getDailyRevenueChartData(chPca.dailyRevenue) : [];
+        const chRevInfo = channelRevenueMap[chId];
+
+        // Compute per-month revenue from daily data
+        const monthlyRevMap: Record<string, number> = {};
+        for (const d of chDailyData) {
+          if (d.fullDate) {
+            const monthKey = d.fullDate.slice(0, 7); // "YYYY-MM"
+            monthlyRevMap[monthKey] = (monthlyRevMap[monthKey] || 0) + d.revenue;
+          }
+        }
+        const sortedMonths = Object.keys(monthlyRevMap).sort((a, b) => b.localeCompare(a));
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+        // Compute revenue for selected period
+        let modalRevenue = chRevInfo?.revenue || 0;
+        let modalLabel = dateRange.label;
+        if (channelModalPeriod !== "current" && channelModalPeriod.match(/^\d{4}-\d{2}$/)) {
+          modalRevenue = monthlyRevMap[channelModalPeriod] || 0;
+          const [y, m] = channelModalPeriod.split("-").map(Number);
+          modalLabel = `${monthNames[m - 1]} ${y}`;
+        } else if (channelModalPeriod === "28d") {
+          // Sum last 28 days from daily data
+          const last28 = chDailyData.slice(-28);
+          modalRevenue = last28.reduce((s, d) => s + d.revenue, 0);
+          modalLabel = "Last 28 Days";
+        } else if (channelModalPeriod === "3m") {
+          // Sum last 3 months
+          const now = new Date();
+          const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+          const prefix = `${threeMonthsAgo.getFullYear()}-${String(threeMonthsAgo.getMonth() + 1).padStart(2, "0")}`;
+          modalRevenue = chDailyData.filter((d) => d.fullDate && d.fullDate >= prefix).reduce((s, d) => s + d.revenue, 0);
+          modalLabel = "Last 3 Months";
+        }
+        const modalRPM = chRevInfo && chRevInfo.views > 0 ? (modalRevenue / chRevInfo.views) * 1000 : 0;
+
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between p-5 border-b border-border">
+                <h2 className="text-lg font-semibold text-foreground">Channel Analysis</h2>
+                <button onClick={() => { setSelectedChannel(null); setChannelModalPeriod("current"); }} className="p-1 hover:bg-slate-100 rounded-lg">
+                  <X className="w-5 h-5 text-muted" />
+                </button>
+              </div>
+              <div className="p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  {selectedChannel.snippet?.thumbnails?.default?.url && (
+                    <img src={selectedChannel.snippet.thumbnails.default.url} alt="" className="w-12 h-12 rounded-full object-cover" referrerPolicy="no-referrer" />
+                  )}
+                  <div>
+                    <h3 className="font-semibold text-foreground">{selectedChannel.snippet?.title || "Unknown"}</h3>
+                    <p className="text-xs text-muted">{chId}</p>
+                  </div>
+                </div>
+
+                {/* Period filter */}
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  <button
+                    onClick={() => setChannelModalPeriod("current")}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${channelModalPeriod === "current" ? "bg-primary text-white" : "bg-slate-100 text-muted hover:bg-slate-200"}`}
+                  >
+                    {dateRange.label}
+                  </button>
+                  <button
+                    onClick={() => setChannelModalPeriod("28d")}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${channelModalPeriod === "28d" ? "bg-primary text-white" : "bg-slate-100 text-muted hover:bg-slate-200"}`}
+                  >
+                    28 Days
+                  </button>
+                  <button
+                    onClick={() => setChannelModalPeriod("3m")}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${channelModalPeriod === "3m" ? "bg-primary text-white" : "bg-slate-100 text-muted hover:bg-slate-200"}`}
+                  >
+                    3 Months
+                  </button>
+                  {sortedMonths.slice(0, 6).map((mk) => {
+                    const [y, m] = mk.split("-").map(Number);
+                    return (
+                      <button
+                        key={mk}
+                        onClick={() => setChannelModalPeriod(mk)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${channelModalPeriod === mk ? "bg-primary text-white" : "bg-slate-100 text-muted hover:bg-slate-200"}`}
+                      >
+                        {monthNames[m - 1]} {y}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-xs text-muted mb-1">Subscribers</p>
+                    <p className="text-lg font-bold text-foreground">{formatNumber(Number(selectedChannel.statistics?.subscriberCount || 0))}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-xs text-muted mb-1">Total Views</p>
+                    <p className="text-lg font-bold text-foreground">{formatNumber(Number(selectedChannel.statistics?.viewCount || 0))}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-xs text-muted mb-1">Videos</p>
+                    <p className="text-lg font-bold text-foreground">{formatNumber(Number(selectedChannel.statistics?.videoCount || 0))}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-xs text-muted mb-1">Revenue ({modalLabel})</p>
+                    <p className="text-lg font-bold text-amber-600">{formatCurrency(modalRevenue)}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-xs text-muted mb-1">RPM</p>
+                    <p className="text-lg font-bold text-purple-600">{formatCurrency(channelModalPeriod === "current" ? (chRevInfo?.rpm || 0) : modalRPM)}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-xs text-muted mb-1">Revenue (INR)</p>
+                    <p className="text-lg font-bold text-amber-600">₹{formatNumber(Math.round(modalRevenue * INR_RATE))}</p>
+                  </div>
+                </div>
+
+                {/* Monthly Revenue Breakdown */}
+                {sortedMonths.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <h4 className="text-xs font-semibold text-muted mb-2">Monthly Revenue</h4>
+                    <div className="space-y-1.5">
+                      {sortedMonths.map((mk) => {
+                        const [y, m] = mk.split("-").map(Number);
+                        const rev = monthlyRevMap[mk] || 0;
+                        return (
+                          <div key={mk} className="flex items-center justify-between text-sm">
+                            <span className="text-foreground">{monthNames[m - 1]} {y}</span>
+                            <div className="flex items-center gap-3">
+                              <span className="font-semibold text-amber-600">{formatCurrency(rev)}</span>
+                              <span className="text-xs text-muted">₹{formatNumber(Math.round(rev * INR_RATE))}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
-                <div>
-                  <h3 className="font-semibold text-foreground">{selectedChannel.snippet?.title || "Unknown"}</h3>
-                  <p className="text-xs text-muted">{selectedChannel.id}</p>
+
+                <div className="mt-4 pt-4 border-t border-border">
+                  <a
+                    href={`https://www.youtube.com/channel/${chId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    View on YouTube →
+                  </a>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-xs text-muted mb-1">Subscribers</p>
-                  <p className="text-lg font-bold text-foreground">{formatNumber(Number(selectedChannel.statistics?.subscriberCount || 0))}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-xs text-muted mb-1">Total Views</p>
-                  <p className="text-lg font-bold text-foreground">{formatNumber(Number(selectedChannel.statistics?.viewCount || 0))}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-xs text-muted mb-1">Videos</p>
-                  <p className="text-lg font-bold text-foreground">{formatNumber(Number(selectedChannel.statistics?.videoCount || 0))}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-xs text-muted mb-1">Revenue ({dateRange.label})</p>
-                  <p className="text-lg font-bold text-amber-600">{formatCurrency(channelRevenueMap[selectedChannel.id || ""]?.revenue || 0)}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-xs text-muted mb-1">RPM</p>
-                  <p className="text-lg font-bold text-purple-600">{formatCurrency(channelRevenueMap[selectedChannel.id || ""]?.rpm || 0)}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-xs text-muted mb-1">Revenue (INR)</p>
-                  <p className="text-lg font-bold text-amber-600">₹{((channelRevenueMap[selectedChannel.id || ""]?.revenue || 0) * INR_RATE).toFixed(0)}</p>
-                </div>
-              </div>
-              <div className="mt-4 pt-4 border-t border-border">
-                <a
-                  href={`https://www.youtube.com/channel/${selectedChannel.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:underline"
-                >
-                  View on YouTube →
-                </a>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
