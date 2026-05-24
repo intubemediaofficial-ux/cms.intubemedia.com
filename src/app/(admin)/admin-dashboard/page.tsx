@@ -343,8 +343,7 @@ export default function AdminDashboardPage() {
     }
 
     const result: { channelId: string; channelName: string; clientName: string; dailyMap: Record<string, number>; monthTotal: number }[] = [];
-    const allDates = new Set<string>();
-    const dateToFullDate = new Map<string, string>();
+    const allFullDates = new Set<string>();
 
     const now = new Date();
     const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -354,9 +353,9 @@ export default function AdminDashboardPage() {
       const dailyMap: Record<string, number> = {};
       let monthTotal = 0;
       for (const d of daily) {
-        dailyMap[d.date] = d.revenue;
-        allDates.add(d.date);
-        if (d.fullDate) dateToFullDate.set(d.date, d.fullDate);
+        const key = d.fullDate || d.date;
+        dailyMap[key] = d.revenue;
+        allFullDates.add(key);
         if (d.fullDate && d.fullDate.startsWith(currentMonthPrefix)) {
           monthTotal += d.revenue;
         }
@@ -371,13 +370,10 @@ export default function AdminDashboardPage() {
       });
     }
 
-    const sortedDates = Array.from(allDates).sort((a, b) => b.localeCompare(a));
+    const sortedDates = Array.from(allFullDates).sort((a, b) => b.localeCompare(a));
     let filteredDates: string[];
     if (dailyRevDays === 30) {
-      filteredDates = sortedDates.filter((d) => {
-        const fd = dateToFullDate.get(d);
-        return fd ? fd.startsWith(currentMonthPrefix) : false;
-      });
+      filteredDates = sortedDates.filter((d) => d.startsWith(currentMonthPrefix));
     } else if (dailyRevDays === "all") {
       filteredDates = sortedDates;
     } else {
@@ -849,7 +845,7 @@ export default function AdminDashboardPage() {
                   <th className="text-left py-2 pr-3 font-medium text-muted text-xs">Channel</th>
                   <th className="text-left py-2 pr-3 font-medium text-muted text-xs">Client</th>
                   {perChannelDailyRevenue.dates.map((date) => (
-                    <th key={date} className="text-right py-2 px-2 font-medium text-muted text-xs whitespace-nowrap">{date}</th>
+                    <th key={date} className="text-right py-2 px-2 font-medium text-muted text-xs whitespace-nowrap">{date.length > 5 ? date.slice(5) : date}</th>
                   ))}
                   <th className="text-right py-2 px-2 font-semibold text-amber-700 text-xs whitespace-nowrap">{perChannelDailyRevenue.currentMonthName}</th>
                   <th className="text-right py-2 pl-3 font-semibold text-foreground text-xs">Total</th>

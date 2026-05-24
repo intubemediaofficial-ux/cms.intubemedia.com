@@ -325,13 +325,19 @@ export default function DashboardPage() {
   let dailyRevenueData = adminDailyData;
   if (perChannelDailyDataArrays.length > 0) {
     const dailyMap: Record<string, number> = {};
-    for (const d of adminDailyData) dailyMap[d.date] = (dailyMap[d.date] || 0) + d.revenue;
+    for (const d of adminDailyData) {
+      const key = d.fullDate || d.date;
+      dailyMap[key] = (dailyMap[key] || 0) + d.revenue;
+    }
     for (const arr of perChannelDailyDataArrays) {
-      for (const d of arr) dailyMap[d.date] = (dailyMap[d.date] || 0) + d.revenue;
+      for (const d of arr) {
+        const key = d.fullDate || d.date;
+        dailyMap[key] = (dailyMap[key] || 0) + d.revenue;
+      }
     }
     dailyRevenueData = Object.entries(dailyMap)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, revenue]) => ({ date, fullDate: "", revenue: Math.round(revenue * 100) / 100 }));
+      .map(([fullDate, revenue]) => ({ date: fullDate.length > 5 ? fullDate.slice(5) : fullDate, fullDate, revenue: Math.round(revenue * 100) / 100 }));
   }
 
   const avgDailyRevenue = dailyRevenueData.length > 0
@@ -348,8 +354,7 @@ export default function DashboardPage() {
     }
 
     const result: { channelId: string; channelName: string; dailyMap: Record<string, number>; monthTotal: number }[] = [];
-    const allDates = new Set<string>();
-    const dateToFullDate = new Map<string, string>();
+    const allFullDates = new Set<string>();
 
     // Get current month prefix for filtering
     const now = new Date();
@@ -360,9 +365,9 @@ export default function DashboardPage() {
       const dailyMap: Record<string, number> = {};
       let monthTotal = 0;
       for (const d of daily) {
-        dailyMap[d.date] = d.revenue;
-        allDates.add(d.date);
-        if (d.fullDate) dateToFullDate.set(d.date, d.fullDate);
+        const key = d.fullDate || d.date;
+        dailyMap[key] = d.revenue;
+        allFullDates.add(key);
         if (d.fullDate && d.fullDate.startsWith(currentMonthPrefix)) {
           monthTotal += d.revenue;
         }
@@ -375,14 +380,10 @@ export default function DashboardPage() {
       });
     }
 
-    const sortedDates = Array.from(allDates).sort((a, b) => b.localeCompare(a));
+    const sortedDates = Array.from(allFullDates).sort((a, b) => b.localeCompare(a));
     let filteredDates: string[];
     if (dailyRevDays === 30) {
-      // Show only current month dates (not 28 days)
-      filteredDates = sortedDates.filter((d) => {
-        const fd = dateToFullDate.get(d);
-        return fd ? fd.startsWith(currentMonthPrefix) : false;
-      });
+      filteredDates = sortedDates.filter((d) => d.startsWith(currentMonthPrefix));
     } else if (dailyRevDays === "all") {
       filteredDates = sortedDates;
     } else {
@@ -476,14 +477,14 @@ export default function DashboardPage() {
 
   // Month-wise Revenue Excel Download
   const handleMonthRevenueExcel = () => {
-    const headers = ["Channel Name", "Channel ID (UC Link)", "Revenue ($)", `Revenue (INR @ ${INR_RATE})`];
+    const headers = ["Channel Name", "Channel Link", "Revenue ($)", `Revenue (INR @ ${INR_RATE})`];
     const rows: string[][] = [];
     for (const ch of channels) {
       const revInfo = channelRevenueMap[ch.id || ""];
       const revenue = revInfo?.revenue || 0;
       rows.push([
         `"${(ch.snippet?.title || "Unknown").replace(/"/g, '""')}"`,
-        ch.id || "",
+        `https://www.youtube.com/channel/${ch.id || ""}`,
         revenue.toFixed(2),
         (revenue * INR_RATE).toFixed(2),
       ]);
@@ -853,7 +854,7 @@ export default function DashboardPage() {
                     <tr className="border-b border-border">
                       <th className="text-left py-2 pr-4 font-medium text-muted text-xs">Channel</th>
                       {perChannelDailyRevenue.dates.map((date) => (
-                        <th key={date} className="text-right py-2 px-2 font-medium text-muted text-xs whitespace-nowrap">{date}</th>
+                        <th key={date} className="text-right py-2 px-2 font-medium text-muted text-xs whitespace-nowrap">{date.length > 5 ? date.slice(5) : date}</th>
                       ))}
                       <th className="text-right py-2 px-2 font-semibold text-amber-700 text-xs whitespace-nowrap">{perChannelDailyRevenue.currentMonthName}</th>
                       <th className="text-right py-2 pl-3 font-semibold text-foreground text-xs">Total</th>
@@ -926,7 +927,7 @@ export default function DashboardPage() {
               </div>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dailyRevenueData}>
+                  <LineChart data={dailyRevenueData.filter((d) => { const fd = d.fullDate || ""; return fd >= dateRange.startDate && fd <= dateRange.endDate; })}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis
                       dataKey="date"
