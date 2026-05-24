@@ -412,7 +412,7 @@ export async function getTopVideos(
     ids: "channel==MINE",
     startDate,
     endDate,
-    metrics: "views,likes,estimatedMinutesWatched,subscribersGained",
+    metrics: "views,likes,estimatedMinutesWatched,subscribersGained,estimatedRevenue",
     dimensions: "video",
     sort: "-views",
     maxResults: 10,
