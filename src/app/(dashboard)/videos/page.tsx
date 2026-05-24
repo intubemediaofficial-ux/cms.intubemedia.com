@@ -233,6 +233,9 @@ export default function VideosPage() {
 
   // Duplicate detector
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [selectedDupVideos, setSelectedDupVideos] = useState<Set<string>>(new Set());
+  const [dupPrivacyFilter, setDupPrivacyFilter] = useState<string>("all");
+  const [dupDeleting, setDupDeleting] = useState(false);
 
   useEffect(() => {
     setActiveChannelIds(getActiveChannelIds());
@@ -687,6 +690,44 @@ export default function VideosPage() {
     }
   };
 
+  const handleDupBulkDelete = async () => {
+    if (selectedDupVideos.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedDupVideos.size} duplicate video(s)? This cannot be undone.`)) return;
+    setDupDeleting(true);
+    setBulkResult(null);
+    const videosToDelete = videos
+      .filter((v) => v.id && selectedDupVideos.has(v.id))
+      .map((v) => ({ videoId: v.id!, channelId: v.snippet?.channelId || "" }));
+    try {
+      const res = await fetch("/api/youtube/video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bulkDelete", videos: videosToDelete }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const successIds = new Set(data.data.results.filter((r: { success: boolean }) => r.success).map((r: { videoId: string }) => r.videoId));
+        setVideos(videos.filter((v) => !successIds.has(v.id!)));
+        setBulkResult(`${data.data.successCount}/${data.data.totalCount} duplicate videos deleted`);
+        setSelectedDupVideos(new Set());
+      } else {
+        setBulkResult(data.error || "Bulk delete failed");
+      }
+    } catch {
+      setBulkResult("Network error during bulk delete");
+    } finally {
+      setDupDeleting(false);
+    }
+  };
+
+  const toggleDupSelect = (videoId: string) => {
+    setSelectedDupVideos((prev) => {
+      const next = new Set(prev);
+      if (next.has(videoId)) next.delete(videoId); else next.add(videoId);
+      return next;
+    });
+  };
+
   const getPrivacyIcon = (privacy: string) => {
     switch (privacy) {
       case "public": return <Globe className="w-3.5 h-3.5" />;
@@ -829,55 +870,116 @@ export default function VideosPage() {
           {/* Duplicate Detector — Channel-wise */}
           {channelDuplicateGroups.length > 0 && (
             <div className="bg-white rounded-xl border border-border p-5">
-              <button
-                onClick={() => setShowDuplicates(!showDuplicates)}
-                className="flex items-center gap-2 text-sm font-semibold text-foreground hover:text-primary transition-colors"
-              >
-                <Copy className="w-4 h-4 text-purple-500" />
-                Duplicate Videos Detected ({channelDuplicateGroups.length} channel{channelDuplicateGroups.length !== 1 ? "s" : ""}, {duplicateGroups.length} groups, {duplicateGroups.reduce((s, g) => s + g.count, 0)} videos)
-                <span className="text-xs text-muted font-normal ml-2">{showDuplicates ? "Hide" : "Show"}</span>
-              </button>
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setShowDuplicates(!showDuplicates)}
+                  className="flex items-center gap-2 text-sm font-semibold text-foreground hover:text-primary transition-colors"
+                >
+                  <Copy className="w-4 h-4 text-purple-500" />
+                  Duplicate Videos ({channelDuplicateGroups.length} channel{channelDuplicateGroups.length !== 1 ? "s" : ""}, {duplicateGroups.reduce((s, g) => s + g.count, 0)} videos)
+                  <span className="text-xs text-muted font-normal ml-2">{showDuplicates ? "Hide" : "Show"}</span>
+                </button>
+                {showDuplicates && (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={dupPrivacyFilter}
+                      onChange={(e) => setDupPrivacyFilter(e.target.value)}
+                      className="border border-border rounded-lg px-2 py-1 text-xs"
+                    >
+                      <option value="all">All Privacy</option>
+                      <option value="public">Public</option>
+                      <option value="private">Private</option>
+                      <option value="unlisted">Unlisted</option>
+                    </select>
+                    {selectedDupVideos.size > 0 && (
+                      <button
+                        onClick={handleDupBulkDelete}
+                        disabled={dupDeleting}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {dupDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        Delete {selectedDupVideos.size} Selected
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               {showDuplicates && (
-                <div className="mt-4 space-y-5 max-h-[500px] overflow-y-auto">
-                  {channelDuplicateGroups.map((chGroup) => (
-                    <div key={chGroup.channelId}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-bold text-foreground">{chGroup.channelName}</span>
-                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
-                          {chGroup.totalDuplicates} duplicate videos in {chGroup.groups.length} group{chGroup.groups.length !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-                      <div className="space-y-2 ml-2">
-                        {chGroup.groups.map((group, idx) => (
-                          <div key={idx} className="border border-border rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-sm font-medium text-foreground truncate max-w-[70%]">&quot;{group.title}&quot;</p>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
-                                  {group.count}x uploaded
-                                </span>
-                                {group.sameCount > 0 && (
-                                  <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
-                                    {group.sameCount} same duration
+                <div className="mt-4 space-y-5 max-h-[600px] overflow-y-auto">
+                  {channelDuplicateGroups.map((chGroup) => {
+                    const filteredGroups = chGroup.groups.map((g) => ({
+                      ...g,
+                      videos: dupPrivacyFilter === "all" ? g.videos : g.videos.filter((v) => (v.status?.privacyStatus || "public") === dupPrivacyFilter),
+                    })).filter((g) => g.videos.length > 0);
+                    if (filteredGroups.length === 0) return null;
+                    return (
+                      <div key={chGroup.channelId}>
+                        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border">
+                          <span className="text-sm font-bold text-foreground">{chGroup.channelName}</span>
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                            {filteredGroups.reduce((s, g) => s + g.videos.length, 0)} videos in {filteredGroups.length} group{filteredGroups.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <div className="space-y-2 ml-2">
+                          {filteredGroups.map((group, idx) => (
+                            <div key={idx} className="border border-border rounded-lg p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-sm font-medium text-foreground truncate max-w-[60%]">&quot;{group.title}&quot;</p>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                                    {group.videos.length}x
                                   </span>
-                                )}
+                                  {group.sameCount > 0 && (
+                                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                                      {group.sameCount} same duration
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="space-y-1.5">
+                                {group.videos.map((v) => (
+                                  <div key={v.id} className="flex items-center gap-2 text-xs">
+                                    <button
+                                      onClick={() => v.id && toggleDupSelect(v.id)}
+                                      className="p-0.5 hover:bg-slate-100 rounded shrink-0"
+                                    >
+                                      {v.id && selectedDupVideos.has(v.id) ? (
+                                        <CheckSquare className="w-3.5 h-3.5 text-primary" />
+                                      ) : (
+                                        <Square className="w-3.5 h-3.5 text-muted" />
+                                      )}
+                                    </button>
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${getPrivacyColor(v.status?.privacyStatus || "public")}`}>
+                                      {v.status?.privacyStatus || "public"}
+                                    </span>
+                                    <span className="text-muted">{parseDuration(v.contentDetails?.duration)}</span>
+                                    <span className="text-muted">{formatNumber(Number(v.statistics?.viewCount || 0))} views</span>
+                                    {v.snippet?.publishedAt && <span className="text-muted">{new Date(v.snippet.publishedAt).toLocaleDateString()}</span>}
+                                    <a
+                                      href={`https://studio.youtube.com/video/${v.id}/edit`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:underline ml-auto shrink-0"
+                                    >
+                                      Edit
+                                    </a>
+                                    <a
+                                      href={`https://www.youtube.com/watch?v=${v.id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-500 hover:underline shrink-0"
+                                    >
+                                      Watch
+                                    </a>
+                                  </div>
+                                ))}
                               </div>
                             </div>
-                            <div className="space-y-1">
-                              {group.videos.map((v) => (
-                                <div key={v.id} className="flex items-center gap-2 text-xs text-muted">
-                                  <span>• {parseDuration(v.contentDetails?.duration)}</span>
-                                  <span>• {v.status?.privacyStatus || "public"}</span>
-                                  <span>• {formatNumber(Number(v.statistics?.viewCount || 0))} views</span>
-                                  {v.snippet?.publishedAt && <span>• {new Date(v.snippet.publishedAt).toLocaleDateString()}</span>}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

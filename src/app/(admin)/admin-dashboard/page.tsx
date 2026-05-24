@@ -114,6 +114,7 @@ function getDailyRevenueChartData(data: AnalyticsResponse | null | undefined) {
   if (dayIdx === -1 || revIdx === -1) return [];
   return data.rows.map((row) => ({
     date: String(row[dayIdx]).slice(5),
+    fullDate: String(row[dayIdx]),
     revenue: Math.round((Number(row[revIdx]) || 0) * 100) / 100,
   }));
 }
@@ -137,7 +138,7 @@ export default function AdminDashboardPage() {
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, { status: string; channelTitle?: string; updatedAt?: string }>>({});
-  const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7>(7);
+  const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all">(7);
 
   // Cached client data from KV (auto-saved when clients load their dashboards)
   interface CachedChannelData {
@@ -341,15 +342,24 @@ export default function AdminDashboardPage() {
       if (ch.id) channelNameMap[ch.id] = ch.snippet?.title || ch.id;
     }
 
-    const result: { channelId: string; channelName: string; clientName: string; dailyMap: Record<string, number> }[] = [];
+    const result: { channelId: string; channelName: string; clientName: string; dailyMap: Record<string, number>; monthTotal: number }[] = [];
     const allDates = new Set<string>();
+    const dateToFullDate = new Map<string, string>();
+
+    const now = new Date();
+    const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
     for (const [cid, pca] of Object.entries(perChannel)) {
       const daily = getDailyRevenueChartData(pca.dailyRevenue);
       const dailyMap: Record<string, number> = {};
+      let monthTotal = 0;
       for (const d of daily) {
         dailyMap[d.date] = d.revenue;
         allDates.add(d.date);
+        if (d.fullDate) dateToFullDate.set(d.date, d.fullDate);
+        if (d.fullDate && d.fullDate.startsWith(currentMonthPrefix)) {
+          monthTotal += d.revenue;
+        }
       }
       const client = clients.find((c) => c.channels.includes(cid));
       result.push({
@@ -357,13 +367,26 @@ export default function AdminDashboardPage() {
         channelName: channelNameMap[cid] || cid,
         clientName: client?.name || "-",
         dailyMap,
+        monthTotal,
       });
     }
 
     const sortedDates = Array.from(allDates).sort((a, b) => b.localeCompare(a));
-    const filteredDates = sortedDates.slice(0, dailyRevDays);
+    let filteredDates: string[];
+    if (dailyRevDays === 30) {
+      filteredDates = sortedDates.filter((d) => {
+        const fd = dateToFullDate.get(d);
+        return fd ? fd.startsWith(currentMonthPrefix) : false;
+      });
+    } else if (dailyRevDays === "all") {
+      filteredDates = sortedDates;
+    } else {
+      filteredDates = sortedDates.slice(0, dailyRevDays);
+    }
 
-    return { channels: result, dates: filteredDates };
+    const currentMonthName = now.toLocaleString("en-US", { month: "short", year: "numeric" });
+
+    return { channels: result, dates: filteredDates, currentMonthName };
   }, [dashData, dailyRevDays, clients]);
 
   const stats = useMemo(() => {
@@ -804,7 +827,7 @@ export default function AdminDashboardPage() {
               <h2 className="text-lg font-semibold text-foreground">Per-Channel Daily Revenue</h2>
             </div>
             <div className="flex items-center gap-1.5">
-              {([1, 3, 7] as const).map((d) => (
+              {([1, 3, 7, 30, "all"] as const).map((d) => (
                 <button
                   key={d}
                   onClick={() => setDailyRevDays(d)}
@@ -814,7 +837,7 @@ export default function AdminDashboardPage() {
                       : "bg-slate-100 text-muted hover:bg-slate-200"
                   }`}
                 >
-                  {d === 1 ? "Latest" : `${d} Days`}
+                  {d === 1 ? "Latest" : d === 30 ? ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][new Date().getMonth()] : d === "all" ? "All" : `${d} Days`}
                 </button>
               ))}
             </div>
@@ -828,7 +851,9 @@ export default function AdminDashboardPage() {
                   {perChannelDailyRevenue.dates.map((date) => (
                     <th key={date} className="text-right py-2 px-2 font-medium text-muted text-xs whitespace-nowrap">{date}</th>
                   ))}
+                  <th className="text-right py-2 px-2 font-semibold text-amber-700 text-xs whitespace-nowrap">{perChannelDailyRevenue.currentMonthName}</th>
                   <th className="text-right py-2 pl-3 font-semibold text-foreground text-xs">Total</th>
+                  <th className="text-right py-2 pl-3 font-semibold text-amber-600 text-xs">INR</th>
                 </tr>
               </thead>
               <tbody>
@@ -843,7 +868,9 @@ export default function AdminDashboardPage() {
                           ${(ch.dailyMap[date] || 0).toFixed(2)}
                         </td>
                       ))}
+                      <td className="text-right py-2 px-2 font-semibold text-amber-700 tabular-nums">${ch.monthTotal.toFixed(2)}</td>
                       <td className="text-right py-2 pl-3 font-semibold text-foreground tabular-nums">${total.toFixed(2)}</td>
+                      <td className="text-right py-2 pl-3 font-semibold text-amber-600 tabular-nums">₹{formatNumber(Math.round(total * 83.5))}</td>
                     </tr>
                   );
                 })}
@@ -859,11 +886,20 @@ export default function AdminDashboardPage() {
                       </td>
                     );
                   })}
-                  <td className="text-right py-2 pl-3 font-bold text-primary tabular-nums">
-                    ${perChannelDailyRevenue.channels.reduce((s, ch) =>
-                      s + perChannelDailyRevenue.dates.reduce((ss, d) => ss + (ch.dailyMap[d] || 0), 0), 0
-                    ).toFixed(2)}
+                  <td className="text-right py-2 px-2 font-bold text-amber-700 tabular-nums">
+                    ${perChannelDailyRevenue.channels.reduce((s, ch) => s + ch.monthTotal, 0).toFixed(2)}
                   </td>
+                  {(() => {
+                    const grandTotal = perChannelDailyRevenue.channels.reduce((s, ch) =>
+                      s + perChannelDailyRevenue.dates.reduce((ss, d) => ss + (ch.dailyMap[d] || 0), 0), 0
+                    );
+                    return (
+                      <>
+                        <td className="text-right py-2 pl-3 font-bold text-primary tabular-nums">${grandTotal.toFixed(2)}</td>
+                        <td className="text-right py-2 pl-3 font-bold text-amber-600 tabular-nums">₹{formatNumber(Math.round(grandTotal * 83.5))}</td>
+                      </>
+                    );
+                  })()}
                 </tr>
               </tfoot>
             </table>
