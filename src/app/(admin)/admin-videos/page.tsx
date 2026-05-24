@@ -683,20 +683,64 @@ export default function AdminVideosPage() {
                       <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
                         {filteredGroups.reduce((s, g) => s + g.videos.length, 0)} videos
                       </span>
+                      <button
+                        onClick={() => {
+                          const allRows: string[][] = [];
+                          for (const g of filteredGroups) {
+                            for (const v of g.videos) {
+                              allRows.push([
+                                `"${(v.snippet?.title || g.title).replace(/"/g, '""')}"`,
+                                `https://www.youtube.com/watch?v=${v.id}`,
+                                `https://studio.youtube.com/video/${v.id}/edit`,
+                                v.status?.privacyStatus || "public",
+                                parseDuration(v.contentDetails?.duration),
+                                v.statistics?.viewCount || "0",
+                                g.videos.length.toString(),
+                              ]);
+                            }
+                          }
+                          const csv = ["Title,YouTube Link,Studio Link,Privacy,Duration,Views,Copies", ...allRows.map((r) => r.join(","))].join("\n");
+                          const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+                          const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+                          a.download = `all_duplicates_${chGroup.channelName.slice(0, 20).replace(/[^a-zA-Z0-9]/g, "_")}.csv`; a.click();
+                        }}
+                        className="text-xs text-primary hover:underline flex items-center gap-1 ml-auto"
+                      >
+                        <Download className="w-3.5 h-3.5" /> Download All
+                      </button>
                     </div>
                     <div className="space-y-2 ml-2">
                       {filteredGroups.map((group, idx) => (
                         <div key={idx} className="border border-border rounded-lg p-3">
                           <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-medium text-foreground truncate max-w-[60%]">&quot;{group.title}&quot;</p>
+                            <p className="text-sm font-medium text-foreground truncate max-w-[50%]">&quot;{group.title}&quot;</p>
                             <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  const rows = group.videos.map((v) => [
+                                    `"${(v.snippet?.title || group.title).replace(/"/g, '""')}"`,
+                                    `https://www.youtube.com/watch?v=${v.id}`,
+                                    `https://studio.youtube.com/video/${v.id}/edit`,
+                                    v.status?.privacyStatus || "public",
+                                    parseDuration(v.contentDetails?.duration),
+                                    v.statistics?.viewCount || "0",
+                                  ]);
+                                  const csv = ["Title,YouTube Link,Studio Link,Privacy,Duration,Views", ...rows.map((r) => r.join(","))].join("\n");
+                                  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+                                  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+                                  a.download = `duplicates_${group.title.slice(0, 30).replace(/[^a-zA-Z0-9]/g, "_")}.csv`; a.click();
+                                }}
+                                className="text-xs text-primary hover:underline flex items-center gap-1"
+                              >
+                                <Download className="w-3 h-3" /> Links
+                              </button>
                               <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">{group.videos.length}x</span>
                               {group.sameCount > 0 && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">{group.sameCount} same duration</span>}
                             </div>
                           </div>
                           <div className="space-y-1.5">
                             {group.videos.map((v) => (
-                              <div key={v.id} className="flex items-center gap-2 text-xs">
+                              <div key={v.id} className="flex items-center gap-2 text-xs flex-wrap">
                                 <button onClick={() => v.id && toggleDupSelect(v.id)} className="p-0.5 hover:bg-slate-100 rounded shrink-0">
                                   {v.id && selectedDupVideos.has(v.id) ? <CheckCircle className="w-3.5 h-3.5 text-primary" /> : <XCircle className="w-3.5 h-3.5 text-muted" />}
                                 </button>
@@ -706,6 +750,7 @@ export default function AdminVideosPage() {
                                 <span className="text-muted">{parseDuration(v.contentDetails?.duration)}</span>
                                 <span className="text-muted">{formatNumber(Number(v.statistics?.viewCount || 0))} views</span>
                                 {v.snippet?.publishedAt && <span className="text-muted">{new Date(v.snippet.publishedAt).toLocaleDateString()}</span>}
+                                <a href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline shrink-0 text-[10px]" title={`https://www.youtube.com/watch?v=${v.id}`}>youtu.be/{v.id}</a>
                                 <a href={`https://studio.youtube.com/video/${v.id}/edit`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-auto shrink-0">Edit</a>
                                 <a href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline shrink-0">Watch</a>
                               </div>
