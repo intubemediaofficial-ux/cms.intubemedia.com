@@ -387,7 +387,7 @@ export async function GET(request: Request) {
               getAnalyticsData(token, prevStartDate, prevEndDate, performanceMetrics, "").catch(() => null),
               getRevenueData(token, startDate, endDate).catch((e) => { console.error(`[dashboardFull] ${cid} rev error:`, e?.message || e); return null; }),
               getRevenueData(token, prevStartDate, prevEndDate).catch(() => null),
-              getAnalyticsData(token, (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split("T")[0]; })(), endDate, "estimatedRevenue", "day").catch(() => null),
+              getAnalyticsData(token, (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`; })(), endDate, "estimatedRevenue", "day").catch(() => null),
               getAnalyticsData(token, startDate, endDate, "estimatedRevenue,views", "").catch(() => null),
               getAnalyticsData(token, startDate, endDate, "views,likes,subscribersGained,estimatedRevenue", "video").catch(() => null),
             ]);

@@ -110,9 +110,9 @@ function getMonthOptions() {
   for (let i = 0; i < 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const label = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-    const startDate = d.toISOString().split("T")[0];
+    const startDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
     const endD = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    const endDate = endD.toISOString().split("T")[0];
+    const endDate = `${endD.getFullYear()}-${String(endD.getMonth()+1).padStart(2,"0")}-${String(endD.getDate()).padStart(2,"0")}`;
     options.push({ label, startDate, endDate });
   }
   return options;

@@ -74,6 +74,13 @@ function getMonthOptions() {
   return months;
 }
 
+function fmtDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function getDateRange(range: string) {
   const end = new Date();
   end.setDate(end.getDate() - 1);
@@ -89,8 +96,8 @@ function getDateRange(range: string) {
     yesterday.setDate(yesterday.getDate() - 1);
     const effectiveEnd = monthEnd > yesterday ? yesterday : monthEnd;
     return {
-      startDate: monthStart.toISOString().split("T")[0],
-      endDate: effectiveEnd.toISOString().split("T")[0],
+      startDate: fmtDate(monthStart),
+      endDate: fmtDate(effectiveEnd),
     };
   }
 
@@ -101,8 +108,8 @@ function getDateRange(range: string) {
     case "365d": start.setDate(start.getDate() - 365); break;
   }
   return {
-    startDate: start.toISOString().split("T")[0],
-    endDate: end.toISOString().split("T")[0],
+    startDate: fmtDate(start),
+    endDate: fmtDate(end),
   };
 }
 
@@ -180,15 +187,18 @@ export default function ChannelRevenuePage() {
             onClick={() => {
               if (channels.length > 0) {
                 downloadCSV(
-                  ["Channel", "Subscribers", "Videos", "Views", "Est. Revenue ($)", "RPM ($)"],
+                  ["Channel", "Channel Link", "Subscribers", "Videos", "Views", "Est. Revenue ($)", "Revenue (INR)", "RPM ($)"],
                   channels.map((ch) => {
                     const revInfo = channelRevenueMap[ch.id || ""];
+                    const rev = revInfo ? revInfo.revenue : 0;
                     return [
                       ch.snippet?.title || "",
+                      `https://www.youtube.com/channel/${ch.id || ""}`,
                       Number(ch.statistics?.subscriberCount || 0),
                       Number(ch.statistics?.videoCount || 0),
                       Number(ch.statistics?.viewCount || 0),
-                      revInfo ? revInfo.revenue.toFixed(2) : "0.00",
+                      rev.toFixed(2),
+                      Math.round(rev * INR_RATE).toString(),
                       revInfo ? revInfo.rpm.toFixed(2) : "0.00",
                     ];
                   }),
