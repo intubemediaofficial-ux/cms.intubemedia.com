@@ -1127,18 +1127,15 @@ export default function VideosPage() {
                               </button>
                               {openMenuId === video.id && (
                                 <div className="absolute right-0 top-8 bg-white border border-border rounded-lg shadow-lg z-20 w-48 py-1">
-                                  <button
-                                    onClick={() => openEdit(video)}
+                                  <a
+                                    href={`https://studio.youtube.com/video/${video.id}/edit`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => setOpenMenuId(null)}
                                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-slate-50"
                                   >
-                                    <Edit2 className="w-3.5 h-3.5" /> Edit Title / Description
-                                  </button>
-                                  <button
-                                    onClick={() => { window.open(`https://studio.youtube.com/video/${video.id}/edit`, "_blank"); setOpenMenuId(null); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-slate-50"
-                                  >
-                                    <Image className="w-3.5 h-3.5" /> Change Thumbnail
-                                  </button>
+                                    <Edit2 className="w-3.5 h-3.5" /> Edit in YouTube Studio
+                                  </a>
                                   <div className="border-t border-border my-1" />
                                   <button
                                     onClick={() => handlePrivacyChange(video, "public")}

@@ -291,6 +291,8 @@ export default function DashboardPage() {
   let prevSubs = sumMetric(dashData?.prevPerformance, "subscribersGained") - sumMetric(dashData?.prevPerformance, "subscribersLost");
   let curLikes = sumMetric(dashData?.currentPerformance, "likes");
   let prevLikes = sumMetric(dashData?.prevPerformance, "likes");
+  let curWatchTime = sumMetric(dashData?.currentPerformance, "estimatedMinutesWatched");
+  let prevWatchTime = sumMetric(dashData?.prevPerformance, "estimatedMinutesWatched");
 
   for (const pca of perChannelEntries) {
     curViews += sumMetric(pca.performance, "views");
@@ -299,6 +301,8 @@ export default function DashboardPage() {
     prevSubs += sumMetric(pca.prevPerformance, "subscribersGained") - sumMetric(pca.prevPerformance, "subscribersLost");
     curLikes += sumMetric(pca.performance, "likes");
     prevLikes += sumMetric(pca.prevPerformance, "likes");
+    curWatchTime += sumMetric(pca.performance, "estimatedMinutesWatched");
+    prevWatchTime += sumMetric(pca.prevPerformance, "estimatedMinutesWatched");
   }
 
   const curCPM = curViews > 0 ? (curEstRevenue / curViews) * 1000 : 0;
@@ -680,7 +684,7 @@ export default function DashboardPage() {
               </span>
             </h3>
 
-            {/* Row 1: Revenue Metrics */}
+            {/* Row 1: Revenue Metrics (5 columns) */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
               <MetricCard
                 title="Estimated Revenue"
@@ -704,6 +708,23 @@ export default function DashboardPage() {
                 color="#22c55e"
               />
               <MetricCard
+                title="Revenue (INR)"
+                value={`₹${formatNumber(Math.round(curEstRevenue * INR_RATE))}`}
+                tooltip={`Estimated revenue in INR (1 USD = ₹${INR_RATE}). Total: $${curEstRevenue.toFixed(2)} × ${INR_RATE}`}
+                color="#f59e0b"
+              />
+              <MetricCard
+                title="Revenue Per Channel"
+                value={formatCurrency(curRevenuePerChannel)}
+                change={pctChange(curRevenuePerChannel, prevRevenuePerChannel)}
+                tooltip="Average revenue per channel in selected period"
+                color="#f97316"
+              />
+            </div>
+
+            {/* Row 2: Performance Metrics (5 columns) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
+              <MetricCard
                 title="Avg CPM"
                 value={formatCurrency(curCPM)}
                 change={pctChange(curCPM, prevCPM)}
@@ -717,22 +738,11 @@ export default function DashboardPage() {
                 tooltip="Average RPM in selected period"
                 color="#ec4899"
               />
-            </div>
-
-            {/* Row 2: Channel & Revenue Breakdown */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
               <MetricCard
                 title="Total Channels"
                 value={String(channelCount)}
                 tooltip="Number of YouTube channels linked"
                 color="#06b6d4"
-              />
-              <MetricCard
-                title="Revenue Per Channel"
-                value={formatCurrency(curRevenuePerChannel)}
-                change={pctChange(curRevenuePerChannel, prevRevenuePerChannel)}
-                tooltip="Average revenue per channel in selected period"
-                color="#f97316"
               />
               <MetricCard
                 title="Revenue Channels"
@@ -741,15 +751,16 @@ export default function DashboardPage() {
                 color="#22c55e"
               />
               <MetricCard
-                title="Revenue (INR)"
-                value={`₹${formatNumber(Math.round(curEstRevenue * INR_RATE))}`}
-                tooltip={`Estimated revenue in INR (1 USD = ₹${INR_RATE}). Total: $${curEstRevenue.toFixed(2)} × ${INR_RATE}`}
-                color="#f59e0b"
+                title="Videos"
+                value={formatNumber(curVideosPublished || totalVideos)}
+                change={pctChange(curVideosPublished || totalVideos, prevVideosPerf || totalVideos)}
+                tooltip="Total videos in selected period"
+                color="#84cc16"
               />
             </div>
 
-            {/* Row 3: Engagement Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
+            {/* Row 3: Engagement Metrics (5 columns) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
               <MetricCard
                 title="Views"
                 value={formatNumber(curViews || totalViews)}
@@ -765,18 +776,24 @@ export default function DashboardPage() {
                 color="#14b8a6"
               />
               <MetricCard
-                title="Videos"
-                value={formatNumber(curVideosPublished || totalVideos)}
-                change={pctChange(curVideosPublished || totalVideos, prevVideosPerf || totalVideos)}
-                tooltip="Total videos in selected period"
-                color="#84cc16"
-              />
-              <MetricCard
                 title="Likes"
                 value={formatNumber(curLikes)}
                 change={pctChange(curLikes, prevLikes)}
                 tooltip="Total likes in selected period"
                 color="#ef4444"
+              />
+              <MetricCard
+                title="Watch Time (hrs)"
+                value={formatNumber(Math.round(curWatchTime / 60))}
+                change={pctChange(curWatchTime, prevWatchTime)}
+                tooltip="Total watch time in hours for selected period"
+                color="#6366f1"
+              />
+              <MetricCard
+                title="Last Day Revenue"
+                value={formatCurrency(lastDayRevenue)}
+                tooltip={lastDayDate ? `Revenue on ${lastDayDate}` : "Last day revenue"}
+                color="#0ea5e9"
               />
             </div>
 
@@ -813,7 +830,7 @@ export default function DashboardPage() {
                           : "bg-slate-100 text-muted hover:bg-slate-200"
                       }`}
                     >
-                      {d === 1 ? "Latest" : d === 30 ? "Month" : d === "all" ? "All" : `${d} Days`}
+                      {d === 1 ? "Latest" : d === 30 ? ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][new Date().getMonth()] : d === "all" ? "All" : `${d} Days`}
                     </button>
                   ))}
                 </div>
