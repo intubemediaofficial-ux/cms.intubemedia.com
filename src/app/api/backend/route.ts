@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 const BACKEND_URL = process.env.BACKEND_URL || "https://api.intubemedia.com";
 
 const ADMIN_EMAILS = [
-  "vijendrachoudhary95@gmail.com",
   "ajeetgurjarofficial@gmail.com",
   "bainslamusicofficial@gmail.com",
+  "shivlalbainslaofficial@gmail.com",
 ];
 
 /**

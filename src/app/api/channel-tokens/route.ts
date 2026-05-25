@@ -13,9 +13,9 @@ import { permanentRemoveFromBackend, expireAllTokensOnBackend } from "@/lib/back
 export const dynamic = "force-dynamic";
 
 const ADMIN_EMAILS = [
-  "vijendrachoudhary95@gmail.com",
   "ajeetgurjarofficial@gmail.com",
   "bainslamusicofficial@gmail.com",
+  "shivlalbainslaofficial@gmail.com",
 ];
 
 function isAdmin(email: string | null | undefined): boolean {
