@@ -32,16 +32,12 @@ declare module "next-auth/jwt" {
 }
 
 const ADMIN_EMAILS = [
-  "vijendrachoudhary95@gmail.com",
   "ajeetgurjarofficial@gmail.com",
   "bainslamusicofficial@gmail.com",
+  "shivlalbainslaofficial@gmail.com",
 ];
 
 const ADMIN_CREDENTIALS: Record<string, { password: string; name: string }> = {
-  "vijendrachoudhary95@gmail.com": {
-    password: process.env.ADMIN_PASSWORD || "BainslaAdmin@2026",
-    name: "Vijendra Choudhary",
-  },
   "ajeetgurjarofficial@gmail.com": {
     password: process.env.ADMIN_PASSWORD_2 || "BainslaAdmin@2026",
     name: "Ajeet Gurjar",
@@ -49,6 +45,10 @@ const ADMIN_CREDENTIALS: Record<string, { password: string; name: string }> = {
   "bainslamusicofficial@gmail.com": {
     password: process.env.ADMIN_PASSWORD_3 || "BainslaAdmin@2026",
     name: "Bainsla Music",
+  },
+  "shivlalbainslaofficial@gmail.com": {
+    password: process.env.ADMIN_PASSWORD_4 || "BainslaAdmin@2026",
+    name: "Shivlal Bainsla",
   },
 };
 

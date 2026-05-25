@@ -22,9 +22,9 @@ import { cacheChannelVideos, getCachedChannelVideos, cacheDashboardData, getCach
 export const dynamic = "force-dynamic";
 
 const ADMIN_EMAILS = [
-  "vijendrachoudhary95@gmail.com",
   "ajeetgurjarofficial@gmail.com",
   "bainslamusicofficial@gmail.com",
+  "shivlalbainslaofficial@gmail.com",
 ];
 
 export async function GET(request: Request) {

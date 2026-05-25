@@ -285,8 +285,9 @@ export default function DashboardPage() {
     prevGrossRevenue += sumRevenueMetric(pca.prevRevenue, "grossRevenue");
   }
 
-  const curPremiumRevenue = Math.max(0, curGrossRevenue - curAdRevenue);
-  const prevPremiumRevenue = Math.max(0, prevGrossRevenue - prevAdRevenue);
+  // Premium Revenue = non-ad revenue (YouTube Premium, Super Chat, etc.)
+  const curPremiumRevenue = Math.max(0, curEstRevenue - curAdRevenue);
+  const prevPremiumRevenue = Math.max(0, prevEstRevenue - prevAdRevenue);
 
   let curViews = sumMetric(dashData?.currentPerformance, "views");
   let prevViews = sumMetric(dashData?.prevPerformance, "views");

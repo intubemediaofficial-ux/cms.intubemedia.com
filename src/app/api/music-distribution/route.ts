@@ -31,9 +31,9 @@ export interface Distribution {
 }
 
 const ADMIN_EMAILS = [
-  "vijendrachoudhary95@gmail.com",
   "ajeetgurjarofficial@gmail.com",
   "bainslamusicofficial@gmail.com",
+  "shivlalbainslaofficial@gmail.com",
 ];
 
 function isAdminEmail(email: string | null | undefined): boolean {
