@@ -324,12 +324,12 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Bainsla Music Studio Text */}
+          {/* InTubeMedia Text */}
           <h1 className="text-5xl font-black text-white mb-2 tracking-tight">
-            <span className="bg-gradient-to-r from-red-400 via-red-500 to-pink-500 bg-clip-text text-transparent">Bainsla Music</span>
+            <span className="bg-gradient-to-r from-red-400 via-red-500 to-pink-500 bg-clip-text text-transparent">InTubeMedia</span>
           </h1>
           <h2 className="text-3xl font-bold text-white/90 tracking-[0.2em] uppercase mb-6">
-            Studio
+            CMS
           </h2>
           <div className="w-20 h-1 bg-gradient-to-r from-red-500 to-pink-500 mx-auto rounded-full mb-6" />
           <p className="text-white/50 text-base leading-relaxed">
@@ -367,9 +367,9 @@ export default function LoginPage() {
               </div>
               <div className="text-left">
                 <h1 className="text-2xl font-black text-white">
-                  <span className="bg-gradient-to-r from-red-400 to-pink-500 bg-clip-text text-transparent">Bainsla Music</span>
+                  <span className="bg-gradient-to-r from-red-400 to-pink-500 bg-clip-text text-transparent">InTubeMedia</span>
                 </h1>
-                <p className="text-[10px] font-bold tracking-[0.3em] text-white/60 uppercase">Studio</p>
+                <p className="text-[10px] font-bold tracking-[0.3em] text-white/60 uppercase">CMS</p>
               </div>
             </div>
           </div>

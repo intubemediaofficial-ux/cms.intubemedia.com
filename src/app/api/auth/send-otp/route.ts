@@ -52,13 +52,13 @@ export async function POST(request: Request) {
     const fromEmail = process.env.OTP_FROM_EMAIL || "onboarding@resend.dev";
 
     const result = await resend.emails.send({
-      from: `Bainsla Music <${fromEmail}>`,
+      from: `InTubeMedia <${fromEmail}>`,
       to: normalizedEmail,
-      subject: "Your Bainsla Music Studio OTP",
+      subject: "Your InTubeMedia OTP",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #1a1a1a; margin: 0;">Bainsla Music Studio</h2>
+            <h2 style="color: #1a1a1a; margin: 0;">InTubeMedia</h2>
             <p style="color: #666; font-size: 14px;">Password Reset / Login Verification</p>
           </div>
           <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 20px;">
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       // Check if domain verification issue
       const errMsg = result.error.message || "Unknown error";
       if (errMsg.includes("testing emails") || errMsg.includes("verify a domain")) {
-        return Response.json({ error: "Email service needs domain setup. Please ask admin to verify domain at resend.com/domains. Contact: bainslamusicofficial@gmail.com" }, { status: 500 });
+        return Response.json({ error: "Email service needs domain setup. Please ask admin to verify domain at resend.com/domains. Contact: contact@intubemedia.com" }, { status: 500 });
       }
       return Response.json({ error: `Email send failed: ${errMsg}` }, { status: 500 });
     }

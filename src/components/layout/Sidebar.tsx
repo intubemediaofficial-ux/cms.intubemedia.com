@@ -127,16 +127,16 @@ export default function Sidebar() {
           <div className="overflow-hidden">
             {isAdmin ? (
               <>
-                <h1 className="text-lg font-bold leading-tight text-white">Bainsla</h1>
+                <h1 className="text-lg font-bold leading-tight text-white">InTube</h1>
                 <p className="text-[10px] font-bold tracking-[0.25em] text-amber-400 uppercase">
-                  Music
+                  Media
                 </p>
               </>
             ) : (
               <>
-                <h1 className="text-lg font-bold leading-tight bg-gradient-to-r from-red-400 to-red-500 bg-clip-text text-transparent">YouTube</h1>
+                <h1 className="text-lg font-bold leading-tight bg-gradient-to-r from-red-400 to-red-500 bg-clip-text text-transparent">InTube</h1>
                 <p className="text-[10px] font-bold tracking-[0.25em] text-white/60 uppercase">
-                  Studio
+                  Media
                 </p>
               </>
             )}

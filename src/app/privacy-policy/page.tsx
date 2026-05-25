@@ -1,7 +1,13 @@
+import Link from "next/link";
+
 export default function PrivacyPolicyPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border p-8 sm:p-12">
+        <div className="flex items-center gap-4 mb-6">
+          <Link href="/" className="text-sm text-blue-600 hover:underline">&larr; Home</Link>
+          <Link href="/terms" className="text-sm text-blue-600 hover:underline">Terms &amp; Conditions</Link>
+        </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
         <p className="text-sm text-gray-500 mb-8">Last updated: May 14, 2026</p>
 
@@ -9,10 +15,10 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-2">1. Introduction</h2>
             <p>
-              YouTube Studio CMS (&quot;we&quot;, &quot;our&quot;, or &quot;the Service&quot;) operated by Bainsla Music
-              provides a channel management system for YouTube content creators. This Privacy Policy
+              InTubeMedia (&quot;we&quot;, &quot;our&quot;, or &quot;the Service&quot;) operated by InTubeMedia
+              provides a YouTube channel management system for content creators and music labels. This Privacy Policy
               explains how we collect, use, and protect your information when you use our service at
-              cms.bainslamusic.com.
+              cms.intubemedia.com.
             </p>
           </section>
 
@@ -123,14 +129,15 @@ export default function PrivacyPolicyPage() {
               If you have questions about this Privacy Policy or your data, contact us at:
             </p>
             <ul className="list-none mt-2 space-y-1">
-              <li><strong>Email:</strong> bainslamusicofficial@gmail.com</li>
-              <li><strong>Website:</strong> <a href="https://bainslamusic.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">bainslamusic.com</a></li>
+              <li><strong>Email:</strong> contact@intubemedia.com</li>
+              <li><strong>Website:</strong> <a href="https://intubemedia.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">intubemedia.com</a></li>
             </ul>
           </section>
         </div>
 
-        <div className="mt-10 pt-6 border-t text-center text-xs text-gray-400">
-          &copy; {new Date().getFullYear()} Bainsla Music. All rights reserved.
+        <div className="mt-10 pt-6 border-t flex items-center justify-between text-xs text-gray-400">
+          <span>&copy; {new Date().getFullYear()} InTubeMedia. All rights reserved.</span>
+          <Link href="/terms" className="text-blue-500 hover:underline">Terms &amp; Conditions</Link>
         </div>
       </div>
     </div>

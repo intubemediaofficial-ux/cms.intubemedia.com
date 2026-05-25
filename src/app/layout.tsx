@@ -14,15 +14,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bainsla Music Studio",
+  title: "InTubeMedia — YouTube Channel Management System",
   description:
-    "Bainsla Music Studio — Channel Management System for YouTube creators. Manage channels, revenue, videos and payments.",
+    "InTubeMedia — YouTube Channel Management System for content creators and music labels. Manage channels, revenue, videos and payments.",
   keywords:
-    "bainsla music studio, channel management, revenue tracking, video management, music distribution",
+    "intubemedia, youtube channel management, revenue tracking, video management, music distribution, cms",
   openGraph: {
-    title: "Bainsla Music Studio",
+    title: "InTubeMedia — YouTube Channel Management System",
     description:
-      "Bainsla Music Studio — Channel Management System for YouTube creators. Manage channels, revenue, videos and payments.",
+      "InTubeMedia — YouTube Channel Management System for content creators and music labels. Manage channels, revenue, videos and payments.",
     type: "website",
   },
   icons: {
