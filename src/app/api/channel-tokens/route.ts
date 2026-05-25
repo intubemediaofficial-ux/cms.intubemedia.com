@@ -8,6 +8,7 @@ import {
   isKVConfigured,
 } from "@/lib/channel-tokens";
 import { kv } from "@vercel/kv";
+import { permanentRemoveFromBackend, expireAllTokensOnBackend } from "@/lib/backend-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -161,6 +162,11 @@ export async function GET(request: Request) {
       const successCount = results.filter((r) => r.success).length;
       console.log(`[bulkExpireTokens] Admin ${session.user.email} expired tokens for client ${clientId}: ${successCount}/${channelIds.length} channels`);
 
+      // Sync to backend
+      expireAllTokensOnBackend(clientId, session.user.email || "admin").catch((err) => {
+        console.warn("[bulkExpireTokens] Backend sync error:", err);
+      });
+
       return Response.json({
         data: {
           success: true,
@@ -216,6 +222,11 @@ export async function GET(request: Request) {
         await kv.del(`yt_channel_stats:${channelId}`);
         await kv.del(`yt_dashboard:${channelId}`);
       } catch { /* ignore */ }
+
+      // Sync permanent removal to backend database
+      permanentRemoveFromBackend(channelId, session.user.email || "admin").catch((err) => {
+        console.warn("[permanentRemoveChannel] Backend sync error:", err);
+      });
 
       console.log(`[permanentRemoveChannel] Admin ${session.user.email} permanently removed channel ${channelId}`);
 
