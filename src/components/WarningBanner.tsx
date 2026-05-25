@@ -17,13 +17,20 @@ export default function WarningBanner() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetch("/api/client-data?action=getMyWarnings")
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.data?.global) setGlobalWarning(j.data.global);
-        if (j.data?.client) setClientWarning(j.data.client);
-      })
-      .catch(() => {});
+    const fetchWarnings = () => {
+      fetch("/api/client-data?action=getMyWarnings")
+        .then((r) => r.json())
+        .then((j) => {
+          setGlobalWarning(j.data?.global || null);
+          setClientWarning(j.data?.client || null);
+        })
+        .catch(() => {});
+    };
+
+    fetchWarnings();
+    // Poll every 30s so banner auto-hides when admin resolves maintenance
+    const interval = setInterval(fetchWarnings, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const warnings = [globalWarning, clientWarning].filter(
