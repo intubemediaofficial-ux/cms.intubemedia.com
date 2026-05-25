@@ -7,6 +7,9 @@ export default function PrivacyPolicyPage() {
         <div className="flex items-center gap-4 mb-6">
           <Link href="/" className="text-sm text-blue-600 hover:underline">&larr; Home</Link>
           <Link href="/terms" className="text-sm text-blue-600 hover:underline">Terms &amp; Conditions</Link>
+          <Link href="/about" className="text-sm text-blue-600 hover:underline">About Us</Link>
+          <Link href="/contact" className="text-sm text-blue-600 hover:underline">Contact Us</Link>
+          <Link href="/faq" className="text-sm text-blue-600 hover:underline">FAQ</Link>
         </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
         <p className="text-sm text-gray-500 mb-8">Last updated: May 14, 2026</p>
