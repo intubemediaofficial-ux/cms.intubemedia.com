@@ -18,18 +18,10 @@ export default function HomePage() {
             </div>
           </div>
           <nav className="flex items-center gap-4">
-            <Link
-              href="/privacy-policy"
-              className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              Privacy Policy
-            </Link>
-            <Link
-              href="/terms"
-              className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              Terms &amp; Conditions
-            </Link>
+            <Link href="/" className="text-sm text-red-600 font-medium">Home</Link>
+            <Link href="/about" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">About Us</Link>
+            <Link href="/contact" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Contact Us</Link>
+            <Link href="/faq" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">FAQ</Link>
             <Link
               href="/login"
               className="px-5 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
@@ -253,18 +245,11 @@ export default function HomePage() {
               <span className="text-sm font-semibold text-slate-900">InTubeMedia</span>
             </div>
             <nav className="flex items-center gap-6 text-sm text-slate-600">
-              <Link href="/privacy-policy" className="hover:text-slate-900 transition-colors">
-                Privacy Policy
-              </Link>
-              <Link href="/terms" className="hover:text-slate-900 transition-colors">
-                Terms &amp; Conditions
-              </Link>
-              <Link href="/login" className="hover:text-slate-900 transition-colors">
-                Sign In
-              </Link>
-              <a href="mailto:contact@intubemedia.com" className="hover:text-slate-900 transition-colors">
-                Contact Us
-              </a>
+              <Link href="/privacy-policy" className="hover:text-slate-900 transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-slate-900 transition-colors">Terms &amp; Conditions</Link>
+              <Link href="/about" className="hover:text-slate-900 transition-colors">About Us</Link>
+              <Link href="/contact" className="hover:text-slate-900 transition-colors">Contact Us</Link>
+              <Link href="/faq" className="hover:text-slate-900 transition-colors">FAQ</Link>
             </nav>
             <p className="text-xs text-slate-500">
               &copy; {new Date().getFullYear()} InTubeMedia. All rights reserved.

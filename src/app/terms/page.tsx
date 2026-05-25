@@ -7,6 +7,9 @@ export default function TermsPage() {
         <div className="flex items-center gap-4 mb-6">
           <Link href="/" className="text-sm text-blue-600 hover:underline">&larr; Home</Link>
           <Link href="/privacy-policy" className="text-sm text-blue-600 hover:underline">Privacy Policy</Link>
+          <Link href="/about" className="text-sm text-blue-600 hover:underline">About Us</Link>
+          <Link href="/contact" className="text-sm text-blue-600 hover:underline">Contact Us</Link>
+          <Link href="/faq" className="text-sm text-blue-600 hover:underline">FAQ</Link>
         </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Terms &amp; Conditions</h1>
         <p className="text-sm text-gray-500 mb-8">Last updated: May 14, 2026</p>
