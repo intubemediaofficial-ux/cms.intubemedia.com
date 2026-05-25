@@ -444,45 +444,50 @@ export async function GET(request: Request) {
           videos: topVideoItems,
         };
 
-        // Build per-channel revenue map — use SAME source as dashboard overview (pca.revenue from getRevenueData)
-        // This ensures Dashboard, Reports, Channel Revenue all show identical numbers
+        // Build per-channel revenue map — use flat totals (no dimensions) for accuracy
         const channelRevenueMap: Record<string, { revenue: number; views: number; rpm: number }> = {};
 
         for (const [cid, data] of Object.entries(perChannelAnalytics)) {
-          // Primary: use revenue data (getRevenueData — same as dashboard overview cards)
-          const revData = data.revenue as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;
           let rev = 0;
-          if (revData?.rows?.length && revData.columnHeaders) {
-            const headers = revData.columnHeaders.map((h) => h.name || "");
-            const revIdx = headers.indexOf("estimatedRevenue");
-            if (revIdx !== -1) {
-              rev = revData.rows.reduce((sum, row) => sum + (Number(row[revIdx]) || 0), 0);
-            }
-          }
-          // Fallback: use revenueViews if revenue data unavailable
-          if (rev === 0) {
-            const rvData = data.revenueViews as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;
-            if (rvData?.rows?.length && rvData.columnHeaders) {
-              const headers = rvData.columnHeaders.map((h) => h.name || "");
-              const revIdx = headers.indexOf("estimatedRevenue");
-              if (revIdx !== -1) rev = Number(rvData.rows[0][revIdx]) || 0;
-            }
-          }
-          // Get views from revenueViews (flat total)
           let views = 0;
+
+          // Primary: use revenueViews (flat total, no dimensions — most accurate for any date range)
           const rvData = data.revenueViews as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;
           if (rvData?.rows?.length && rvData.columnHeaders) {
-            const viewsIdx = rvData.columnHeaders.map((h) => h.name || "").indexOf("views");
-            if (viewsIdx !== -1) views = Number(rvData.rows[0][viewsIdx]) || 0;
+            const headers = rvData.columnHeaders.map((h) => h.name || "");
+            const revIdx = headers.indexOf("estimatedRevenue");
+            const viewsIdx = headers.indexOf("views");
+            if (revIdx !== -1) {
+              rev = rvData.rows.reduce((sum, row) => sum + (Number(row[revIdx]) || 0), 0);
+            }
+            if (viewsIdx !== -1) {
+              views = rvData.rows.reduce((sum, row) => sum + (Number(row[viewsIdx]) || 0), 0);
+            }
           }
+
+          // Fallback: use getRevenueData result if revenueViews unavailable
+          if (rev === 0) {
+            const revData = data.revenue as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;
+            if (revData?.rows?.length && revData.columnHeaders) {
+              const headers = revData.columnHeaders.map((h) => h.name || "");
+              const revIdx = headers.indexOf("estimatedRevenue");
+              if (revIdx !== -1) {
+                rev = revData.rows.reduce((sum, row) => sum + (Number(row[revIdx]) || 0), 0);
+              }
+            }
+          }
+
           // Fallback: views from performance data
           if (views === 0) {
             const perfData = data.performance as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;
             if (perfData?.rows?.length && perfData.columnHeaders) {
               const viewsIdx = perfData.columnHeaders.map((h) => h.name || "").indexOf("views");
-              if (viewsIdx !== -1) views = Number(perfData.rows[0][viewsIdx]) || 0;
+              if (viewsIdx !== -1) {
+                views = perfData.rows.reduce((sum, row) => sum + (Number(row[viewsIdx]) || 0), 0);
+              }
             }
           }
+
           channelRevenueMap[cid] = {
             revenue: rev,
             views,

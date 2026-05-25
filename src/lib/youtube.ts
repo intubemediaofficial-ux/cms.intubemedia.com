@@ -360,15 +360,15 @@ export async function getRevenueData(
   const auth = getAuthClient(accessToken);
   const analytics = google.youtubeAnalytics({ version: "v2", auth });
 
-  // Try with grossRevenue first (requires content owner/CMS access)
+  // Use flat totals (no dimensions) for accurate date-range revenue.
+  // dimensions:"month" can return inaccurate partial-month data when
+  // the date range doesn't align with calendar months.
   try {
     const response = await analytics.reports.query({
       ids: "channel==MINE",
       startDate,
       endDate,
       metrics: "estimatedRevenue,estimatedAdRevenue,grossRevenue",
-      dimensions: "month",
-      sort: "month",
     });
     return response.data;
   } catch {
@@ -379,12 +379,10 @@ export async function getRevenueData(
         startDate,
         endDate,
         metrics: "estimatedRevenue,estimatedAdRevenue",
-        dimensions: "month",
-        sort: "month",
       });
       return response.data;
     } catch {
-      // Final fallback — just estimatedRevenue without dimensions
+      // Final fallback — just estimatedRevenue
       try {
         const response = await analytics.reports.query({
           ids: "channel==MINE",
