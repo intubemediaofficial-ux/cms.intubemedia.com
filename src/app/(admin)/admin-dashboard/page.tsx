@@ -298,7 +298,9 @@ export default function AdminDashboardPage() {
     let prevSubs = sumMetric(dashData?.prevPerformance, "subscribersGained") - sumMetric(dashData?.prevPerformance, "subscribersLost");
 
     for (const pca of perChannelEntries) {
-      curEstRevenue += sumMetric(pca.revenue, "estimatedRevenue");
+      // Prefer revenueViews (flat total) for estimatedRevenue — most accurate for any date range
+      const curRevFromViews = sumMetric(pca.revenueViews, "estimatedRevenue");
+      curEstRevenue += curRevFromViews || sumMetric(pca.revenue, "estimatedRevenue");
       curAdRevenue += sumMetric(pca.revenue, "estimatedAdRevenue");
       curGrossRevenue += sumMetric(pca.revenue, "grossRevenue");
       prevEstRevenue += sumMetric(pca.prevRevenue, "estimatedRevenue");

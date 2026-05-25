@@ -275,7 +275,9 @@ export default function DashboardPage() {
   let prevGrossRevenue = sumRevenueMetric(dashData?.prevRevenue, "grossRevenue");
 
   for (const pca of perChannelEntries) {
-    curEstRevenue += sumRevenueMetric(pca.revenue, "estimatedRevenue");
+    // Prefer revenueViews (flat total) for estimatedRevenue — most accurate for any date range
+    const curRevFromViews = sumRevenueMetric(pca.revenueViews, "estimatedRevenue");
+    curEstRevenue += curRevFromViews || sumRevenueMetric(pca.revenue, "estimatedRevenue");
     curAdRevenue += sumRevenueMetric(pca.revenue, "estimatedAdRevenue");
     curGrossRevenue += sumRevenueMetric(pca.revenue, "grossRevenue");
     prevEstRevenue += sumRevenueMetric(pca.prevRevenue, "estimatedRevenue");

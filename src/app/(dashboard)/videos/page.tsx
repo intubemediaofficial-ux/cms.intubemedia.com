@@ -1023,16 +1023,26 @@ export default function VideosPage() {
                                       href={`https://studio.youtube.com/video/${v.id}/edit`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-primary hover:underline ml-auto shrink-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(`https://studio.youtube.com/video/${v.id}/edit`, "_blank");
+                                      }}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-primary bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded ml-auto shrink-0 cursor-pointer"
                                     >
+                                      <Edit2 className="w-3 h-3" />
                                       Edit
                                     </a>
                                     <a
                                       href={`https://www.youtube.com/watch?v=${v.id}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-blue-500 hover:underline shrink-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(`https://www.youtube.com/watch?v=${v.id}`, "_blank");
+                                      }}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded shrink-0 cursor-pointer"
                                     >
+                                      <Play className="w-3 h-3" />
                                       Watch
                                     </a>
                                   </div>
