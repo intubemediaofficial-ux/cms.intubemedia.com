@@ -424,7 +424,7 @@ export default function AdminSettingsPage() {
               </label>
               <input
                 type="email"
-                defaultValue="contact@intubemedia.com"
+                defaultValue="shivlalbainslaofficial@gmail.com"
                 className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
@@ -447,9 +447,9 @@ export default function AdminSettingsPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-xs">B</div>
+                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-xs">S</div>
                 <div>
-                  <p className="text-sm font-medium text-foreground">contact@intubemedia.com</p>
+                  <p className="text-sm font-medium text-foreground">shivlalbainslaofficial@gmail.com</p>
                   <p className="text-xs text-muted">Super Admin</p>
                 </div>
               </div>
@@ -460,6 +460,16 @@ export default function AdminSettingsPage() {
                 <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-xs">A</div>
                 <div>
                   <p className="text-sm font-medium text-foreground">ajeetgurjarofficial@gmail.com</p>
+                  <p className="text-xs text-muted">Admin</p>
+                </div>
+              </div>
+              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Admin</span>
+            </div>
+            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-xs">B</div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">bainslamusicofficial@gmail.com</p>
                   <p className="text-xs text-muted">Admin</p>
                 </div>
               </div>
