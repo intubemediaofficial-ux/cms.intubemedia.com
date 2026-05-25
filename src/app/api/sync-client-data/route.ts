@@ -5,6 +5,7 @@ import { getValidAccessToken } from "@/lib/channel-tokens";
 import { cacheClientData } from "@/lib/client-data-cache";
 import type { CachedChannelData, CachedClientData } from "@/lib/client-data-cache";
 import { getChannelStatsById, getRevenueData } from "@/lib/youtube";
+import { syncChannelToBackend } from "@/lib/backend-sync";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -148,6 +149,19 @@ export async function GET(request: Request) {
         };
 
         await cacheClientData(user.email, clientData);
+
+        // Sync channels to backend database (non-blocking)
+        for (const ch of cachedChannels) {
+          syncChannelToBackend({
+            channelId: ch.channelId,
+            title: ch.channelTitle,
+            thumbnailUrl: ch.thumbnail,
+            subscriberCount: ch.subscribers,
+            videoCount: ch.videoCount,
+            viewCount: ch.views,
+          }).catch(() => {});
+        }
+
         results.push({
           email: user.email,
           status: "synced",
