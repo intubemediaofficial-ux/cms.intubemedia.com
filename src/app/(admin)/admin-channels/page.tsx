@@ -94,6 +94,7 @@ export default function AdminChannelsPage() {
   const [perPage, setPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [clientFilter, setClientFilter] = useState("");
+  const [tokenFilter, setTokenFilter] = useState<string>("all");
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, string>>({});
   const [selectedChannel, setSelectedChannel] = useState<ChannelRow | null>(null);
   const [activeActionMenu, setActiveActionMenu] = useState<string | null>(null);
@@ -366,8 +367,17 @@ export default function AdminChannelsPage() {
       result = result.filter((c) => c.clientName === clientFilter);
     }
 
+    if (tokenFilter !== "all") {
+      result = result.filter((c) => {
+        if (tokenFilter === "valid") return c.tokenStatus === "valid";
+        if (tokenFilter === "expired") return c.tokenStatus === "expired";
+        if (tokenFilter === "none") return c.tokenStatus === "none" || !c.tokenStatus;
+        return true;
+      });
+    }
+
     return result;
-  }, [allChannelRows, searchQuery, clientFilter]);
+  }, [allChannelRows, searchQuery, clientFilter, tokenFilter]);
 
   const totalPages = Math.ceil(filteredChannels.length / perPage);
   const pageChannels = filteredChannels.slice((currentPage - 1) * perPage, currentPage * perPage);
@@ -602,8 +612,12 @@ export default function AdminChannelsPage() {
             <Shield className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="text-sm text-amber-600 font-medium">Valid Tokens</p>
-            <p className="text-2xl font-bold text-amber-900">{allChannelRows.filter(c => c.tokenStatus === "valid").length} / {allChannelRows.length}</p>
+            <p className="text-sm text-amber-600 font-medium">Token Status</p>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-bold text-green-700">{allChannelRows.filter(c => c.tokenStatus === "valid").length} Valid</span>
+              <span className="text-sm font-bold text-amber-700">{allChannelRows.filter(c => c.tokenStatus === "expired").length} Expired</span>
+              <span className="text-sm font-bold text-red-700">{allChannelRows.filter(c => c.tokenStatus === "none" || !c.tokenStatus).length} None</span>
+            </div>
           </div>
         </div>
       </div>
@@ -734,6 +748,16 @@ export default function AdminChannelsPage() {
             ))}
           </select>
           <select
+            value={tokenFilter}
+            onChange={(e) => { setTokenFilter(e.target.value); setCurrentPage(1); }}
+            className="border border-border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="all">All Tokens</option>
+            <option value="valid">Valid</option>
+            <option value="expired">Expired</option>
+            <option value="none">Not Validated</option>
+          </select>
+          <select
             value={perPage}
             onChange={(e) => { setPerPage(Number(e.target.value)); setCurrentPage(1); }}
             className="border border-border rounded-lg px-3 py-2 text-sm"
@@ -741,7 +765,7 @@ export default function AdminChannelsPage() {
             {PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n} per page</option>)}
           </select>
           <button
-            onClick={() => { setSearchQuery(""); setClientFilter(""); setCurrentPage(1); }}
+            onClick={() => { setSearchQuery(""); setClientFilter(""); setTokenFilter("all"); setCurrentPage(1); }}
             className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground px-3 py-2 border border-border rounded-lg"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -810,9 +834,13 @@ export default function AdminChannelsPage() {
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                        channel.tokenStatus === "valid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                        channel.tokenStatus === "valid" ? "bg-green-100 text-green-700" :
+                        channel.tokenStatus === "expired" ? "bg-amber-100 text-amber-700" :
+                        "bg-red-100 text-red-700"
                       }`}>
-                        {channel.tokenStatus === "valid" ? "Valid" : "Not Validated"}
+                        {channel.tokenStatus === "valid" ? "✓ Valid" :
+                         channel.tokenStatus === "expired" ? "⏱ Expired" :
+                         "✗ Not Validated"}
                       </span>
                       {clients.some((c) => (c.pendingChannels || []).includes(channel.channelId)) && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
@@ -927,9 +955,13 @@ export default function AdminChannelsPage() {
                   <h3 className="text-lg font-semibold">{selectedChannel.name}</h3>
                   <p className="text-sm text-muted">{selectedChannel.channelId}</p>
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mt-1 ${
-                    selectedChannel.tokenStatus === "valid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                    selectedChannel.tokenStatus === "valid" ? "bg-green-100 text-green-700" :
+                    selectedChannel.tokenStatus === "expired" ? "bg-amber-100 text-amber-700" :
+                    "bg-red-100 text-red-700"
                   }`}>
-                    Token: {selectedChannel.tokenStatus === "valid" ? "Valid" : "Not Validated"}
+                    Token: {selectedChannel.tokenStatus === "valid" ? "✓ Valid" :
+                            selectedChannel.tokenStatus === "expired" ? "⏱ Expired" :
+                            "✗ Not Validated"}
                   </span>
                 </div>
               </div>
