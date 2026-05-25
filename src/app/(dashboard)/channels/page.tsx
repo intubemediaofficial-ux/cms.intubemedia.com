@@ -76,7 +76,7 @@ const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 const CATEGORIES = ["Music", "Entertainment", "Education", "Comedy", "Gaming", "News", "Sports"];
 const CHANNEL_TYPES = ["Original", "Refurbished", "Licensed"];
 const TOKEN_STATUSES = ["Valid", "Invalid", "Expired", "N/A"];
-const DEFAULT_NETWORK_OPTIONS = ["Bainsla Music", "WMG - MUSIC", "Sony Music", "T-Series", "Other"];
+const DEFAULT_NETWORK_OPTIONS = ["InTubeMedia", "WMG - MUSIC", "Sony Music", "T-Series", "Other"];
 
 type TabType = "channels" | "requests" | "bulk" | "transferred";
 
@@ -473,7 +473,7 @@ export default function ChannelsPage() {
         category: categoryInput,
         channelType: channelTypeInput || "Original",
         tokenStatus: "Invalid",
-        cms: cmsInput || "Bainsla Music",
+        cms: cmsInput || "InTubeMedia",
         addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
         status: "pending_approval",
       };
@@ -605,7 +605,7 @@ export default function ChannelsPage() {
             category: bulkCategory || "Music",
             channelType: bulkChannelType || "Original",
             tokenStatus: "Invalid",
-            cms: bulkCms || "Bainsla Music",
+            cms: bulkCms || "InTubeMedia",
             addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
             status: "active",
           };
@@ -683,7 +683,7 @@ export default function ChannelsPage() {
           category: storedInfo?.category || "Music",
           channelType: storedInfo?.channelType || "Original",
           tokenStatus: tokenStatuses[ch.id || ""] || storedInfo?.tokenStatus || "Invalid",
-          cms: storedInfo?.cms || "Bainsla Music",
+          cms: storedInfo?.cms || "InTubeMedia",
           addedDate: storedInfo?.addedDate || "-",
           delinkedDate: storedInfo?.delinkedDate || "-",
           isOwn: true,
@@ -706,7 +706,7 @@ export default function ChannelsPage() {
         category: sc.category,
         channelType: sc.channelType || "Original",
         tokenStatus: tokenStatuses[sc.id] || sc.tokenStatus || "Invalid",
-        cms: sc.cms || "Bainsla Music",
+        cms: sc.cms || "InTubeMedia",
         addedDate: sc.addedDate,
         delinkedDate: sc.delinkedDate || "-",
         isOwn: false,

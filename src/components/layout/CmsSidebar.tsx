@@ -58,7 +58,7 @@ export default function CmsSidebar() {
         collapsed ? "w-[72px]" : "w-[240px]"
       )}
     >
-      {/* YouTube Studio Header */}
+      {/* InTubeMedia Header */}
       <div className="h-[56px] flex items-center px-3 shrink-0">
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -92,7 +92,7 @@ export default function CmsSidebar() {
           </svg>
         </div>
         {!collapsed && (
-          <p className="mt-3 text-[14px] text-[#282828] font-normal">YouTube Studio</p>
+          <p className="mt-3 text-[14px] text-[#282828] font-normal">InTubeMedia</p>
         )}
       </div>
 
