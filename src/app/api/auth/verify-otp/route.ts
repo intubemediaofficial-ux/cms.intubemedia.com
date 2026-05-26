@@ -1,11 +1,11 @@
-import { kv } from "@vercel/kv";
+import { kv } from "@/lib/redis";
 
 export const dynamic = "force-dynamic";
 
 const OTP_PREFIX = "otp:";
 
 function isKVAvailable(): boolean {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  return true; // Always available — using DigitalOcean Redis
 }
 
 export async function POST(request: Request) {

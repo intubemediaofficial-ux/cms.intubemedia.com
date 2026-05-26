@@ -1,11 +1,11 @@
-import { kv } from "@vercel/kv";
+import { kv } from "@/lib/redis";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const results: Record<string, unknown> = {};
 
-  // Test basic KV connectivity
+  // Test basic Redis connectivity
   try {
     await kv.set("test_connectivity", "ok");
     const val = await kv.get("test_connectivity");
@@ -18,7 +18,7 @@ export async function GET() {
   try {
     const raw = await kv.get("bainsla_users");
     if (raw === null) {
-      results.users = { status: "null", message: "Key does not exist — no users stored in KV" };
+      results.users = { status: "null", message: "Key does not exist — no users stored yet" };
     } else if (Array.isArray(raw)) {
       results.users = {
         status: "ok",
@@ -40,8 +40,8 @@ export async function GET() {
 
   // Check env vars
   results.env = {
-    KV_REST_API_URL: process.env.KV_REST_API_URL ? "set (" + process.env.KV_REST_API_URL.slice(0, 30) + "...)" : "MISSING",
-    KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN ? "set (length: " + process.env.KV_REST_API_TOKEN.length + ")" : "MISSING",
+    REDIS_URL: process.env.REDIS_URL ? "set (" + process.env.REDIS_URL.slice(0, 30) + "...)" : "using default (159.89.55.126:6379)",
+    storage: "DigitalOcean Redis",
   };
 
   return Response.json(results);

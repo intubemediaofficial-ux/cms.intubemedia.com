@@ -1,7 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { kv } from "@vercel/kv";
+import { kv } from "@/lib/redis";
 import crypto from "crypto";
 
 

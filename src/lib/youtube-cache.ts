@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import { kv } from "@/lib/redis";
 
 const YT_CACHE_PREFIX = "yt_cache:";
 
@@ -11,7 +11,7 @@ export interface CachedYouTubeData {
 }
 
 function isKVAvailable(): boolean {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  return true; // Always available — using DigitalOcean Redis
 }
 
 export async function cacheChannelVideos(channelId: string, videos: unknown[]): Promise<void> {
