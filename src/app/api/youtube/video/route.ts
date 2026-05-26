@@ -18,6 +18,7 @@ async function getAccessTokenForChannel(channelId: string): Promise<string | nul
   return token;
 }
 
+
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -138,9 +139,14 @@ export async function POST(request: Request) {
           } else {
             const data = await deleteRes.json().catch(() => ({}));
             const errMsg = (data as Record<string, Record<string, string>>)?.error?.message || "Failed";
-            console.error(`[YouTube Video] Delete failed for ${videoId} (status ${deleteRes.status}):`, errMsg);
+            const errReason = (data as { error?: { errors?: Array<{ reason?: string }> } })?.error?.errors?.[0]?.reason || "";
+            console.error(`[YouTube Video] Delete failed for ${videoId} channel=${channelId} (status ${deleteRes.status}): ${errMsg} reason=${errReason}`);
             if (deleteRes.status === 403) {
-              results.push({ videoId, success: false, error: "insufficientPermissions: Token needs re-validation with full YouTube access. Go to Channels → Re-validate token." });
+              if (errReason === "forbidden" || errMsg.includes("not properly authorized")) {
+                results.push({ videoId, success: false, error: "Delete permission denied. Token may not have write access OR the video belongs to a different channel. Please re-validate token with ALL permissions." });
+              } else {
+                results.push({ videoId, success: false, error: `Delete forbidden: ${errMsg}` });
+              }
             } else {
               results.push({ videoId, success: false, error: errMsg });
             }
@@ -241,7 +247,7 @@ export async function DELETE(request: Request) {
       console.error(`[YouTube Video] Single delete failed for ${videoId} (status ${deleteRes.status}):`, errMsg);
       if (deleteRes.status === 403) {
         return Response.json(
-          { error: "Token does not have delete permission. Please go to Channels page and re-validate the channel token." },
+          { error: "Delete permission denied by YouTube. Please re-validate the channel token and make sure to grant ALL permissions on the Google consent screen. If issue persists, the video may belong to a different channel." },
           { status: 403 }
         );
       }

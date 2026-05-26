@@ -9,6 +9,7 @@ export interface ChannelToken {
   createdAt: string;
   updatedAt: string;
   googleChannelId?: string;
+  grantedScopes?: string;
 }
 
 const TOKEN_PREFIX = "channel_token:";

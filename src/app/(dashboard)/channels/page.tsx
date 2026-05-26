@@ -394,7 +394,7 @@ export default function ChannelsPage() {
       "https://www.googleapis.com/auth/youtube",
       "https://www.googleapis.com/auth/yt-analytics.readonly",
       "https://www.googleapis.com/auth/yt-analytics-monetary.readonly",
-    ].join("+");
+    ].map(s => encodeURIComponent(s)).join("+");
 
     const oauthUrl = `https://accounts.google.com/o/oauth2/auth?access_type=offline&client_id=${encodeURIComponent(clientId)}&prompt=consent&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}&state=${channelId}`;
 

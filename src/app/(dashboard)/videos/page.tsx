@@ -718,8 +718,8 @@ export default function VideosPage() {
         setVideos(videos.filter((v) => !successIds.has(v.id!)));
         if (failedResults.length > 0 && successIds.size === 0) {
           const firstError = failedResults[0]?.error || "Unknown error";
-          if (firstError.includes("insufficient") || firstError.includes("forbidden") || firstError.includes("scope")) {
-            setBulkResult("Delete failed: Token does not have delete permission. Please re-validate the channel token.");
+          if (firstError.includes("insufficient") || firstError.includes("forbidden") || firstError.includes("scope") || firstError.includes("permission") || firstError.includes("Permission")) {
+            setBulkResult("Delete failed: YouTube denied permission. Please go to Channels → Re-validate token → Grant ALL permissions on Google consent screen.");
           } else if (firstError.includes("No valid token")) {
             setBulkResult("Delete failed: No valid token for this channel. Please validate the channel token first.");
           } else {
