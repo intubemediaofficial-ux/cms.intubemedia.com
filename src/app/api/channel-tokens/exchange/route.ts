@@ -1,5 +1,6 @@
-import { setChannelToken, isKVConfigured, type ChannelToken } from "@/lib/channel-tokens";
+import { setChannelToken, isKVConfigured, type ChannelToken, deleteChannelToken } from "@/lib/channel-tokens";
 import { google } from "googleapis";
+import { kv } from "@/lib/redis";
 
 export const dynamic = "force-dynamic";
 
@@ -69,9 +70,23 @@ export async function POST(request: Request) {
     const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
     const refreshToken = tokenData.refresh_token;
+    const grantedScopes = tokenData.scope || "";
+
+    console.log(`[Token Exchange] Granted scopes for ${expectedChannelId}: ${grantedScopes}`);
 
     if (!accessToken) {
       return Response.json({ error: "No access token received" }, { status: 400 });
+    }
+
+    // Clear old token and cached data for fresh start on re-validation
+    try {
+      await deleteChannelToken(expectedChannelId);
+      // Clear cached videos and stats for this channel (fresh start)
+      await kv.del(`yt_cache:videos:${expectedChannelId}`);
+      await kv.del(`yt_cache:stats:${expectedChannelId}`);
+      console.log(`[Token Exchange] Cleared old token and cache for ${expectedChannelId}`);
+    } catch (e) {
+      console.warn("[Token Exchange] Cache clear error (non-fatal):", e);
     }
 
     // Try to get channel info (may fail if quota exceeded — that's OK, token still gets saved)
@@ -115,7 +130,13 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       googleChannelId,
+      grantedScopes: grantedScopes,
     };
+
+    // Log whether youtube write scope was granted (space-separated scopes from Google)
+    const scopeList = grantedScopes.split(" ");
+    const hasFullYouTube = scopeList.some((s: string) => s.endsWith("/auth/youtube"));
+    console.log(`[Token Exchange] Has YouTube write scope: ${hasFullYouTube}, scopes: ${grantedScopes}`);
 
     await setChannelToken(storageChannelId, channelToken);
 

@@ -733,8 +733,14 @@ export default function DashboardPage() {
             </div>
           )}
           {realtime48?.disabled && (
-            <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-muted">
-              Realtime view is disabled by admin.
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 rounded-full bg-amber-500" />
+                <h3 className="text-sm font-bold text-amber-800">Realtime 48 Hours — Admin Approval Required</h3>
+              </div>
+              <p className="text-sm text-amber-700">
+                Realtime analytics is currently <strong>OFF</strong> for your account. Admin must enable it before you can view last 48 hours data for your channels. Please contact admin to turn ON realtime access.
+              </p>
             </div>
           )}
 
