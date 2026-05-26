@@ -136,6 +136,7 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const [clients, setClients] = useState<ClientUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [clientFilter, setClientFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"channels" | "name" | "status">("channels");
@@ -182,13 +183,24 @@ export default function AdminDashboardPage() {
   const fetchClients = useCallback(async () => {
     try {
       setLoading(true);
+      setFetchError(null);
       const res = await fetch("/api/users");
       if (res.ok) {
         const json = await res.json();
         setClients(json.data || []);
+      } else {
+        const json = await res.json().catch(() => ({}));
+        if (json.kvError) {
+          setFetchError(`Storage error: ${json.details || "Unable to read user data from KV"}. Please check Vercel KV connection.`);
+        } else if (res.status === 401) {
+          setFetchError("Unauthorized — please re-login as admin.");
+        } else {
+          setFetchError(`Failed to load users (HTTP ${res.status})`);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch clients:", error);
+      setFetchError("Network error — could not reach the server.");
     } finally {
       setLoading(false);
     }
@@ -486,6 +498,28 @@ export default function AdminDashboardPage() {
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
         <span className="ml-2 text-sm text-muted">Loading dashboard...</span>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="space-y-4 py-10">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 max-w-2xl mx-auto">
+          <div className="flex items-start gap-3">
+            <XCircle className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <h2 className="text-lg font-semibold text-red-900">Dashboard Data Error</h2>
+              <p className="text-sm text-red-700 mt-1">{fetchError}</p>
+              <button
+                onClick={() => fetchClients()}
+                className="mt-4 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

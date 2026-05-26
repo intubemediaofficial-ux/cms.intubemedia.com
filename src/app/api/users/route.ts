@@ -46,7 +46,7 @@ async function getUsers(): Promise<StoredUser[]> {
     return users || [];
   } catch (error) {
     console.error("[Users] Failed to read from KV:", error);
-    return [];
+    throw new Error(`KV read failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -83,11 +83,16 @@ export async function GET(request: Request) {
 
   // Non-admin: return only own user info (for fetching assigned networks etc.)
   if (action === "me") {
-    const users = await getUsers();
-    const me = users.find((u) => u.email.toLowerCase() === session.user!.email!.toLowerCase());
-    if (!me) return Response.json({ data: null });
-    const { password, ...safe } = me;
-    return Response.json({ data: safe });
+    try {
+      const users = await getUsers();
+      const me = users.find((u) => u.email.toLowerCase() === session.user!.email!.toLowerCase());
+      if (!me) return Response.json({ data: null });
+      const { password, ...safe } = me;
+      return Response.json({ data: safe });
+    } catch (error) {
+      console.error("[Users GET me] Error:", error);
+      return Response.json({ error: "Storage error", kvError: true, details: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    }
   }
 
   // Admin-only: return all users
@@ -95,9 +100,14 @@ export async function GET(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const users = await getUsers();
-  const safeUsers = users.map(({ password, ...u }) => u);
-  return Response.json({ data: safeUsers });
+  try {
+    const users = await getUsers();
+    const safeUsers = users.map(({ password, ...u }) => u);
+    return Response.json({ data: safeUsers });
+  } catch (error) {
+    console.error("[Users GET] Error:", error);
+    return Response.json({ error: "Failed to fetch users from storage", kvError: true, details: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
