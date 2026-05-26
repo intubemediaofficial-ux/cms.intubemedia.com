@@ -96,6 +96,7 @@ export async function GET(request: Request) {
 
       const status = await getTokenStatus(channelId);
       const token = await getChannelToken(channelId);
+      const channelMismatch = token?.googleChannelId && token.googleChannelId !== channelId;
       return Response.json({
         data: {
           channelId,
@@ -103,6 +104,8 @@ export async function GET(request: Request) {
           channelTitle: token?.channelTitle || null,
           updatedAt: token?.updatedAt || null,
           kvConfigured: isKVConfigured(),
+          channelMismatch: !!channelMismatch,
+          googleChannelId: token?.googleChannelId || null,
         },
       });
     }
@@ -111,7 +114,7 @@ export async function GET(request: Request) {
       const channelIdsParam = url.searchParams.get("channelIds") || "";
       const channelIds = channelIdsParam.split(",").filter(Boolean);
 
-      const statuses: Record<string, { status: string; channelTitle?: string; updatedAt?: string }> = {};
+      const statuses: Record<string, { status: string; channelTitle?: string; updatedAt?: string; channelMismatch?: boolean; googleChannelId?: string }> = {};
       for (const id of channelIds) {
         const status = await getTokenStatus(id);
         const token = await getChannelToken(id);
@@ -119,6 +122,8 @@ export async function GET(request: Request) {
           status,
           channelTitle: token?.channelTitle || undefined,
           updatedAt: token?.updatedAt || undefined,
+          channelMismatch: !!(token?.googleChannelId && token.googleChannelId !== id),
+          googleChannelId: token?.googleChannelId || undefined,
         };
       }
 

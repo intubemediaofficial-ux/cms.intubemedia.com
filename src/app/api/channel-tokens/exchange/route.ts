@@ -121,9 +121,18 @@ export async function POST(request: Request) {
     // Store the token with the expectedChannelId from state parameter
     const storageChannelId = expectedChannelId;
 
+    // Check channel mismatch — if Google channel differs from expected, the user
+    // logged in with the wrong account. Token won't have delete/edit permission for the expected channel.
+    const channelMismatch = googleChannelId !== expectedChannelId && googleChannelId !== storageChannelId;
+
+    if (channelMismatch && !quotaWarning) {
+      console.warn(`[Token Exchange] CHANNEL MISMATCH! Expected: ${expectedChannelId}, Got: ${googleChannelId} ("${channelTitle}")`);
+      // Still store the token (for read operations like analytics) but flag the mismatch
+    }
+
     const channelToken: ChannelToken = {
       channelId: storageChannelId,
-      channelTitle,
+      channelTitle: channelMismatch ? channelTitle : channelTitle,
       accessToken,
       refreshToken: refreshToken || "",
       tokenExpiry: Date.now() + (tokenData.expires_in || 3600) * 1000,
@@ -147,6 +156,13 @@ export async function POST(request: Request) {
         success: true,
         kvConfigured: isKVConfigured(),
         quotaWarning,
+        channelMismatch,
+        channelMismatchDetails: channelMismatch ? {
+          expectedChannelId,
+          actualGoogleChannelId: googleChannelId,
+          actualChannelTitle: channelTitle,
+          message: `Token validated but this Google account owns channel "${channelTitle}" (${googleChannelId}), not the channel you added (${expectedChannelId}). Video delete/edit will NOT work. Please login with the Google account that owns this channel.`,
+        } : undefined,
         channelInfo: {
           channelId: storageChannelId,
           channelTitle,
