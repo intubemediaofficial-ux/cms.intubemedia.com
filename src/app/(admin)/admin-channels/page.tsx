@@ -78,6 +78,7 @@ type ChannelRow = {
   clientName: string;
   category: string;
   tokenStatus?: string;
+  approvalStatus?: "approved" | "pending";
 };
 
 export default function AdminChannelsPage() {
@@ -303,6 +304,7 @@ export default function AdminChannelsPage() {
     const seenIds = new Set<string>();
     for (const client of clients) {
       // Include both approved and pending channels
+      const pendingSet = new Set(client.pendingChannels || []);
       const allClientChannels = [...client.channels, ...(client.pendingChannels || [])];
       for (const chId of allClientChannels) {
         if (seenIds.has(chId)) continue;
@@ -323,6 +325,7 @@ export default function AdminChannelsPage() {
           clientName: client.name,
           category: client.category,
           tokenStatus: tokenStatuses[chId] || "none",
+          approvalStatus: pendingSet.has(chId) ? "pending" : "approved",
         });
       }
     }
@@ -376,6 +379,13 @@ export default function AdminChannelsPage() {
       });
     }
 
+    // Sort: approved channels first, then pending
+    result.sort((a, b) => {
+      if (a.approvalStatus === "approved" && b.approvalStatus === "pending") return -1;
+      if (a.approvalStatus === "pending" && b.approvalStatus === "approved") return 1;
+      return 0;
+    });
+
     return result;
   }, [allChannelRows, searchQuery, clientFilter, tokenFilter]);
 
@@ -392,16 +402,17 @@ export default function AdminChannelsPage() {
         body: JSON.stringify({ action: "removeChannelFromCache", channelId }),
       });
 
-      let owner = clients.find((c) => c.channels.includes(channelId));
+      let owner = clients.find((c) => c.channels.includes(channelId) || (c.pendingChannels || []).includes(channelId));
       if (!owner) {
         owner = clients.find((c) => c.name === clientName || c.email === clientName);
       }
       if (owner) {
         const updatedChannels = owner.channels.filter((ch) => ch !== channelId);
+        const updatedPending = (owner.pendingChannels || []).filter((ch) => ch !== channelId);
         const res = await fetch("/api/users", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: owner.id, channels: updatedChannels }),
+          body: JSON.stringify({ id: owner.id, channels: updatedChannels, pendingChannels: updatedPending }),
         });
         if (!res.ok) {
           alert("Failed to delete channel. Please try again.");
@@ -410,7 +421,7 @@ export default function AdminChannelsPage() {
         }
         setClients((prev) =>
           prev.map((c) =>
-            c.id === owner.id ? { ...c, channels: updatedChannels } : c
+            c.id === owner.id ? { ...c, channels: updatedChannels, pendingChannels: updatedPending } : c
           )
         );
       }

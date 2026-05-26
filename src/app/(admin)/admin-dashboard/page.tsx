@@ -22,6 +22,11 @@ import {
   ChevronUp,
   RefreshCw,
   AlertCircle,
+  CheckCircle2,
+  XCircle,
+  Phone,
+  Mail,
+  Calendar,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -140,6 +145,7 @@ export default function AdminDashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, { status: string; channelTitle?: string; updatedAt?: string }>>({});
   const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all" | string>(7);
+  const [showInvalidTokens, setShowInvalidTokens] = useState(false);
   const { rate: INR_RATE } = useExchangeRate("USD");
 
   // Cached client data from KV (auto-saved when clients load their dashboards)
@@ -404,6 +410,9 @@ export default function AdminDashboardPage() {
       acc[c.category] = (acc[c.category] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
+    // Token counts
+    const validTokens = allChannelIds.filter((id) => tokenStatuses[id]?.status === "valid").length;
+    const invalidTokens = allChannelIds.length - validTokens;
     return {
       totalClients,
       activeClients,
@@ -413,8 +422,10 @@ export default function AdminDashboardPage() {
       clientsWithChannels,
       clientsWithoutChannels,
       categories,
+      validTokens,
+      invalidTokens,
     };
-  }, [clients]);
+  }, [clients, allChannelIds, tokenStatuses]);
 
   const filteredClients = useMemo(() => {
     let result = clients;
@@ -610,19 +621,35 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Stats Cards Row 2 */}
+      {/* Stats Cards Row 2 — Token Status & More */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-border p-5">
+        <div className="bg-white rounded-xl border border-green-200 p-5">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-              <Users className="w-6 h-6 text-red-600" />
+            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-muted">Inactive Users</p>
-              <p className="text-2xl font-bold text-foreground">{stats.inactiveClients}</p>
+              <p className="text-sm text-muted">Valid Token Channels</p>
+              <p className="text-2xl font-bold text-green-700">{stats.validTokens}</p>
             </div>
           </div>
         </div>
+
+        <button
+          onClick={() => setShowInvalidTokens(!showInvalidTokens)}
+          className="bg-white rounded-xl border border-red-200 p-5 hover:shadow-md transition-shadow text-left"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+              <XCircle className="w-6 h-6 text-red-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted">Invalid Token Channels</p>
+              <p className="text-2xl font-bold text-red-700">{stats.invalidTokens}</p>
+              <p className="text-[10px] text-red-500 mt-0.5">Click to view &amp; validate →</p>
+            </div>
+          </div>
+        </button>
 
         <div className="bg-white rounded-xl border border-border p-5">
           <div className="flex items-center gap-3">
@@ -642,24 +669,195 @@ export default function AdminDashboardPage() {
               <UserPlus className="w-6 h-6 text-orange-600" />
             </div>
             <div>
-              <p className="text-sm text-muted">Users without Channels</p>
-              <p className="text-2xl font-bold text-foreground">{stats.clientsWithoutChannels}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-border p-5">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
-              <Filter className="w-6 h-6 text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-sm text-muted">Categories</p>
-              <p className="text-2xl font-bold text-foreground">{Object.keys(stats.categories).length}</p>
+              <p className="text-sm text-muted">Inactive Users</p>
+              <p className="text-2xl font-bold text-foreground">{stats.inactiveClients}</p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Invalid Token Channels — Expandable */}
+      {showInvalidTokens && (
+        <div className="bg-white rounded-xl border border-red-200 overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-red-100 bg-red-50">
+            <div className="flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-red-500" />
+              <h2 className="text-base font-semibold text-red-900">
+                Invalid Token Channels ({stats.invalidTokens})
+              </h2>
+            </div>
+            <button
+              onClick={() => setShowInvalidTokens(false)}
+              className="text-xs text-red-600 hover:text-red-800 font-medium"
+            >
+              Close ✕
+            </button>
+          </div>
+          <div className="p-4">
+            {allChannelIds.filter((id) => !tokenStatuses[id] || tokenStatuses[id].status !== "valid").length === 0 ? (
+              <p className="text-center text-green-600 py-4 text-sm font-medium">All channels have valid tokens!</p>
+            ) : (
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {allChannelIds
+                  .filter((id) => !tokenStatuses[id] || tokenStatuses[id].status !== "valid")
+                  .map((chId) => {
+                    const client = clients.find((c) => c.channels.includes(chId));
+                    const cached = cachedChannelMap[chId];
+                    const ts = tokenStatuses[chId];
+                    return (
+                      <div key={chId} className="flex items-center gap-3 p-3 bg-red-50/50 rounded-lg border border-red-100">
+                        {cached?.thumbnail ? (
+                          <img src={cached.thumbnail} alt="" className="w-8 h-8 rounded-full shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+                            <Radio className="w-4 h-4 text-red-400" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {cached?.channelTitle || chId}
+                          </p>
+                          <p className="text-xs text-muted truncate">
+                            Client: {client?.name || "Unknown"} • {client?.email || "—"}
+                          </p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                          ts?.status === "expired" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                        }`}>
+                          {ts?.status === "expired" ? "Expired" : "Not Validated"}
+                        </span>
+                        <a
+                          href={`/channels?validate=${chId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors shrink-0"
+                        >
+                          Validate
+                        </a>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Pending Approvals — New Clients + Pending Channels */}
+      {(() => {
+        const pendingUsers = clients.filter((c) => c.status === "inactive" || c.status === ("pending" as string));
+        const pendingChannelsList: { channelId: string; userId: string; userName: string; userEmail: string }[] = [];
+        for (const c of clients) {
+          const pc = (c as unknown as { pendingChannels?: string[] }).pendingChannels;
+          if (pc?.length) {
+            for (const chId of pc) {
+              pendingChannelsList.push({ channelId: chId, userId: c.id, userName: c.name, userEmail: c.email });
+            }
+          }
+        }
+        if (pendingUsers.length === 0 && pendingChannelsList.length === 0) return null;
+        return (
+          <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-amber-100 bg-amber-50">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-500" />
+                <h2 className="text-base font-semibold text-amber-900">
+                  Pending Approvals ({pendingUsers.length + pendingChannelsList.length})
+                </h2>
+              </div>
+              <button
+                onClick={() => router.push("/admin-clients")}
+                className="text-xs text-amber-700 hover:text-amber-900 font-medium"
+              >
+                Manage Users →
+              </button>
+            </div>
+            <div className="p-4 space-y-3 max-h-[350px] overflow-y-auto">
+              {pendingUsers.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-2">New Users Waiting Approval</p>
+                  {pendingUsers.map((user) => (
+                    <div key={user.id} className="flex items-center gap-3 p-3 bg-amber-50/50 rounded-lg border border-amber-100 mb-2">
+                      <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+                        <UserPlus className="w-4 h-4 text-amber-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
+                        <p className="text-xs text-muted">{user.email} {user.phone && `• ${user.phone}`}</p>
+                      </div>
+                      <span className="text-xs text-muted">{user.joinedDate}</span>
+                      <button
+                        onClick={async () => {
+                          const res = await fetch("/api/users", {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ id: user.id, status: "active" }),
+                          });
+                          if (res.ok) fetchClients();
+                        }}
+                        className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors shrink-0"
+                      >
+                        Approve
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {pendingChannelsList.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-2">Channels Waiting Approval</p>
+                  {pendingChannelsList.map((pc) => {
+                    const cached = cachedChannelMap[pc.channelId];
+                    return (
+                      <div key={`${pc.userId}-${pc.channelId}`} className="flex items-center gap-3 p-3 bg-amber-50/50 rounded-lg border border-amber-100 mb-2">
+                        {cached?.thumbnail ? (
+                          <img src={cached.thumbnail} alt="" className="w-8 h-8 rounded-full shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+                            <Radio className="w-4 h-4 text-amber-500" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {cached?.channelTitle || pc.channelId}
+                          </p>
+                          <p className="text-xs text-muted truncate">Client: {pc.userName} • {pc.userEmail}</p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            const res = await fetch("/api/users", {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ type: "approve_channel", userId: pc.userId, channelId: pc.channelId }),
+                            });
+                            if (res.ok) fetchClients();
+                          }}
+                          className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors shrink-0"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const res = await fetch("/api/users", {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ type: "reject_channel", userId: pc.userId, channelId: pc.channelId }),
+                            });
+                            if (res.ok) fetchClients();
+                          }}
+                          className="px-2.5 py-1.5 bg-red-100 text-red-700 text-xs font-medium rounded-lg hover:bg-red-200 transition-colors shrink-0"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* YouTube Analytics — Real-time Revenue, Views, Subscribers, CPM, RPM */}
       <div className="bg-white rounded-xl border border-border p-5">
@@ -1081,8 +1279,7 @@ export default function AdminDashboardPage() {
                     {sortBy === "name" && (sortDir === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />)}
                   </div>
                 </th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Email</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Category</th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground">Contact</th>
                 <th
                   className="text-left px-4 py-3 font-semibold text-foreground cursor-pointer hover:text-primary"
                   onClick={() => toggleSort("channels")}
@@ -1116,14 +1313,25 @@ export default function AdminDashboardPage() {
                         <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-sm">
                           {client.name[0]}
                         </div>
-                        <span className="font-medium text-foreground">{client.name}</span>
+                        <div>
+                          <span className="font-medium text-foreground block">{client.name}</span>
+                          <span className="text-[10px] text-muted">{client.category}</span>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-muted">{client.email}</td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
-                        {client.category}
-                      </span>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1 text-xs text-muted">
+                          <Mail className="w-3 h-3" />
+                          <span className="truncate max-w-[160px]">{client.email}</span>
+                        </div>
+                        {client.phone && (
+                          <div className="flex items-center gap-1 text-xs text-muted">
+                            <Phone className="w-3 h-3" />
+                            <span>{client.phone}</span>
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-1 font-semibold text-foreground">
@@ -1135,9 +1343,11 @@ export default function AdminDashboardPage() {
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                         client.status === "active"
                           ? "bg-green-100 text-green-700"
+                          : client.status === ("pending" as string)
+                          ? "bg-amber-100 text-amber-700"
                           : "bg-red-100 text-red-700"
                       }`}>
-                        {client.status === "active" ? "Active" : "Inactive"}
+                        {client.status === "active" ? "Active" : client.status === ("pending" as string) ? "Pending" : "Inactive"}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -1149,7 +1359,12 @@ export default function AdminDashboardPage() {
                         return <span className="text-muted text-xs">—</span>;
                       })()}
                     </td>
-                    <td className="px-4 py-3 text-muted">{client.joinedDate}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1 text-xs text-muted">
+                        <Calendar className="w-3 h-3" />
+                        <span>{client.joinedDate}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       {client.channels.length > 0 && (
                         <button
@@ -1168,7 +1383,7 @@ export default function AdminDashboardPage() {
                   </tr>
                   {expandedClient === client.id && client.channels.length > 0 && (
                     <tr key={`${client.id}-channels`} className="bg-slate-50">
-                      <td colSpan={9} className="px-8 py-4">
+                      <td colSpan={8} className="px-8 py-4">
                         <div className="space-y-2">
                           <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
                             Channel IDs assigned to {client.name}

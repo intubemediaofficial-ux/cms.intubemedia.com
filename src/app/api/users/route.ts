@@ -248,6 +248,7 @@ export async function PUT(request: Request) {
     if (password) users[idx].password = hashPassword(password);
     if (phone !== undefined) users[idx].phone = phone.trim();
     if (channels) users[idx].channels = channels;
+    if (body.pendingChannels !== undefined) users[idx].pendingChannels = body.pendingChannels;
     if (category) users[idx].category = category;
     if (status) users[idx].status = status;
     if (networks !== undefined) users[idx].networks = networks;
