@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import { kv } from "@/lib/redis";
 
 export interface CachedChannelData {
   channelId: string;
@@ -26,7 +26,7 @@ export interface CachedClientData {
 const CACHE_PREFIX = "client_data_cache:";
 
 function isKVAvailable(): boolean {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  return true; // Always available — using DigitalOcean Redis
 }
 
 export async function cacheClientData(userId: string, data: CachedClientData): Promise<void> {

@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import { kv } from "@/lib/redis";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";

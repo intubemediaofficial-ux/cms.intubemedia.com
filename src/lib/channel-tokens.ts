@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import { kv } from "@/lib/redis";
 
 export interface ChannelToken {
   channelId: string;
@@ -14,7 +14,7 @@ export interface ChannelToken {
 const TOKEN_PREFIX = "channel_token:";
 
 function isKVAvailable(): boolean {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  return true; // Always available — using DigitalOcean Redis
 }
 
 // In-memory fallback when Vercel KV is not configured

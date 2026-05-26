@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import { kv } from "@/lib/redis";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ function hashPassword(password: string): string {
 }
 
 function isKVAvailable(): boolean {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  return true; // Always available — using DigitalOcean Redis
 }
 
 export async function POST(request: Request) {

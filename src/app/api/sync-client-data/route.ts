@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { kv } from "@vercel/kv";
+import { kv } from "@/lib/redis";
 import { getValidAccessToken } from "@/lib/channel-tokens";
 import { cacheClientData } from "@/lib/client-data-cache";
 import type { CachedChannelData, CachedClientData } from "@/lib/client-data-cache";

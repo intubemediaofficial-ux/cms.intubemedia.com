@@ -7,7 +7,7 @@ import {
   getTokenStatus,
   isKVConfigured,
 } from "@/lib/channel-tokens";
-import { kv } from "@vercel/kv";
+import { kv } from "@/lib/redis";
 import { permanentRemoveFromBackend, expireAllTokensOnBackend } from "@/lib/backend-sync";
 
 export const dynamic = "force-dynamic";
