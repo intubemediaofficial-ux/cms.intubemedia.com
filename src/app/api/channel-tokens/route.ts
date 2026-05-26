@@ -199,18 +199,23 @@ export async function GET(request: Request) {
         console.warn("[permanentRemoveChannel] Cache cleanup error:", err);
       }
 
-      // Remove from user's channel list in KV
+      // Remove from user's channel list in KV (shared bainsla_users array)
       try {
-        const usersRes = await fetch(new URL("/api/users?action=list", request.url).toString());
-        if (usersRes.ok) {
-          const usersJson = await usersRes.json();
-          const users = usersJson.data || [];
-          for (const user of users) {
-            if (user.channels?.includes(channelId)) {
-              user.channels = user.channels.filter((c: string) => c !== channelId);
-              await kv.set(`user:${user.id}`, user);
-            }
+        const USERS_KEY = "bainsla_users";
+        const users = await kv.get<Array<{ id: string; channels: string[]; pendingChannels?: string[] }>>(USERS_KEY) || [];
+        let changed = false;
+        for (const user of users) {
+          if (user.channels?.includes(channelId)) {
+            user.channels = user.channels.filter((c: string) => c !== channelId);
+            changed = true;
           }
+          if (user.pendingChannels?.includes(channelId)) {
+            user.pendingChannels = user.pendingChannels.filter((c: string) => c !== channelId);
+            changed = true;
+          }
+        }
+        if (changed) {
+          await kv.set(USERS_KEY, users);
         }
       } catch (err) {
         console.warn("[permanentRemoveChannel] User cleanup error:", err);

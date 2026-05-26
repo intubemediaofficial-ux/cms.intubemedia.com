@@ -293,10 +293,10 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    const { channels, pendingChannels } = body;
+    const { channels, pendingChannels, removeChannels } = body;
 
-    if (!Array.isArray(channels) && !Array.isArray(pendingChannels)) {
-      return Response.json({ error: "channels or pendingChannels array required" }, { status: 400 });
+    if (!Array.isArray(channels) && !Array.isArray(pendingChannels) && !Array.isArray(removeChannels)) {
+      return Response.json({ error: "channels, pendingChannels, or removeChannels array required" }, { status: 400 });
     }
 
     const users = await getUsers();
@@ -305,6 +305,15 @@ export async function PATCH(request: Request) {
 
     if (idx === -1) {
       return Response.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Remove channels from both approved and pending lists
+    if (Array.isArray(removeChannels)) {
+      const removeSet = new Set(removeChannels.filter((c: unknown) => typeof c === "string" && (c as string).length > 0));
+      users[idx].channels = users[idx].channels.filter((ch) => !removeSet.has(ch));
+      if (users[idx].pendingChannels) {
+        users[idx].pendingChannels = users[idx].pendingChannels!.filter((ch) => !removeSet.has(ch));
+      }
     }
 
     // If pendingChannels is provided, add new channels to pending list
