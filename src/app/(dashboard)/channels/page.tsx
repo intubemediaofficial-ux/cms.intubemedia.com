@@ -310,8 +310,10 @@ export default function ChannelsPage() {
         }
 
         // Sync approval status from KV — if admin approved a pending channel, update localStorage
+        // Also remove channels that admin has deleted (no longer in KV at all)
         const kvApprovedSet = new Set(kvApproved);
         const kvPendingSet = new Set(kvPending);
+        const kvAllSet = new Set([...kvApproved, ...kvPending]);
         let changed = false;
         const updated = currentStored.map((ch) => {
           if (ch.status === "pending_approval" && kvApprovedSet.has(ch.id)) {
@@ -321,6 +323,11 @@ export default function ChannelsPage() {
           if (ch.status === "pending_approval" && !kvPendingSet.has(ch.id) && !kvApprovedSet.has(ch.id)) {
             changed = true;
             return null; // rejected by admin — remove
+          }
+          // If admin removed an active channel from KV, remove from localStorage too
+          if (ch.status === "active" && !kvAllSet.has(ch.id) && kvAllSet.size > 0) {
+            changed = true;
+            return null; // removed by admin
           }
           return ch;
         }).filter(Boolean) as StoredChannel[];
