@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
-import { CheckCircle, XCircle, Loader2, ArrowLeft } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, ArrowLeft, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
 interface ChannelInfo {
@@ -23,6 +23,8 @@ function CallbackContent() {
   const [errorMessage, setErrorMessage] = useState("");
   const [kvConfigured, setKvConfigured] = useState<boolean | null>(null);
   const [quotaWarning, setQuotaWarning] = useState(false);
+  const [channelMismatch, setChannelMismatch] = useState(false);
+  const [mismatchMessage, setMismatchMessage] = useState("");
   const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
@@ -70,6 +72,10 @@ function CallbackContent() {
         setChannelInfo(result.data.channelInfo);
         setKvConfigured(result.data.kvConfigured ?? null);
         setQuotaWarning(result.data.quotaWarning ?? false);
+        if (result.data.channelMismatch && result.data.channelMismatchDetails) {
+          setChannelMismatch(true);
+          setMismatchMessage(result.data.channelMismatchDetails.message);
+        }
         setStatus("success");
       } catch {
         setStatus("error");
@@ -119,6 +125,20 @@ function CallbackContent() {
                 </div>
                 <p className="text-sm text-green-600 mt-1">Token validated and stored. Redirecting to Channels page in {countdown}s...</p>
               </div>
+              {channelMismatch && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-700">Wrong Google Account!</p>
+                      <p className="text-sm text-red-600 mt-1">{mismatchMessage}</p>
+                      <p className="text-sm text-red-600 mt-2">
+                        <strong>Fix:</strong> Go to Channels → Delete this channel → Re-add it → Validate with the correct Google account that OWNS this channel.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
               {quotaWarning && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
                   <p className="text-sm text-amber-700">
