@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getValidAccessToken } from "@/lib/channel-tokens";
+import { getCachedChannelVideos, cacheChannelVideos } from "@/lib/youtube-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -126,11 +127,26 @@ export async function POST(request: Request) {
           );
           if (deleteRes.ok || deleteRes.status === 204) {
             results.push({ videoId, success: true });
+            // Remove from KV cache
+            try {
+              const cached = await getCachedChannelVideos(channelId);
+              if (cached?.videos) {
+                const filtered = cached.videos.filter((v) => v && (v as { id?: string }).id !== videoId);
+                await cacheChannelVideos(channelId, filtered);
+              }
+            } catch { /* cache update best-effort */ }
           } else {
             const data = await deleteRes.json().catch(() => ({}));
-            results.push({ videoId, success: false, error: (data as Record<string, Record<string, string>>)?.error?.message || "Failed" });
+            const errMsg = (data as Record<string, Record<string, string>>)?.error?.message || "Failed";
+            console.error(`[YouTube Video] Delete failed for ${videoId} (status ${deleteRes.status}):`, errMsg);
+            if (deleteRes.status === 403) {
+              results.push({ videoId, success: false, error: "insufficientPermissions: Token needs re-validation with full YouTube access. Go to Channels → Re-validate token." });
+            } else {
+              results.push({ videoId, success: false, error: errMsg });
+            }
           }
-        } catch {
+        } catch (e) {
+          console.error(`[YouTube Video] Delete network error for ${videoId}:`, e);
           results.push({ videoId, success: false, error: "Network error" });
         }
       }
@@ -221,11 +237,28 @@ export async function DELETE(request: Request) {
 
     if (!deleteRes.ok && deleteRes.status !== 204) {
       const data = await deleteRes.json().catch(() => ({}));
+      const errMsg = (data as Record<string, Record<string, string>>)?.error?.message || "Failed to delete video";
+      console.error(`[YouTube Video] Single delete failed for ${videoId} (status ${deleteRes.status}):`, errMsg);
+      if (deleteRes.status === 403) {
+        return Response.json(
+          { error: "Token does not have delete permission. Please go to Channels page and re-validate the channel token." },
+          { status: 403 }
+        );
+      }
       return Response.json(
-        { error: (data as Record<string, Record<string, string>>)?.error?.message || "Failed to delete video" },
+        { error: errMsg },
         { status: deleteRes.status }
       );
     }
+
+    // Remove from KV cache
+    try {
+      const cached = await getCachedChannelVideos(channelId);
+      if (cached?.videos) {
+        const filtered = cached.videos.filter((v) => v && (v as { id?: string }).id !== videoId);
+        await cacheChannelVideos(channelId, filtered);
+      }
+    } catch { /* cache update best-effort */ }
 
     return Response.json({ data: { success: true } });
   } catch (error) {

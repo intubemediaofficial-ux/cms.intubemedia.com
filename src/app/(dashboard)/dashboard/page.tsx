@@ -551,6 +551,24 @@ export default function DashboardPage() {
     cacheData();
   }, [cacheData]);
 
+  // Realtime 48-hour data
+  const [realtime48, setRealtime48] = useState<{
+    views: number; subscribers: number; watchTime: number; revenue: number;
+    dailyBreakdown: Array<{ date: string; views: number; subscribers: number; watchTime: number; revenue: number }>;
+    disabled?: boolean; message?: string;
+  } | null>(null);
+  const [realtime48Loading, setRealtime48Loading] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || allChannelIds.length === 0) return;
+    setRealtime48Loading(true);
+    fetch(`/api/youtube?action=realtime48&channelIds=${allChannelIds.join(",")}`)
+      .then(res => res.json())
+      .then(data => { if (data.data) setRealtime48(data.data); })
+      .catch(() => {})
+      .finally(() => setRealtime48Loading(false));
+  }, [isAuthenticated, allChannelIds]);
+
   return (
     <div className="space-y-5 max-w-full overflow-x-hidden">
       {/* Header */}
@@ -674,6 +692,51 @@ export default function DashboardPage() {
             <span className="font-semibold shrink-0">Note:</span>
             <span>All date ranges end at {displayEnd} (today minus 3 days) due to YouTube&apos;s data reporting delay.</span>
           </div>
+
+          {/* ===== REALTIME 48 HOURS ===== */}
+          {realtime48 && !realtime48.disabled && (
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <h3 className="text-sm font-bold text-purple-800">Last 48 Hours (Realtime)</h3>
+                {realtime48Loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-500" />}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-lg p-3 border border-purple-100">
+                  <p className="text-xs text-muted mb-1">Views</p>
+                  <p className="text-lg font-bold text-foreground">{formatNumber(realtime48.views)}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-purple-100">
+                  <p className="text-xs text-muted mb-1">Subscribers</p>
+                  <p className="text-lg font-bold text-foreground">+{formatNumber(realtime48.subscribers)}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-purple-100">
+                  <p className="text-xs text-muted mb-1">Watch Time (hrs)</p>
+                  <p className="text-lg font-bold text-foreground">{formatNumber(Math.round(realtime48.watchTime / 60))}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-purple-100">
+                  <p className="text-xs text-muted mb-1">Revenue (Est.)</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(realtime48.revenue)}</p>
+                  {INR_RATE > 0 && <p className="text-xs text-muted">≈ ₹{toINR(realtime48.revenue, INR_RATE).toFixed(0)}</p>}
+                </div>
+              </div>
+              {realtime48.dailyBreakdown.length > 0 && (
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {realtime48.dailyBreakdown.map(d => (
+                    <div key={d.date} className="flex items-center justify-between px-3 py-1.5 bg-white/70 rounded border border-purple-50 text-xs">
+                      <span className="font-medium text-purple-700">{d.date}</span>
+                      <span className="text-muted">{formatNumber(d.views)} views • ${d.revenue.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {realtime48?.disabled && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-muted">
+              Realtime view is disabled by admin.
+            </div>
+          )}
 
           {/* ===== DATE RANGE FILTER + DOWNLOAD ===== */}
           <div className="flex items-center justify-between gap-4 flex-wrap">

@@ -174,6 +174,16 @@ export default function AdminDashboardPage() {
   const [cachedClientData, setCachedClientData] = useState<CachedClientData[]>([]);
   const [syncing, setSyncing] = useState(false);
 
+  // Realtime 48-hour state
+  const [realtime48, setRealtime48] = useState<{
+    views: number; subscribers: number; watchTime: number; revenue: number;
+    dailyBreakdown: Array<{ date: string; views: number; subscribers: number; watchTime: number; revenue: number }>;
+  } | null>(null);
+  const [realtime48Loading, setRealtime48Loading] = useState(false);
+  const [realtimeEnabled, setRealtimeEnabled] = useState(true);
+  const [realtimeChannel, setRealtimeChannel] = useState<string>("all");
+  const [realtimeUserSettings, setRealtimeUserSettings] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
       router.push("/dashboard");
@@ -275,6 +285,40 @@ export default function AdminDashboardPage() {
     ytApiParams,
     {}
   );
+
+  // Fetch realtime 48h data for admin
+  useEffect(() => {
+    if (!realtimeEnabled || allChannelIds.length === 0) { setRealtime48(null); return; }
+    const ids = realtimeChannel === "all" ? allChannelIds : [realtimeChannel];
+    setRealtime48Loading(true);
+    fetch(`/api/youtube?action=realtime48&channelIds=${ids.join(",")}`)
+      .then(res => res.json())
+      .then(data => { if (data.data && !data.data.disabled) setRealtime48(data.data); })
+      .catch(() => {})
+      .finally(() => setRealtime48Loading(false));
+  }, [realtimeEnabled, realtimeChannel, allChannelIds]);
+
+  // Fetch realtime user settings (admin control)
+  useEffect(() => {
+    fetch("/api/admin-settings?setting=realtime")
+      .then(res => res.json())
+      .then(data => { if (data.data) setRealtimeUserSettings(data.data); })
+      .catch(() => {});
+  }, []);
+
+  const toggleUserRealtime = async (email: string, enabled: boolean) => {
+    try {
+      const res = await fetch("/api/admin-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ setting: "realtime", email, enabled }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRealtimeUserSettings(data.data || {});
+      }
+    } catch { /* silent */ }
+  };
 
   // Aggregate cached client data totals
   const cachedTotals = useMemo(() => {
@@ -708,6 +752,98 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ===== REALTIME 48 HOURS (Admin) ===== */}
+      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <h3 className="text-sm font-bold text-purple-800">Last 48 Hours (Realtime)</h3>
+            {realtime48Loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-500" />}
+          </div>
+          <div className="flex items-center gap-3">
+            <select
+              value={realtimeChannel}
+              onChange={(e) => setRealtimeChannel(e.target.value)}
+              className="text-xs border border-purple-200 rounded-lg px-2 py-1 bg-white"
+            >
+              <option value="all">All Channels</option>
+              {allChannelIds.map(id => {
+                const cached = cachedChannelMap[id];
+                return <option key={id} value={id}>{cached?.channelTitle || id}</option>;
+              })}
+            </select>
+            <label className="flex items-center gap-1.5 text-xs text-purple-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={realtimeEnabled}
+                onChange={(e) => setRealtimeEnabled(e.target.checked)}
+                className="rounded border-purple-300"
+              />
+              Enabled
+            </label>
+          </div>
+        </div>
+        {realtimeEnabled && realtime48 && (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white rounded-lg p-3 border border-purple-100">
+                <p className="text-xs text-muted mb-1">Views</p>
+                <p className="text-lg font-bold text-foreground">{formatNumber(realtime48.views)}</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-purple-100">
+                <p className="text-xs text-muted mb-1">Subscribers</p>
+                <p className="text-lg font-bold text-foreground">+{formatNumber(realtime48.subscribers)}</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-purple-100">
+                <p className="text-xs text-muted mb-1">Watch Time (hrs)</p>
+                <p className="text-lg font-bold text-foreground">{formatNumber(Math.round(realtime48.watchTime / 60))}</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-purple-100">
+                <p className="text-xs text-muted mb-1">Revenue (Est.)</p>
+                <p className="text-lg font-bold text-foreground">{formatCurrency(realtime48.revenue)}</p>
+                {INR_RATE > 0 && <p className="text-xs text-muted">≈ ₹{(realtime48.revenue * INR_RATE).toFixed(0)}</p>}
+              </div>
+            </div>
+            {realtime48.dailyBreakdown.length > 0 && (
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2">
+                {realtime48.dailyBreakdown.map(d => (
+                  <div key={d.date} className="flex items-center justify-between px-3 py-1.5 bg-white/70 rounded border border-purple-50 text-xs">
+                    <span className="font-medium text-purple-700">{d.date}</span>
+                    <span className="text-muted">{formatNumber(d.views)} views • ${d.revenue.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+        {!realtimeEnabled && (
+          <p className="text-sm text-purple-600">Realtime is OFF — API quota saved. Enable to see last 48h data.</p>
+        )}
+
+        {/* Admin: User Realtime Controls */}
+        {clients.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-purple-200">
+            <h4 className="text-xs font-semibold text-purple-800 mb-2">User Realtime Access Control</h4>
+            <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+              {clients.filter(c => c.status === "active").map(c => (
+                <div key={c.id} className="flex items-center justify-between px-3 py-1.5 bg-white rounded border border-purple-50">
+                  <span className="text-xs text-foreground">{c.name} ({c.email})</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={realtimeUserSettings[c.email] !== false}
+                      onChange={(e) => toggleUserRealtime(c.email, e.target.checked)}
+                      className="rounded border-purple-300"
+                    />
+                    <span className="text-[10px] text-muted">{realtimeUserSettings[c.email] === false ? "OFF" : "ON"}</span>
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Invalid Token Channels — Expandable */}

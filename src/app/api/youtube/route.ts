@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { kv } from "@/lib/redis";
 import {
   getChannelStats,
   getChannelStatsById,
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
 
   try {
     // All YouTube API actions now use per-channel tokens (login tokens lack YouTube scopes)
-    if (!["dashboardFull", "lookupChannel", "dashboard", "videos"].includes(action || "")) {
+    if (!["dashboardFull", "lookupChannel", "dashboard", "videos", "realtime48"].includes(action || "")) {
       return Response.json(
         { error: "This action requires per-channel token validation. Please validate channel tokens first." },
         { status: 401 }
@@ -538,6 +539,105 @@ export async function GET(request: Request) {
         }
 
         return Response.json({ data: responseData });
+      }
+      case "realtime48": {
+        // Fetch last 48 hours of data (actually last 3 days to account for YouTube's 2-day delay)
+        const channelIdsParam48 = url.searchParams.get("channelIds") || "";
+        const channelIds48 = channelIdsParam48 ? channelIdsParam48.split(",").filter(Boolean) : [];
+
+        if (channelIds48.length === 0) {
+          return Response.json({ data: { views: 0, subscribers: 0, watchTime: 0, revenue: 0, dailyBreakdown: [] } });
+        }
+
+        // Check if user has realtime access (admin setting)
+        const userEmail48 = session.user?.email || "";
+        const realtimeSettings = await kv.get<Record<string, boolean>>("realtime_settings") || {};
+        const isAdmin48 = ADMIN_EMAILS.includes(userEmail48);
+        // Admin always has access; clients check their setting (default: enabled)
+        if (!isAdmin48 && realtimeSettings[userEmail48] === false) {
+          return Response.json({ data: { disabled: true, message: "Realtime view is disabled by admin" } });
+        }
+
+        const now = new Date();
+        const day1 = new Date(now); day1.setDate(now.getDate() - 1);
+        const day2 = new Date(now); day2.setDate(now.getDate() - 2);
+        const day3 = new Date(now); day3.setDate(now.getDate() - 3);
+        const realtimeStart = `${day3.getUTCFullYear()}-${String(day3.getUTCMonth()+1).padStart(2,"0")}-${String(day3.getUTCDate()).padStart(2,"0")}`;
+        const realtimeEnd = `${day1.getUTCFullYear()}-${String(day1.getUTCMonth()+1).padStart(2,"0")}-${String(day1.getUTCDate()).padStart(2,"0")}`;
+
+        let totalViews48 = 0;
+        let totalSubs48 = 0;
+        let totalWatchTime48 = 0;
+        let totalRevenue48 = 0;
+        const dailyBreakdown: Array<{ date: string; views: number; subscribers: number; watchTime: number; revenue: number }> = [];
+        const dailyMap = new Map<string, { views: number; subscribers: number; watchTime: number; revenue: number }>();
+
+        for (const cid of channelIds48) {
+          const token48 = await getValidAccessToken(cid);
+          if (!token48) continue;
+          try {
+            const [perfData, revData] = await Promise.all([
+              getAnalyticsData(token48, realtimeStart, realtimeEnd, "views,estimatedMinutesWatched,subscribersGained", "day").catch(() => null),
+              getAnalyticsData(token48, realtimeStart, realtimeEnd, "estimatedRevenue", "day").catch(() => null),
+            ]);
+            // Process performance data
+            const perf = perfData as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;
+            if (perf?.rows?.length && perf.columnHeaders) {
+              const headers = perf.columnHeaders.map(h => h.name || "");
+              const dayIdx = headers.indexOf("day");
+              const viewsIdx = headers.indexOf("views");
+              const watchIdx = headers.indexOf("estimatedMinutesWatched");
+              const subsIdx = headers.indexOf("subscribersGained");
+              for (const row of perf.rows) {
+                const dayStr = String(row[dayIdx] || "");
+                const views = Number(row[viewsIdx] || 0);
+                const watch = Number(row[watchIdx] || 0);
+                const subs = Number(row[subsIdx] || 0);
+                totalViews48 += views;
+                totalWatchTime48 += watch;
+                totalSubs48 += subs;
+                const existing = dailyMap.get(dayStr) || { views: 0, subscribers: 0, watchTime: 0, revenue: 0 };
+                existing.views += views;
+                existing.watchTime += watch;
+                existing.subscribers += subs;
+                dailyMap.set(dayStr, existing);
+              }
+            }
+            // Process revenue data
+            const rev48 = revData as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;
+            if (rev48?.rows?.length && rev48.columnHeaders) {
+              const headers = rev48.columnHeaders.map(h => h.name || "");
+              const dayIdx = headers.indexOf("day");
+              const revIdx = headers.indexOf("estimatedRevenue");
+              for (const row of rev48.rows) {
+                const dayStr = String(row[dayIdx] || "");
+                const rev = Number(row[revIdx] || 0);
+                totalRevenue48 += rev;
+                const existing = dailyMap.get(dayStr) || { views: 0, subscribers: 0, watchTime: 0, revenue: 0 };
+                existing.revenue += rev;
+                dailyMap.set(dayStr, existing);
+              }
+            }
+          } catch (err48) {
+            console.warn(`[realtime48] ${cid} error:`, err48 instanceof Error ? err48.message : err48);
+          }
+        }
+
+        // Sort daily breakdown by date
+        for (const [date, data] of Array.from(dailyMap.entries()).sort()) {
+          dailyBreakdown.push({ date, ...data });
+        }
+
+        return Response.json({
+          data: {
+            views: totalViews48,
+            subscribers: totalSubs48,
+            watchTime: totalWatchTime48,
+            revenue: totalRevenue48,
+            dailyBreakdown,
+            period: { start: realtimeStart, end: realtimeEnd },
+          }
+        });
       }
       default:
         return Response.json({ error: "Invalid action" }, { status: 400 });
