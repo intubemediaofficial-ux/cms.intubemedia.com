@@ -699,6 +699,11 @@ export default function VideosPage() {
     const videosToDelete = videos
       .filter((v) => v.id && selectedDupVideos.has(v.id))
       .map((v) => ({ videoId: v.id!, channelId: v.snippet?.channelId || "" }));
+    if (videosToDelete.length === 0) {
+      setBulkResult("No videos found to delete");
+      setDupDeleting(false);
+      return;
+    }
     try {
       const res = await fetch("/api/youtube/video", {
         method: "POST",
@@ -707,12 +712,27 @@ export default function VideosPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        const successIds = new Set(data.data.results.filter((r: { success: boolean }) => r.success).map((r: { videoId: string }) => r.videoId));
+        const results = data.data.results as { videoId: string; success: boolean; error?: string }[];
+        const successIds = new Set(results.filter((r) => r.success).map((r) => r.videoId));
+        const failedResults = results.filter((r) => !r.success);
         setVideos(videos.filter((v) => !successIds.has(v.id!)));
-        setBulkResult(`${data.data.successCount}/${data.data.totalCount} duplicate videos deleted`);
-        setSelectedDupVideos(new Set());
+        if (failedResults.length > 0 && successIds.size === 0) {
+          const firstError = failedResults[0]?.error || "Unknown error";
+          if (firstError.includes("insufficient") || firstError.includes("forbidden") || firstError.includes("scope")) {
+            setBulkResult("Delete failed: Token does not have delete permission. Please re-validate the channel token.");
+          } else if (firstError.includes("No valid token")) {
+            setBulkResult("Delete failed: No valid token for this channel. Please validate the channel token first.");
+          } else {
+            setBulkResult(`Delete failed: ${firstError}`);
+          }
+        } else if (successIds.size > 0) {
+          setBulkResult(`${data.data.successCount}/${data.data.totalCount} duplicate videos deleted`);
+          setSelectedDupVideos(new Set());
+        } else {
+          setBulkResult("Delete failed — please re-validate channel token with full YouTube access");
+        }
       } else {
-        setBulkResult(data.error || "Bulk delete failed");
+        setBulkResult(data.error || "Bulk delete failed — please check channel token");
       }
     } catch {
       setBulkResult("Network error during bulk delete");
@@ -766,10 +786,13 @@ export default function VideosPage() {
       )}
 
       {bulkResult && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+        <div className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm ${bulkResult.toLowerCase().includes("failed") || bulkResult.toLowerCase().includes("error") || bulkResult.toLowerCase().includes("no valid") ? "bg-red-50 border border-red-200 text-red-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>{bulkResult}</span>
-          <button onClick={() => setBulkResult(null)} className="ml-auto p-1 hover:bg-blue-100 rounded">
+          {bulkResult.toLowerCase().includes("re-validate") && (
+            <a href="/channels" className="ml-2 px-2 py-0.5 bg-primary text-white rounded text-xs font-medium hover:opacity-90">Go to Channels</a>
+          )}
+          <button onClick={() => setBulkResult(null)} className="ml-auto p-1 hover:bg-opacity-50 rounded">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
