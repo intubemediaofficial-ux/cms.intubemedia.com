@@ -545,6 +545,12 @@ export default function ChannelsPage() {
       delete copy[channelId];
       return copy;
     });
+    // Remove channel from user's KV record so it doesn't reappear on refresh
+    fetch("/api/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ removeChannels: [channelId] }),
+    }).catch(() => {});
     // Delete channel token from KV so it doesn't persist as stale/valid
     fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`)
       .catch(() => {});
