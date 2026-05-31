@@ -691,7 +691,7 @@ export default function AdminVideosPage() {
                               allRows.push([
                                 `"${(v.snippet?.title || g.title).replace(/"/g, '""')}"`,
                                 `https://www.youtube.com/watch?v=${v.id}`,
-                                v.snippet?.channelId ? `https://studio.youtube.com/channel/${v.snippet.channelId}/video/${v.id}/edit` : `https://studio.youtube.com/video/${v.id}/edit`,
+                                `https://studio.youtube.com/video/${v.id}/edit`,
                                 v.status?.privacyStatus || "public",
                                 parseDuration(v.contentDetails?.duration),
                                 v.statistics?.viewCount || "0",
@@ -720,7 +720,7 @@ export default function AdminVideosPage() {
                                   const rows = group.videos.map((v) => [
                                     `"${(v.snippet?.title || group.title).replace(/"/g, '""')}"`,
                                     `https://www.youtube.com/watch?v=${v.id}`,
-                                    v.snippet?.channelId ? `https://studio.youtube.com/channel/${v.snippet.channelId}/video/${v.id}/edit` : `https://studio.youtube.com/video/${v.id}/edit`,
+                                    `https://studio.youtube.com/video/${v.id}/edit`,
                                     v.status?.privacyStatus || "public",
                                     parseDuration(v.contentDetails?.duration),
                                     v.statistics?.viewCount || "0",
@@ -751,7 +751,7 @@ export default function AdminVideosPage() {
                                 <span className="text-muted">{formatNumber(Number(v.statistics?.viewCount || 0))} views</span>
                                 {v.snippet?.publishedAt && <span className="text-muted">{new Date(v.snippet.publishedAt).toLocaleDateString()}</span>}
                                 <a href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline shrink-0 text-[10px]" title={`https://www.youtube.com/watch?v=${v.id}`}>youtu.be/{v.id}</a>
-                                <a href={v.snippet?.channelId ? `https://studio.youtube.com/channel/${v.snippet.channelId}/video/${v.id}/edit` : `https://studio.youtube.com/video/${v.id}/edit`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-auto shrink-0">Edit</a>
+                                <a href={`https://studio.youtube.com/video/${v.id}/edit`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-auto shrink-0">Edit</a>
                                 <a href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline shrink-0">Watch</a>
                               </div>
                             ))}

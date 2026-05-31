@@ -961,7 +961,7 @@ export default function VideosPage() {
                                   allRows.push([
                                     `"${(v.snippet?.title || g.title).replace(/"/g, '""')}"`,
                                     `https://www.youtube.com/watch?v=${v.id}`,
-                                    v.snippet?.channelId ? `https://studio.youtube.com/channel/${v.snippet.channelId}/video/${v.id}/edit` : `https://studio.youtube.com/video/${v.id}/edit`,
+                                    `https://studio.youtube.com/video/${v.id}/edit`,
                                     v.status?.privacyStatus || "public",
                                     parseDuration(v.contentDetails?.duration),
                                     v.statistics?.viewCount || "0",
@@ -990,7 +990,7 @@ export default function VideosPage() {
                                       const rows = group.videos.map((v) => [
                                         `"${(v.snippet?.title || group.title).replace(/"/g, '""')}"`,
                                         `https://www.youtube.com/watch?v=${v.id}`,
-                                        v.snippet?.channelId ? `https://studio.youtube.com/channel/${v.snippet.channelId}/video/${v.id}/edit` : `https://studio.youtube.com/video/${v.id}/edit`,
+                                        `https://studio.youtube.com/video/${v.id}/edit`,
                                         v.status?.privacyStatus || "public",
                                         parseDuration(v.contentDetails?.duration),
                                         v.statistics?.viewCount || "0",
@@ -1043,13 +1043,10 @@ export default function VideosPage() {
                                       youtu.be/{v.id}
                                     </a>
                                     <a
-                                      href={v.snippet?.channelId ? `https://studio.youtube.com/channel/${v.snippet.channelId}/video/${v.id}/edit` : `https://studio.youtube.com/video/${v.id}/edit`}
+                                      href={`https://studio.youtube.com/video/${v.id}/edit`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        window.open(v.snippet?.channelId ? `https://studio.youtube.com/channel/${v.snippet.channelId}/video/${v.id}/edit` : `https://studio.youtube.com/video/${v.id}/edit`, "_blank");
-                                      }}
+                                      onClick={(e) => e.stopPropagation()}
                                       className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-primary bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded ml-auto shrink-0 cursor-pointer"
                                     >
                                       <Edit2 className="w-3 h-3" />
@@ -1059,10 +1056,7 @@ export default function VideosPage() {
                                       href={`https://www.youtube.com/watch?v=${v.id}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        window.open(`https://www.youtube.com/watch?v=${v.id}`, "_blank");
-                                      }}
+                                      onClick={(e) => e.stopPropagation()}
                                       className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded shrink-0 cursor-pointer"
                                     >
                                       <Play className="w-3 h-3" />
@@ -1327,7 +1321,7 @@ export default function VideosPage() {
                               {openMenuId === video.id && (
                                 <div className="absolute right-0 top-8 bg-white border border-border rounded-lg shadow-lg z-20 w-48 py-1">
                                   <a
-                                    href={video.snippet?.channelId ? `https://studio.youtube.com/channel/${video.snippet.channelId}/video/${video.id}/edit` : `https://studio.youtube.com/video/${video.id}/edit`}
+                                    href={`https://studio.youtube.com/video/${video.id}/edit`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={() => setOpenMenuId(null)}
