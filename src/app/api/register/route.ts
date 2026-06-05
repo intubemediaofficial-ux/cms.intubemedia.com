@@ -1,4 +1,5 @@
 import { kv } from "@/lib/redis";
+import { getAdminSettings } from "@/lib/client-data-cache";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +78,10 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check if admin approval is required for new users
+    const adminSettings = await getAdminSettings();
+    const userStatus = adminSettings.requireUserApproval ? "pending" : "active";
+
     const newUser: StoredUser = {
       id: crypto.randomUUID(),
       name: name.trim(),
@@ -84,7 +89,7 @@ export async function POST(request: Request) {
       password: hashPassword(password),
       phone: phone?.trim() || "",
       channels: [],
-      status: "pending",
+      status: userStatus,
       joinedDate: new Date().toLocaleDateString("en-GB", {
         day: "2-digit",
         month: "2-digit",
@@ -97,8 +102,12 @@ export async function POST(request: Request) {
     users.push(newUser);
     await kv.set(USERS_KEY, users);
 
+    const successMessage = adminSettings.requireUserApproval
+      ? "Account created successfully. Admin will verify your account."
+      : "Account created successfully! You can now login.";
+
     return Response.json(
-      { message: "Account created successfully. Admin will verify your account." },
+      { message: successMessage },
       { status: 201 }
     );
   } catch (error) {

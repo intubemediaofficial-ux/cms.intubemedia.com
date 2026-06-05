@@ -16,8 +16,10 @@ import {
   getSupportRequests,
   addSupportRequest,
   resolveSupportRequest,
+  getAdminSettings,
+  setAdminSettings,
 } from "@/lib/client-data-cache";
-import type { CachedClientData, BankDetails, Agreement, AdminWarning, SupportRequest } from "@/lib/client-data-cache";
+import type { CachedClientData, BankDetails, Agreement, AdminWarning, SupportRequest, AdminSettings } from "@/lib/client-data-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +97,10 @@ export async function GET(request: Request) {
       const myReqs = allReqs.filter((r) => r.clientEmail.toLowerCase() === email);
       return Response.json({ data: myReqs });
     }
+    case "getAdminSettings": {
+      const settings = await getAdminSettings();
+      return Response.json({ data: settings });
+    }
     default:
       return Response.json({ error: "Invalid action" }, { status: 400 });
   }
@@ -171,6 +177,13 @@ export async function POST(request: Request) {
       const { requestId, adminResponse } = body as { requestId: string; adminResponse?: string };
       if (!requestId) return Response.json({ error: "requestId required" }, { status: 400 });
       await resolveSupportRequest(requestId, adminResponse);
+      return Response.json({ success: true });
+    }
+    case "setAdminSettings": {
+      if (!isAdmin) return Response.json({ error: "Admin only" }, { status: 403 });
+      const { settings } = body as { settings: AdminSettings };
+      if (!settings) return Response.json({ error: "settings required" }, { status: 400 });
+      await setAdminSettings(settings);
       return Response.json({ success: true });
     }
     default:
