@@ -188,6 +188,7 @@ export default function ChannelsPage() {
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, string>>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [userNetworks, setUserNetworks] = useState<string[]>([]);
+  const [myCustomNetworks, setMyCustomNetworks] = useState<string[]>([]);
   const [showChannelDetail, setShowChannelDetail] = useState<string | null>(null);
   const [channelDetailData, setChannelDetailData] = useState<{
     revenue?: number;
@@ -395,7 +396,8 @@ export default function ChannelsPage() {
         const meRes = await fetch("/api/users?action=me");
         const meJson = await meRes.json();
         const adminAssigned = meJson.data?.networks?.map((n: { networkName: string }) => n.networkName) || [];
-        const custom = meJson.data?.customNetworks || [];
+        const custom: string[] = meJson.data?.customNetworks || [];
+        setMyCustomNetworks(custom);
 
         // Fetch admin-created networks list
         const netRes = await fetch("/api/networks");
@@ -419,19 +421,18 @@ export default function ChannelsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const saveCustomNetwork = useCallback(async (networkName: string) => {
     if (!networkName.trim()) return;
-    const newList = [...new Set([...userNetworks, networkName.trim()])];
-    setUserNetworks(newList);
-    // Save to KV
-    try {
-      await fetch("/api/users", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customNetworks: newList }),
-      });
-    } catch {
-      // silent
-    }
-  }, [userNetworks]);
+    // Update display list instantly
+    setUserNetworks((prev) => [...new Set([...prev, networkName.trim()])]);
+    // Track only custom networks separately for KV save
+    const updatedCustom = [...new Set([...myCustomNetworks, networkName.trim()])];
+    setMyCustomNetworks(updatedCustom);
+    // Save ONLY custom networks to KV (background, non-blocking)
+    fetch("/api/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customNetworks: updatedCustom }),
+    }).catch(() => {});
+  }, [myCustomNetworks]);
 
   const [inviteError, setInviteError] = useState("");
 
@@ -1200,7 +1201,30 @@ export default function ChannelsPage() {
                           </button>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-foreground">{channel.cms}</td>
+                      <td className="px-4 py-3 text-foreground">
+                        <input
+                          type="text"
+                          defaultValue={channel.cms}
+                          placeholder="Type network..."
+                          list={`net-opts-${channel.id}`}
+                          onBlur={(e) => {
+                            const val = e.target.value.trim();
+                            if (val !== channel.cms) {
+                              const updated = storedChannels.map((c) => c.id === channel.id ? { ...c, cms: val } : c);
+                              saveStoredChannels(updated);
+                              setStoredChannels(updated);
+                              if (val && !networkOptions.includes(val)) {
+                                saveCustomNetwork(val);
+                              }
+                            }
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          className="w-full px-1.5 py-0.5 border border-transparent hover:border-border focus:border-primary rounded text-sm bg-transparent focus:bg-background focus:outline-none"
+                        />
+                        <datalist id={`net-opts-${channel.id}`}>
+                          {networkOptions.map((n) => <option key={n} value={n} />)}
+                        </datalist>
+                      </td>
                       <td className="px-4 py-3 text-foreground">{channel.category}</td>
                       <td className="px-4 py-3 text-muted">{channel.addedDate}</td>
                       {activeTab === "transferred" && (
