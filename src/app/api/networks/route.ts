@@ -6,6 +6,7 @@ import crypto from "crypto";
 export const dynamic = "force-dynamic";
 
 const NETWORKS_KEY = "bainsla_networks";
+const USERS_KEY = "bainsla_users";
 
 export interface Network {
   id: string;
@@ -46,12 +47,34 @@ async function saveNetworks(networks: Network[]): Promise<boolean> {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const networks = await getNetworks();
+
+  // For admin: also return all user-created custom networks
+  const url = new URL(request.url);
+  if (url.searchParams.get("include_custom") === "true" && ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
+    try {
+      const users = await kv.get<Array<{ name: string; email: string; customNetworks?: string[] }>>(USERS_KEY);
+      const allCustom: Array<{ name: string; createdBy: string; createdByEmail: string }> = [];
+      if (users) {
+        for (const u of users) {
+          if (u.customNetworks?.length) {
+            for (const cn of u.customNetworks) {
+              allCustom.push({ name: cn, createdBy: u.name, createdByEmail: u.email });
+            }
+          }
+        }
+      }
+      return Response.json({ data: networks, customNetworks: allCustom });
+    } catch {
+      return Response.json({ data: networks, customNetworks: [] });
+    }
+  }
+
   return Response.json({ data: networks });
 }
 
