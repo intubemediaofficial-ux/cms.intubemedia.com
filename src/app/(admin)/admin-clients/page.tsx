@@ -223,7 +223,7 @@ export default function AdminClientsPage() {
     setFormName(client.name);
     setFormEmail(client.email);
     setFormPassword("");
-    setFormPhone(client.phone);
+    setFormPhone(client.phone || "");
     setFormCategory(client.category);
     setFormChannels(client.channels.join(", "));
     setFormNetworks(client.networks || []);
@@ -268,7 +268,7 @@ export default function AdminClientsPage() {
           id: editingClient.id,
           name: formName.trim(),
           email: formEmail.trim(),
-          phone: formPhone.trim(),
+          phone: (formPhone || "").trim(),
           category: formCategory,
           channels: channelIds,
           networks: formNetworks,
@@ -296,7 +296,7 @@ export default function AdminClientsPage() {
             name: formName.trim(),
             email: formEmail.trim(),
             password: formPassword.trim(),
-            phone: formPhone.trim(),
+            phone: (formPhone || "").trim(),
             category: formCategory,
             channels: channelIds,
             networks: formNetworks,
