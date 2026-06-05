@@ -210,20 +210,40 @@ export default function ChannelsPage() {
     if (idsToFetch.length === 0) return;
 
     const fetchChannels = async () => {
-      for (const id of idsToFetch) {
-        try {
-          const res = await fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}`);
-          const json = await res.json();
-          if (res.ok && json.data?.length) {
-            setChannelDataMap((prev) => ({ ...prev, [id]: json.data[0] }));
+      // Step 1: Bulk load cached data INSTANTLY (no YouTube API calls)
+      try {
+        const bulkRes = await fetch(`/api/youtube?action=bulkCachedChannels&channelIds=${encodeURIComponent(idsToFetch.join(","))}`);
+        const bulkJson = await bulkRes.json();
+        if (bulkRes.ok && bulkJson.data) {
+          const newMap: Record<string, YouTubeChannel> = {};
+          for (const [id, stats] of Object.entries(bulkJson.data)) {
+            newMap[id] = stats as YouTubeChannel;
           }
-        } catch {
-          // skip
+          if (Object.keys(newMap).length > 0) {
+            setChannelDataMap((prev) => ({ ...prev, ...newMap }));
+          }
         }
+      } catch { /* ignore bulk cache errors */ }
+
+      // Step 2: Refresh remaining channels from YouTube API in background (parallel)
+      const stillMissing = idsToFetch.filter((id) => !channelDataMap[id]);
+      if (stillMissing.length > 0) {
+        Promise.allSettled(
+          stillMissing.map((id) =>
+            fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}`)
+              .then((r) => r.json())
+              .then((json) => {
+                if (json.data?.length) {
+                  setChannelDataMap((prev) => ({ ...prev, [id]: json.data[0] }));
+                }
+              })
+          )
+        );
       }
     };
     fetchChannels();
-  }, [isAuthenticated, storedChannels, channelDataMap]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, storedChannels]);
 
   // Auto-refresh channel stats (subscribers, views, videos) every 60s
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
