@@ -76,7 +76,7 @@ const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 const CATEGORIES = ["Music", "Entertainment", "Education", "Comedy", "Gaming", "News", "Sports"];
 const CHANNEL_TYPES = ["Original", "Refurbished", "Licensed"];
 const TOKEN_STATUSES = ["Valid", "Invalid", "Expired", "N/A"];
-const DEFAULT_NETWORK_OPTIONS = ["InTubeMedia", "WMG - MUSIC", "Sony Music", "T-Series", "Other"];
+
 
 type TabType = "channels" | "requests" | "bulk" | "transferred";
 
@@ -351,21 +351,52 @@ export default function ChannelsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
-  // Fetch user's assigned networks from admin
+  // Fetch user's assigned networks from admin + custom networks + admin-created networks
   useEffect(() => {
-    if (!isAuthenticated || isAdmin) return;
-    fetch("/api/users?action=me")
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.data?.networks?.length) {
-          setUserNetworks(j.data.networks.map((n: { networkName: string }) => n.networkName));
-        }
-      })
-      .catch(() => {});
-  }, [isAuthenticated, isAdmin]);
+    if (!isAuthenticated) return;
+    const fetchAllNetworks = async () => {
+      try {
+        // Fetch user's own data (assigned networks + custom networks)
+        const meRes = await fetch("/api/users?action=me");
+        const meJson = await meRes.json();
+        const adminAssigned = meJson.data?.networks?.map((n: { networkName: string }) => n.networkName) || [];
+        const custom = meJson.data?.customNetworks || [];
 
-  // Use admin-assigned networks if available, fallback to defaults
-  const networkOptions = userNetworks.length > 0 ? userNetworks : DEFAULT_NETWORK_OPTIONS;
+        // Fetch admin-created networks list
+        const netRes = await fetch("/api/networks");
+        const netJson = await netRes.json();
+        const adminCreated = (netJson.data || []).map((n: { name: string }) => n.name);
+
+        // Merge all: admin-assigned + admin-created + custom (deduplicated)
+        const all = [...new Set([...adminAssigned, ...adminCreated, ...custom])];
+        setUserNetworks(all);
+      } catch {
+        // silent
+      }
+    };
+    fetchAllNetworks();
+  }, [isAuthenticated]);
+
+  // networkOptions = all available networks (no hardcoded defaults)
+  const networkOptions = userNetworks;
+
+  // Save custom network to user's profile
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const saveCustomNetwork = useCallback(async (networkName: string) => {
+    if (!networkName.trim()) return;
+    const newList = [...new Set([...userNetworks, networkName.trim()])];
+    setUserNetworks(newList);
+    // Save to KV
+    try {
+      await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customNetworks: newList }),
+      });
+    } catch {
+      // silent
+    }
+  }, [userNetworks]);
 
   const [inviteError, setInviteError] = useState("");
 
@@ -480,7 +511,7 @@ export default function ChannelsPage() {
         category: categoryInput,
         channelType: channelTypeInput || "Original",
         tokenStatus: "Invalid",
-        cms: cmsInput || "InTubeMedia",
+        cms: cmsInput.trim() || "",
         addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
         status: "pending_approval",
       };
@@ -490,6 +521,10 @@ export default function ChannelsPage() {
       setStoredChannels(updatedChannels);
       if (channelData) {
         setChannelDataMap((prev) => ({ ...prev, [actualId]: channelData! }));
+      }
+      // Save custom network name if it's new
+      if (cmsInput.trim() && !networkOptions.includes(cmsInput.trim())) {
+        saveCustomNetwork(cmsInput.trim());
       }
       setShowModal(false);
       setChannelIdInput("");
@@ -501,7 +536,7 @@ export default function ChannelsPage() {
     } finally {
       setAddingChannel(false);
     }
-  }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, storedChannels]);
+  }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, storedChannels, networkOptions, saveCustomNetwork]);
 
   const handleDelink = (channelId: string) => {
     const now = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -618,7 +653,7 @@ export default function ChannelsPage() {
             category: bulkCategory || "Music",
             channelType: bulkChannelType || "Original",
             tokenStatus: "Invalid",
-            cms: bulkCms || "InTubeMedia",
+            cms: bulkCms.trim() || "",
             addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
             status: "active",
           };
@@ -638,10 +673,14 @@ export default function ChannelsPage() {
       }
     }
 
+    // Save custom network name if it's new
+    if (bulkCms.trim() && !networkOptions.includes(bulkCms.trim())) {
+      saveCustomNetwork(bulkCms.trim());
+    }
     setBulkAdding(false);
     setBulkResult(`Added ${added} channel(s). ${skipped > 0 ? `Skipped ${skipped} (already exist or not found).` : ""}`);
     if (added > 0) setBulkInput("");
-  }, [bulkInput, bulkCategory, bulkChannelType, bulkCms, storedChannels]);
+  }, [bulkInput, bulkCategory, bulkChannelType, bulkCms, storedChannels, networkOptions, saveCustomNetwork]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -696,7 +735,7 @@ export default function ChannelsPage() {
           category: storedInfo?.category || "Music",
           channelType: storedInfo?.channelType || "Original",
           tokenStatus: tokenStatuses[ch.id || ""] || storedInfo?.tokenStatus || "Invalid",
-          cms: storedInfo?.cms || "InTubeMedia",
+          cms: storedInfo?.cms || "",
           addedDate: storedInfo?.addedDate || "-",
           delinkedDate: storedInfo?.delinkedDate || "-",
           isOwn: true,
@@ -719,7 +758,7 @@ export default function ChannelsPage() {
         category: sc.category,
         channelType: sc.channelType || "Original",
         tokenStatus: tokenStatuses[sc.id] || sc.tokenStatus || "Invalid",
-        cms: sc.cms || "InTubeMedia",
+        cms: sc.cms || "",
         addedDate: sc.addedDate,
         delinkedDate: sc.delinkedDate || "-",
         isOwn: false,
@@ -935,7 +974,7 @@ export default function ChannelsPage() {
                 className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 <option value="">All Networks</option>
-                {networkOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                {[...new Set([...networkOptions, ...storedChannels.map((c) => c.cms).filter(Boolean)])].map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
               <select
                 value={categoryFilter}
@@ -1325,14 +1364,17 @@ export default function ChannelsPage() {
               <option value="">Select Channel Type</option>
               {CHANNEL_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select
+            <input
+              type="text"
               value={bulkCms}
               onChange={(e) => setBulkCms(e.target.value)}
+              placeholder="Type network name..."
+              list="network-options-bulk"
               className="border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">Select Network</option>
-              {networkOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            />
+            <datalist id="network-options-bulk">
+              {networkOptions.map((c) => <option key={c} value={c} />)}
+            </datalist>
           </div>
 
           <textarea
@@ -1432,14 +1474,20 @@ export default function ChannelsPage() {
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Network
                   </label>
-                  <select
-                    value={cmsInput}
-                    onChange={(e) => setCmsInput(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                  >
-                    <option value="">Select Network</option>
-                    {networkOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={cmsInput}
+                      onChange={(e) => setCmsInput(e.target.value)}
+                      placeholder="Type network name or select..."
+                      list="network-options-add"
+                      className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    />
+                    <datalist id="network-options-add">
+                      {networkOptions.map((c) => <option key={c} value={c} />)}
+                    </datalist>
+                  </div>
+                  <p className="text-xs text-muted mt-1">Type a custom name or select from list. New names are saved automatically.</p>
                 </div>
               </div>
               {addError && (

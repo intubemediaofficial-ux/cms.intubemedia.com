@@ -34,6 +34,7 @@ export interface StoredUser {
   role: "client";
   networks?: NetworkAssignment[];
   channelNetworks?: ChannelNetworkAssignment[];
+  customNetworks?: string[];
 }
 
 function hashPassword(password: string): string {
@@ -293,10 +294,10 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    const { channels, pendingChannels, removeChannels } = body;
+    const { channels, pendingChannels, removeChannels, customNetworks } = body;
 
-    if (!Array.isArray(channels) && !Array.isArray(pendingChannels) && !Array.isArray(removeChannels)) {
-      return Response.json({ error: "channels, pendingChannels, or removeChannels array required" }, { status: 400 });
+    if (!Array.isArray(channels) && !Array.isArray(pendingChannels) && !Array.isArray(removeChannels) && !Array.isArray(customNetworks)) {
+      return Response.json({ error: "channels, pendingChannels, removeChannels, or customNetworks array required" }, { status: 400 });
     }
 
     const users = await getUsers();
@@ -343,12 +344,18 @@ export async function PATCH(request: Request) {
       users[idx].channels = realChannels.length > 0 ? realChannels : Array.from(existingChannels);
     }
 
+    // Save custom network names
+    if (Array.isArray(customNetworks)) {
+      const validNetworks = customNetworks.filter((n: unknown) => typeof n === "string" && (n as string).trim().length > 0).map((n: unknown) => (n as string).trim());
+      users[idx].customNetworks = [...new Set(validNetworks)];
+    }
+
     const saved = await saveUsers(users);
     if (!saved) {
       return Response.json({ error: "Failed to sync channels" }, { status: 500 });
     }
 
-    return Response.json({ data: { success: true, channels: users[idx].channels, pendingChannels: users[idx].pendingChannels || [] } });
+    return Response.json({ data: { success: true, channels: users[idx].channels, pendingChannels: users[idx].pendingChannels || [], customNetworks: users[idx].customNetworks || [] } });
   } catch (error) {
     console.error("[Users] Error syncing channels:", error);
     return Response.json({ error: "Failed to sync channels" }, { status: 500 });
