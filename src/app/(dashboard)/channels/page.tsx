@@ -404,8 +404,8 @@ export default function ChannelsPage() {
         const netJson = await netRes.json();
         const adminCreated = (netJson.data || []).map((n: { name: string }) => n.name);
 
-        // Merge all: admin-assigned + admin-created + custom (deduplicated)
-        const all = [...new Set([...adminAssigned, ...adminCreated, ...custom])];
+        // Merge all: admin-assigned + admin-created + custom (deduplicated, exclude deprecated)
+        const all = [...new Set([...adminAssigned, ...adminCreated, ...custom])].filter((n) => !DEPRECATED_NETWORKS.includes(n));
         setUserNetworks(all);
       } catch {
         // silent
@@ -1010,7 +1010,7 @@ export default function ChannelsPage() {
                 className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 <option value="">All Networks</option>
-                {[...new Set([...networkOptions, ...storedChannels.map((c) => c.cms).filter(Boolean)])].map((c) => <option key={c} value={c}>{c}</option>)}
+                {[...new Set([...networkOptions, ...storedChannels.map((c) => c.cms).filter(Boolean)])].filter((n) => !DEPRECATED_NETWORKS.includes(n)).map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
               <select
                 value={categoryFilter}
