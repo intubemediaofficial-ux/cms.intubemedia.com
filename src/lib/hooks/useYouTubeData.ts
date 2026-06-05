@@ -3,20 +3,45 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 
+const CACHE_PREFIX = "yt_cache_";
+
+function getCachedData<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + key);
+    if (!raw) return null;
+    const { data, timestamp } = JSON.parse(raw);
+    // Cache valid for 30 minutes
+    if (Date.now() - timestamp > 30 * 60 * 1000) return null;
+    return data as T;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedData<T>(key: string, data: T): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch { /* storage full — ignore */ }
+}
+
 export function useYouTubeData<T>(
   action: string,
   params: Record<string, string> = {},
   fallback: T
 ) {
   const { data: session, status } = useSession();
-  const [data, setData] = useState<T>(fallback);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isReal, setIsReal] = useState(false);
-  const [cached, setCached] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-
   const paramsKey = useMemo(() => JSON.stringify(params), [params]);
+  const cacheKey = `${action}_${paramsKey}`;
+
+  // Load from localStorage cache immediately for instant display
+  const [data, setData] = useState<T>(() => getCachedData<T>(cacheKey) || fallback);
+  const [loading, setLoading] = useState(() => !getCachedData<T>(cacheKey));
+  const [error, setError] = useState<string | null>(null);
+  const [isReal, setIsReal] = useState(() => !!getCachedData<T>(cacheKey));
+  const [cached, setCached] = useState(() => !!getCachedData<T>(cacheKey));
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -29,7 +54,9 @@ export function useYouTubeData<T>(
     }
 
     const fetchData = async () => {
-      setLoading(true);
+      // Only show loading spinner if no cached data
+      const hasCached = getCachedData<T>(cacheKey);
+      if (!hasCached) setLoading(true);
       setError(null);
       try {
         const parsedParams = JSON.parse(paramsKey) as Record<string, string>;
@@ -42,6 +69,8 @@ export function useYouTubeData<T>(
           setIsReal(true);
           setCached(!!json._cached);
           setLastUpdated(json._lastUpdated || null);
+          // Save to localStorage for instant load next time
+          setCachedData(cacheKey, json.data);
         } else {
           console.error(`YouTube API error [${action}]:`, json.error);
           setError(json.error || "Failed to fetch data");
@@ -56,7 +85,7 @@ export function useYouTubeData<T>(
     };
 
     fetchData();
-  }, [session?.accessToken, session?.user?.role, session?.user?.email, status, action, paramsKey]);
+  }, [session?.accessToken, session?.user?.role, session?.user?.email, status, action, paramsKey, cacheKey]);
 
   return { data, loading, error, isReal, cached, lastUpdated };
 }
