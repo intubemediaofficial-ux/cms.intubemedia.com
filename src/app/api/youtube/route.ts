@@ -53,7 +53,7 @@ export async function GET(request: Request) {
 
   try {
     // All YouTube API actions now use per-channel tokens (login tokens lack YouTube scopes)
-    if (!["dashboardFull", "lookupChannel", "dashboard", "videos", "realtime48"].includes(action || "")) {
+    if (!["dashboardFull", "lookupChannel", "bulkCachedChannels", "dashboard", "videos", "realtime48"].includes(action || "")) {
       return Response.json(
         { error: "This action requires per-channel token validation. Please validate channel tokens first." },
         { status: 401 }
@@ -61,6 +61,36 @@ export async function GET(request: Request) {
     }
 
     switch (action) {
+      case "bulkCachedChannels": {
+        // Return cached channel stats for all requested channel IDs — instant, no YouTube API calls
+        const ids = url.searchParams.get("channelIds")?.split(",").filter(Boolean) || [];
+        if (ids.length === 0) return Response.json({ data: {} });
+        const results: Record<string, unknown> = {};
+        await Promise.all(ids.map(async (id) => {
+          const cached = await getCachedChannelStats(id);
+          if (cached?.stats) {
+            results[id] = cached.stats;
+          }
+        }));
+        // Also check client data cache for any missing channels
+        if (Object.keys(results).length < ids.length) {
+          try {
+            const allCached = await getAllCachedClientData();
+            for (const cd of allCached) {
+              for (const ch of (cd.channels || [])) {
+                if (ids.includes(ch.channelId) && !results[ch.channelId]) {
+                  results[ch.channelId] = {
+                    id: ch.channelId,
+                    snippet: { title: ch.channelTitle || ch.channelId, thumbnails: { default: { url: ch.thumbnail || "" }, medium: { url: ch.thumbnail || "" } } },
+                    statistics: { subscriberCount: String(ch.subscribers || 0), videoCount: String(ch.videoCount || 0), viewCount: String(ch.views || 0) },
+                  };
+                }
+              }
+            }
+          } catch { /* ignore */ }
+        }
+        return Response.json({ data: results, _cached: true });
+      }
       case "channels": {
         const channels = await getChannelStats(session.accessToken!);
         return Response.json({ data: channels });
