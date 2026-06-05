@@ -41,10 +41,36 @@ function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password).digest("hex");
 }
 
+// Deprecated network names to auto-remove from user assignments
+const DEPRECATED_NETWORK_NAMES = ["T-Series", "Sony Music", "InTubeMedia", "Other"];
+
 async function getUsers(): Promise<StoredUser[]> {
   try {
     const users = await kv.get<StoredUser[]>(USERS_KEY);
-    return users || [];
+    if (!users) return [];
+    // Auto-cleanup: remove deprecated network names from user assignments
+    let cleaned = false;
+    for (const u of users) {
+      if (u.networks?.length) {
+        const before = u.networks.length;
+        u.networks = u.networks.filter((n) => !DEPRECATED_NETWORK_NAMES.includes(n.networkName));
+        if (u.networks.length !== before) cleaned = true;
+      }
+      if (u.channelNetworks?.length) {
+        const before = u.channelNetworks.length;
+        u.channelNetworks = u.channelNetworks.filter((cn) => !DEPRECATED_NETWORK_NAMES.includes(cn.networkName));
+        if (u.channelNetworks.length !== before) cleaned = true;
+      }
+      if (u.customNetworks?.length) {
+        const before = u.customNetworks.length;
+        u.customNetworks = u.customNetworks.filter((cn) => !DEPRECATED_NETWORK_NAMES.includes(cn));
+        if (u.customNetworks.length !== before) cleaned = true;
+      }
+    }
+    if (cleaned) {
+      await kv.set(USERS_KEY, users);
+    }
+    return users;
   } catch (error) {
     console.error("[Users] Failed to read from KV:", error);
     throw new Error(`KV read failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -257,7 +283,7 @@ export async function PUT(request: Request) {
     if (name) users[idx].name = name.trim();
     if (email) users[idx].email = email.toLowerCase().trim();
     if (password) users[idx].password = hashPassword(password);
-    if (phone !== undefined) users[idx].phone = phone.trim();
+    if (phone !== undefined) users[idx].phone = (phone || "").trim();
     if (channels) users[idx].channels = channels;
     if (body.pendingChannels !== undefined) users[idx].pendingChannels = body.pendingChannels;
     if (category) users[idx].category = category;

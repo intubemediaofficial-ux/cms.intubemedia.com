@@ -27,10 +27,19 @@ async function isAdmin(): Promise<boolean> {
   return ADMIN_EMAILS.includes(session.user.email.toLowerCase());
 }
 
+// Deprecated network names to auto-remove (keep only "WMG - MUSIC")
+const DEPRECATED_NETWORK_NAMES = ["T-Series", "Sony Music", "InTubeMedia", "Other"];
+
 async function getNetworks(): Promise<Network[]> {
   try {
     const networks = await kv.get<Network[]>(NETWORKS_KEY);
-    return networks || [];
+    if (!networks) return [];
+    // Auto-cleanup: remove deprecated networks from KV
+    const cleaned = networks.filter((n) => !DEPRECATED_NETWORK_NAMES.includes(n.name));
+    if (cleaned.length !== networks.length) {
+      await kv.set(NETWORKS_KEY, cleaned);
+    }
+    return cleaned;
   } catch (error) {
     console.error("[Networks] Failed to read from KV:", error);
     return [];

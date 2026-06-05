@@ -137,12 +137,12 @@ export default function AdminNetworksPage() {
           revenueSharePercent: network?.revenueSharePercent || 0,
         }];
 
-        await fetch("/api/users", {
+        const putRes = await fetch("/api/users", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: clientId, networks: updatedNetworks }),
         });
-        successCount++;
+        if (putRes.ok) successCount++;
       } catch {
         // skip failed
       }
