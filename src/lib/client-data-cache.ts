@@ -251,3 +251,34 @@ export async function resolveSupportRequest(requestId: string, adminResponse?: s
     console.error("[Support] Failed to resolve support request:", error);
   }
 }
+
+// ===== Admin Settings =====
+const ADMIN_SETTINGS_KEY = "admin_settings";
+
+export interface AdminSettings {
+  requireUserApproval: boolean; // if true, new users need admin approval; if false, auto-active
+}
+
+const DEFAULT_SETTINGS: AdminSettings = {
+  requireUserApproval: true, // default: approval required
+};
+
+export async function getAdminSettings(): Promise<AdminSettings> {
+  if (!isKVAvailable()) return DEFAULT_SETTINGS;
+  try {
+    const data = await kv.get<AdminSettings>(ADMIN_SETTINGS_KEY);
+    return data || DEFAULT_SETTINGS;
+  } catch (error) {
+    console.error("[Settings] Failed to get admin settings:", error);
+    return DEFAULT_SETTINGS;
+  }
+}
+
+export async function setAdminSettings(settings: AdminSettings): Promise<void> {
+  if (!isKVAvailable()) return;
+  try {
+    await kv.set(ADMIN_SETTINGS_KEY, settings);
+  } catch (error) {
+    console.error("[Settings] Failed to save admin settings:", error);
+  }
+}

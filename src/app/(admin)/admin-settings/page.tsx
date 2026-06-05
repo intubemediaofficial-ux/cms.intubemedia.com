@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Shield, Settings, Save, Users, Key, AlertTriangle, Wrench, Info, Trash2, Loader2, MessageSquare, Image as ImageIcon, X } from "lucide-react";
+import { Shield, Settings, Save, Users, Key, AlertTriangle, Wrench, Info, Trash2, Loader2, MessageSquare, Image as ImageIcon, X, ToggleLeft, ToggleRight } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -57,6 +57,10 @@ export default function AdminSettingsPage() {
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [viewScreenshot, setViewScreenshot] = useState<string | null>(null);
 
+  // Admin Settings
+  const [requireUserApproval, setRequireUserApproval] = useState(true);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
       router.push("/dashboard");
@@ -98,6 +102,16 @@ export default function AdminSettingsPage() {
       })
       .catch(() => {})
       .finally(() => setSupportLoading(false));
+
+    // Fetch admin settings
+    fetch("/api/client-data?action=getAdminSettings")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data) {
+          setRequireUserApproval(j.data.requireUserApproval ?? true);
+        }
+      })
+      .catch(() => {});
   }, [status, session]);
 
   const handleSave = () => {
@@ -397,6 +411,55 @@ export default function AdminSettingsPage() {
           </div>
         </div>
       )}
+
+      {/* User Approval Toggle */}
+      <div className="bg-white rounded-xl border border-border overflow-hidden">
+        <div className="p-5 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-indigo-500" />
+            <h2 className="text-lg font-semibold text-foreground">New User Registration</h2>
+          </div>
+          <p className="text-sm text-muted mt-1">Control whether new users need admin approval before they can access the dashboard.</p>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-foreground">Require Admin Approval for New Users</p>
+              <p className="text-xs text-muted mt-0.5">
+                {requireUserApproval
+                  ? "ON — New users must wait for admin approval before accessing dashboard"
+                  : "OFF — New users can login immediately after registration (channel approval still required)"}
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                setSettingsLoading(true);
+                const newValue = !requireUserApproval;
+                await fetch("/api/client-data", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "setAdminSettings", settings: { requireUserApproval: newValue } }),
+                });
+                setRequireUserApproval(newValue);
+                setSettingsLoading(false);
+              }}
+              disabled={settingsLoading}
+              className="flex items-center gap-1 transition-colors"
+            >
+              {settingsLoading ? (
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              ) : requireUserApproval ? (
+                <ToggleRight className="w-10 h-10 text-green-500" />
+              ) : (
+                <ToggleLeft className="w-10 h-10 text-slate-400" />
+              )}
+            </button>
+          </div>
+          <p className="text-xs text-muted">
+            <strong>Note:</strong> Channel approval is always required regardless of this setting. Admin must approve channels before token can be validated.
+          </p>
+        </div>
+      </div>
 
       {/* General Settings */}
       <div className="bg-white rounded-xl border border-border overflow-hidden">
