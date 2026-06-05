@@ -77,6 +77,8 @@ const CATEGORIES = ["Music", "Entertainment", "Education", "Comedy", "Gaming", "
 const CHANNEL_TYPES = ["Original", "Refurbished", "Licensed"];
 const TOKEN_STATUSES = ["Valid", "Invalid", "Expired", "N/A"];
 
+// Old hardcoded network names to remove from stored data (keep only "WMG - MUSIC")
+const DEPRECATED_NETWORKS = ["T-Series", "Sony Music", "InTubeMedia", "Other"];
 
 type TabType = "channels" | "requests" | "bulk" | "transferred";
 
@@ -84,7 +86,20 @@ function getStoredChannels(): StoredChannel[] {
   if (typeof window === "undefined") return [];
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    if (!stored) return [];
+    const channels = JSON.parse(stored) as StoredChannel[];
+    // Clean up deprecated network names from stored channels
+    let cleaned = false;
+    for (const ch of channels) {
+      if (ch.cms && DEPRECATED_NETWORKS.includes(ch.cms)) {
+        ch.cms = "";
+        cleaned = true;
+      }
+    }
+    if (cleaned) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
+    }
+    return channels;
   } catch {
     return [];
   }
