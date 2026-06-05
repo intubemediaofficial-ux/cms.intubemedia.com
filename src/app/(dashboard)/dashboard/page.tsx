@@ -481,6 +481,12 @@ export default function DashboardPage() {
 
   // Month-wise Revenue Excel Download
   const handleMonthRevenueExcel = () => {
+    const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const startD = new Date(dateRange.startDate + "T00:00:00");
+    const monthName = MONTH_NAMES[startD.getMonth()];
+    const year = startD.getFullYear();
+    const reportTitle = `Channel Revenue Report ${monthName} ${year}`;
+
     const headers = ["Channel Name", "Channel Link", "Revenue ($)", `Revenue (INR @ ${INR_RATE})`];
     const rows: string[][] = [];
     for (const ch of channels) {
@@ -497,13 +503,14 @@ export default function DashboardPage() {
     const totalRev = rows.reduce((s, r) => s + Number(r[2]), 0);
     rows.push([`"TOTAL"`, "", totalRev.toFixed(2), (totalRev * INR_RATE).toFixed(2)]);
 
-    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const titleRow = `"${reportTitle}",,,""`; 
+    const csv = [titleRow, "", headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const bom = "\uFEFF";
     const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `channel_revenue_${dateRange.startDate}_to_${dateRange.endDate}.csv`;
+    a.download = `Channel_Revenue_Report_${monthName}_${year}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
