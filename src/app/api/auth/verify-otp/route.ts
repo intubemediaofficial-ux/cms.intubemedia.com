@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "OTP expired or not found. Please request a new one." }, { status: 400 });
     }
 
-    if (storedOtp !== otp.trim()) {
+    if (String(storedOtp) !== otp.trim()) {
       return Response.json({ error: "Invalid OTP. Please try again." }, { status: 400 });
     }
 
