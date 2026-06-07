@@ -32,6 +32,18 @@ interface VideoItem {
 
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
+function getMonthOptions() {
+  const months: { value: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleString("en-US", { month: "long", year: "numeric" });
+    months.push({ value, label });
+  }
+  return months;
+}
+
 export default function VideoRevenuePage() {
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated" && !!session?.accessToken;
@@ -92,6 +104,11 @@ export default function VideoRevenuePage() {
             <option value="28d">Last 28 days</option>
             <option value="90d">Last 90 days</option>
             <option value="365d">Last 365 days</option>
+            <optgroup label="By Month">
+              {getMonthOptions().map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </optgroup>
           </select>
         </div>
       </div>
@@ -119,15 +136,23 @@ export default function VideoRevenuePage() {
           <button
             onClick={() => {
               if (filteredVideos.length > 0) {
+                const monthLabel = getMonthOptions().find((m) => m.value === dateRange)?.label;
+                const monthName = monthLabel || dateRange;
+                const titleRow = `Video Revenue Report - ${monthName}`;
+                const csvFilename = monthLabel
+                  ? `${monthLabel.replace(" ", "-")}-Video-Revenue-Report`
+                  : "video-revenue-report";
                 downloadCSV(
-                  ["Title", "Views", "Likes", "Published"],
+                  ["Month", "Title", "Views", "Likes", "Published"],
                   filteredVideos.map((v) => [
+                    monthName,
                     v.snippet?.title || "",
                     Number(v.statistics?.viewCount || 0),
                     Number(v.statistics?.likeCount || 0),
                     v.snippet?.publishedAt ? new Date(v.snippet.publishedAt).toLocaleDateString() : "-",
                   ]),
-                  "video-revenue-report"
+                  csvFilename,
+                  titleRow
                 );
               }
             }}

@@ -4,6 +4,7 @@ import { Loader2, Wifi, WifiOff, Download } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
+import { downloadCSV } from "@/lib/csv-export";
 
 interface YouTubeChannel {
   id?: string | null;
@@ -55,9 +56,31 @@ export default function SummaryChannelPage() {
               Sign in to see data
             </div>
           )}
-          <button className="flex items-center gap-2 text-sm text-primary hover:text-primary-dark font-medium px-3 py-2 border border-border rounded-lg">
+          <button
+            onClick={() => {
+              if (channels.length > 0) {
+                const now = new Date();
+                const monthName = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+                const titleRow = `Summary Channel Report - ${monthName}`;
+                const csvFilename = `${monthName.replace(" ", "-")}-Summary-Channel-Report`;
+                downloadCSV(
+                  ["Month", "Channel", "Subscribers", "Videos", "Views"],
+                  channels.map((ch) => [
+                    monthName,
+                    ch.snippet?.title || "",
+                    Number(ch.statistics?.subscriberCount || 0),
+                    Number(ch.statistics?.videoCount || 0),
+                    Number(ch.statistics?.viewCount || 0),
+                  ]),
+                  csvFilename,
+                  titleRow
+                );
+              }
+            }}
+            className="flex items-center gap-2 text-sm text-primary hover:text-primary-dark font-medium px-3 py-2 border border-border rounded-lg"
+          >
             <Download className="w-4 h-4" />
-            Export
+            Export CSV
           </button>
         </div>
       </div>
