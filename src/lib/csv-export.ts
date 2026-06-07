@@ -1,10 +1,18 @@
 export function downloadCSV(
   headers: string[],
   rows: (string | number)[][],
-  filename: string
+  filename: string,
+  titleRow?: string
 ) {
-  const csvContent = [
-    headers.join(","),
+  const lines: string[] = [];
+
+  if (titleRow) {
+    lines.push(titleRow);
+    lines.push("");
+  }
+
+  lines.push(headers.join(","));
+  lines.push(
     ...rows.map((row) =>
       row.map((cell) => {
         const str = String(cell);
@@ -13,10 +21,12 @@ export function downloadCSV(
         }
         return str;
       }).join(",")
-    ),
-  ].join("\n");
+    )
+  );
 
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const csvContent = lines.join("\n");
+  const BOM = "\uFEFF";
+  const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

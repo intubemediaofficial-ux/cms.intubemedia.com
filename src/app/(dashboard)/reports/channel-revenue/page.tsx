@@ -186,12 +186,19 @@ export default function ChannelRevenuePage() {
           <button
             onClick={() => {
               if (channels.length > 0) {
+                const monthLabel = getMonthOptions().find((m) => m.value === dateRange)?.label;
+                const monthName = monthLabel || dateRange;
+                const titleRow = `Channel Revenue Report - ${monthName}`;
+                const csvFilename = monthLabel
+                  ? `${monthLabel.replace(" ", "-")}-Channel-Revenue-Report`
+                  : "channel-revenue-report";
                 downloadCSV(
-                  ["Channel", "Channel Link", "Subscribers", "Videos", "Views", "Est. Revenue ($)", "Revenue (INR)", "RPM ($)"],
+                  ["Month", "Channel", "Channel Link", "Subscribers", "Videos", "Views", "Est. Revenue ($)", "Revenue (INR)", "RPM ($)"],
                   channels.map((ch) => {
                     const revInfo = channelRevenueMap[ch.id || ""];
                     const rev = revInfo ? revInfo.revenue : 0;
                     return [
+                      monthName,
                       ch.snippet?.title || "",
                       `https://www.youtube.com/channel/${ch.id || ""}`,
                       Number(ch.statistics?.subscriberCount || 0),
@@ -202,7 +209,8 @@ export default function ChannelRevenuePage() {
                       revInfo ? revInfo.rpm.toFixed(2) : "0.00",
                     ];
                   }),
-                  "channel-revenue-report"
+                  csvFilename,
+                  titleRow
                 );
               }
             }}
