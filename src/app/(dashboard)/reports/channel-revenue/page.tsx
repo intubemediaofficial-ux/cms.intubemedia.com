@@ -186,6 +186,11 @@ export default function ChannelRevenuePage() {
           <button
             onClick={() => {
               if (channels.length > 0) {
+                const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+                const startD = new Date(dates.startDate + "T00:00:00");
+                const monthName = MONTH_NAMES[startD.getMonth()];
+                const year = startD.getFullYear();
+                const reportTitle = `Channel Revenue Report ${monthName} ${year}`;
                 downloadCSV(
                   ["Channel", "Channel Link", "Subscribers", "Videos", "Views", "Est. Revenue ($)", "Revenue (INR)", "RPM ($)"],
                   channels.map((ch) => {
@@ -202,7 +207,8 @@ export default function ChannelRevenuePage() {
                       revInfo ? revInfo.rpm.toFixed(2) : "0.00",
                     ];
                   }),
-                  "channel-revenue-report"
+                  `Channel_Revenue_Report_${monthName}_${year}`,
+                  reportTitle
                 );
               }
             }}

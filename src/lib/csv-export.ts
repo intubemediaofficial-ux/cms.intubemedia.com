@@ -1,11 +1,17 @@
 export function downloadCSV(
   headers: string[],
   rows: (string | number)[][],
-  filename: string
+  filename: string,
+  titleRow?: string
 ) {
-  const csvContent = [
-    headers.join(","),
-    ...rows.map((row) =>
+  const lines: string[] = [];
+  if (titleRow) {
+    lines.push(`"${titleRow}"`);
+    lines.push("");
+  }
+  lines.push(headers.join(","));
+  for (const row of rows) {
+    lines.push(
       row.map((cell) => {
         const str = String(cell);
         if (str.includes(",") || str.includes('"') || str.includes("\n")) {
@@ -13,10 +19,11 @@ export function downloadCSV(
         }
         return str;
       }).join(",")
-    ),
-  ].join("\n");
-
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    );
+  }
+  const csvContent = lines.join("\n");
+  const bom = "\uFEFF";
+  const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
