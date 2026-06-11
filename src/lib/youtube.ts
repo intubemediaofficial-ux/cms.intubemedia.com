@@ -255,13 +255,16 @@ export async function getAnalyticsData(
   startDate: string,
   endDate: string,
   metrics: string = "views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes,averageViewDuration",
-  dimensions: string = "day"
+  dimensions: string = "day",
+  channelId?: string
 ) {
   const auth = getAuthClient(accessToken);
   const analytics = google.youtubeAnalytics({ version: "v2", auth });
 
+  const ids = channelId ? `channel==${channelId}` : "channel==MINE";
+
   const response = await analytics.reports.query({
-    ids: "channel==MINE",
+    ids,
     startDate,
     endDate,
     metrics,
@@ -275,13 +278,16 @@ export async function getAnalyticsData(
 export async function getTrafficSources(
   accessToken: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  channelId?: string
 ) {
   const auth = getAuthClient(accessToken);
   const analytics = google.youtubeAnalytics({ version: "v2", auth });
 
+  const ids = channelId ? `channel==${channelId}` : "channel==MINE";
+
   const response = await analytics.reports.query({
-    ids: "channel==MINE",
+    ids,
     startDate,
     endDate,
     metrics: "views,estimatedMinutesWatched",
@@ -295,13 +301,16 @@ export async function getTrafficSources(
 export async function getCountryData(
   accessToken: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  channelId?: string
 ) {
   const auth = getAuthClient(accessToken);
   const analytics = google.youtubeAnalytics({ version: "v2", auth });
 
+  const ids = channelId ? `channel==${channelId}` : "channel==MINE";
+
   const response = await analytics.reports.query({
-    ids: "channel==MINE",
+    ids,
     startDate,
     endDate,
     metrics: "views,estimatedMinutesWatched",
@@ -316,13 +325,16 @@ export async function getCountryData(
 export async function getDemographics(
   accessToken: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  channelId?: string
 ) {
   const auth = getAuthClient(accessToken);
   const analytics = google.youtubeAnalytics({ version: "v2", auth });
 
+  const ids = channelId ? `channel==${channelId}` : "channel==MINE";
+
   const response = await analytics.reports.query({
-    ids: "channel==MINE",
+    ids,
     startDate,
     endDate,
     metrics: "viewerPercentage",
@@ -335,13 +347,16 @@ export async function getDemographics(
 export async function getDeviceData(
   accessToken: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  channelId?: string
 ) {
   const auth = getAuthClient(accessToken);
   const analytics = google.youtubeAnalytics({ version: "v2", auth });
 
+  const ids = channelId ? `channel==${channelId}` : "channel==MINE";
+
   const response = await analytics.reports.query({
-    ids: "channel==MINE",
+    ids,
     startDate,
     endDate,
     metrics: "views,estimatedMinutesWatched",
@@ -355,17 +370,20 @@ export async function getDeviceData(
 export async function getRevenueData(
   accessToken: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  channelId?: string
 ) {
   const auth = getAuthClient(accessToken);
   const analytics = google.youtubeAnalytics({ version: "v2", auth });
+
+  const ids = channelId ? `channel==${channelId}` : "channel==MINE";
 
   // Use flat totals (no dimensions) for accurate date-range revenue.
   // dimensions:"month" can return inaccurate partial-month data when
   // the date range doesn't align with calendar months.
   try {
     const response = await analytics.reports.query({
-      ids: "channel==MINE",
+      ids,
       startDate,
       endDate,
       metrics: "estimatedRevenue,estimatedAdRevenue,grossRevenue",
@@ -375,7 +393,7 @@ export async function getRevenueData(
     // grossRevenue requires content owner access — fallback without it
     try {
       const response = await analytics.reports.query({
-        ids: "channel==MINE",
+        ids,
         startDate,
         endDate,
         metrics: "estimatedRevenue,estimatedAdRevenue",
@@ -385,7 +403,7 @@ export async function getRevenueData(
       // Final fallback — just estimatedRevenue
       try {
         const response = await analytics.reports.query({
-          ids: "channel==MINE",
+          ids,
           startDate,
           endDate,
           metrics: "estimatedRevenue",
@@ -401,13 +419,16 @@ export async function getRevenueData(
 export async function getTopVideos(
   accessToken: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  channelId?: string
 ) {
   const auth = getAuthClient(accessToken);
   const analytics = google.youtubeAnalytics({ version: "v2", auth });
 
+  const ids = channelId ? `channel==${channelId}` : "channel==MINE";
+
   const response = await analytics.reports.query({
-    ids: "channel==MINE",
+    ids,
     startDate,
     endDate,
     metrics: "views,likes,estimatedMinutesWatched,subscribersGained,estimatedRevenue",

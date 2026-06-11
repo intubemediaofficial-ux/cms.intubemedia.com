@@ -101,7 +101,7 @@ export async function GET(request: Request) {
           let channelRpm = 0;
           try {
             const chToken = await getValidAccessToken(chId) || validToken;
-            const revData = await getRevenueData(chToken, startStr, endStr);
+            const revData = await getRevenueData(chToken, startStr, endStr, chId);
             if (revData?.rows?.length && revData.columnHeaders) {
               const headers = (revData.columnHeaders as Array<{ name?: string | null }>).map(h => h.name || "");
               const revIdx = headers.indexOf("estimatedRevenue");

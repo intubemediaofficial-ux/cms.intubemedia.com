@@ -414,13 +414,13 @@ export async function GET(request: Request) {
           // Process all tokenized channels
           try {
             const [perf, prevPerf, rev, prevRev, daily, revViews, videoAnalytics] = await Promise.all([
-              getAnalyticsData(token, startDate, endDate, performanceMetrics, "").catch((e) => { console.error(`[dashboardFull] ${cid} perf error:`, e?.message || e); return null; }),
-              getAnalyticsData(token, prevStartDate, prevEndDate, performanceMetrics, "").catch(() => null),
-              getRevenueData(token, startDate, endDate).catch((e) => { console.error(`[dashboardFull] ${cid} rev error:`, e?.message || e); return null; }),
-              getRevenueData(token, prevStartDate, prevEndDate).catch(() => null),
-              getAnalyticsData(token, (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`; })(), endDate, "estimatedRevenue", "day").catch(() => null),
-              getAnalyticsData(token, startDate, endDate, "estimatedRevenue,views", "").catch(() => null),
-              getAnalyticsData(token, startDate, endDate, "views,likes,subscribersGained,estimatedRevenue", "video").catch(() => null),
+              getAnalyticsData(token, startDate, endDate, performanceMetrics, "", cid).catch((e) => { console.error(`[dashboardFull] ${cid} perf error:`, e?.message || e); return null; }),
+              getAnalyticsData(token, prevStartDate, prevEndDate, performanceMetrics, "", cid).catch(() => null),
+              getRevenueData(token, startDate, endDate, cid).catch((e) => { console.error(`[dashboardFull] ${cid} rev error:`, e?.message || e); return null; }),
+              getRevenueData(token, prevStartDate, prevEndDate, cid).catch(() => null),
+              getAnalyticsData(token, (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`; })(), endDate, "estimatedRevenue", "day", cid).catch(() => null),
+              getAnalyticsData(token, startDate, endDate, "estimatedRevenue,views", "", cid).catch(() => null),
+              getAnalyticsData(token, startDate, endDate, "views,likes,subscribersGained,estimatedRevenue", "video", cid).catch(() => null),
             ]);
             perChannelAnalytics[cid] = {
               performance: perf as Record<string, unknown> | null,
@@ -607,8 +607,8 @@ export async function GET(request: Request) {
           if (!token48) continue;
           try {
             const [perfData, revData] = await Promise.all([
-              getAnalyticsData(token48, realtimeStart, realtimeEnd, "views,estimatedMinutesWatched,subscribersGained", "day").catch(() => null),
-              getAnalyticsData(token48, realtimeStart, realtimeEnd, "estimatedRevenue", "day").catch(() => null),
+              getAnalyticsData(token48, realtimeStart, realtimeEnd, "views,estimatedMinutesWatched,subscribersGained", "day", cid).catch(() => null),
+              getAnalyticsData(token48, realtimeStart, realtimeEnd, "estimatedRevenue", "day", cid).catch(() => null),
             ]);
             // Process performance data
             const perf = perfData as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null;

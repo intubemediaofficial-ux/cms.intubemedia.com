@@ -348,7 +348,7 @@ export default function DashboardPage() {
     ? dailyRevenueData.reduce((s, d) => s + d.revenue, 0) / dailyRevenueData.length
     : 0;
 
-  // Per-Channel Daily Revenue table data with current month support
+  // Per-Channel Daily Revenue table data with selected date range support
   const perChannelDailyRevenue = useMemo(() => {
     const perChannel = dashData?.perChannelAnalytics || {};
     const channelList = dashData?.channels || [];
@@ -360,9 +360,9 @@ export default function DashboardPage() {
     const result: { channelId: string; channelName: string; dailyMap: Record<string, number>; monthTotal: number }[] = [];
     const allFullDates = new Set<string>();
 
-    // Get current month prefix for filtering
-    const now = new Date();
-    const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    // Use selected date range for filtering (not hardcoded current month)
+    const filterStart = dateRange.startDate;
+    const filterEnd = dateRange.endDate;
 
     for (const [cid, pca] of Object.entries(perChannel)) {
       const daily = getDailyRevenueChartData(pca.dailyRevenue);
@@ -372,7 +372,8 @@ export default function DashboardPage() {
         const key = d.fullDate || d.date;
         dailyMap[key] = d.revenue;
         allFullDates.add(key);
-        if (d.fullDate && d.fullDate.startsWith(currentMonthPrefix)) {
+        // Sum revenue within the selected date range
+        if (d.fullDate && d.fullDate >= filterStart && d.fullDate <= filterEnd) {
           monthTotal += d.revenue;
         }
       }
@@ -387,17 +388,20 @@ export default function DashboardPage() {
     const sortedDates = Array.from(allFullDates).sort((a, b) => b.localeCompare(a));
     let filteredDates: string[];
     if (dailyRevDays === 30) {
-      filteredDates = sortedDates.filter((d) => d.startsWith(currentMonthPrefix));
+      // Show dates within the selected range only
+      filteredDates = sortedDates.filter((d) => d >= filterStart && d <= filterEnd);
     } else if (dailyRevDays === "all") {
       filteredDates = sortedDates;
     } else {
       filteredDates = sortedDates.slice(0, dailyRevDays);
     }
 
-    const currentMonthName = now.toLocaleString("en-US", { month: "short", year: "numeric" });
+    // Label based on selected date range
+    const startD = new Date(filterStart + "T00:00:00");
+    const periodLabel = startD.toLocaleString("en-US", { month: "short", year: "numeric" });
 
-    return { channels: result, dates: filteredDates, currentMonthName };
-  }, [dashData, dailyRevDays]);
+    return { channels: result, dates: filteredDates, currentMonthName: periodLabel };
+  }, [dashData, dailyRevDays, dateRange]);
 
   // Top videos
   const topVideos = isReal ? (dashData?.topVideos?.videos || []) : [];
