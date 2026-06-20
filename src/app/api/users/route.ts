@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sendEmail, getWelcomeEmailHtml } from "@/lib/email";
 import { addAuditLog } from "@/lib/audit-log";
+import { createSystemNotification } from "@/lib/notifications";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -281,6 +282,14 @@ export async function POST(request: Request) {
       targetEmail: newUser.email,
       details: `Created ${newRole} user "${newUser.name}" (${newUser.email})`,
     }).catch(() => {});
+
+    createSystemNotification(
+      newUser.id,
+      newUser.email,
+      "welcome",
+      "Welcome to InTubeMedia!",
+      `Your ${newRole} account has been created. Login at cms.intubemedia.com with your email.`
+    ).catch(() => {});
 
     const { password: _, ...safeUser } = newUser;
     return Response.json({ data: safeUser }, { status: 201 });

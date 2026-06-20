@@ -14,7 +14,9 @@ import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import { downloadCSV } from "@/lib/csv-export";
 import { downloadExcel } from "@/lib/excel-export";
+import { generateMonthlyPDFReport } from "@/lib/pdf-report";
 import { useExchangeRate } from "@/lib/hooks/useExchangeRate";
+import { FileText } from "lucide-react";
 
 const CHANNELS_STORAGE_KEY = "bainsla_channels";
 
@@ -219,6 +221,37 @@ export default function ChannelRevenuePage() {
                 >
                   <Download className="w-3.5 h-3.5" />
                   Excel
+                </button>
+                <button
+                  onClick={() => {
+                    generateMonthlyPDFReport({
+                      title: "Channel Revenue Report",
+                      period: monthName,
+                      channels: channels.map((ch) => {
+                        const revInfo = channelRevenueMap[ch.id || ""];
+                        const rev = revInfo ? revInfo.revenue : 0;
+                        return {
+                          channelName: ch.snippet?.title || "",
+                          subscribers: Number(ch.statistics?.subscriberCount || 0),
+                          views: Number(ch.statistics?.viewCount || 0),
+                          videos: Number(ch.statistics?.videoCount || 0),
+                          revenue: rev,
+                          revenueINR: Math.round(rev * INR_RATE),
+                          rpm: revInfo?.rpm || 0,
+                        };
+                      }),
+                      totalRevenue,
+                      totalRevenueINR: Math.round(totalRevenue * INR_RATE),
+                      totalSubscribers: channels.reduce((s, c) => s + Number(c.statistics?.subscriberCount || 0), 0),
+                      totalViews: channels.reduce((s, c) => s + Number(c.statistics?.viewCount || 0), 0),
+                      exchangeRate: INR_RATE,
+                      generatedBy: session?.user?.email || "User",
+                    });
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  PDF
                 </button>
               </div>
             );
