@@ -27,6 +27,7 @@ import {
   CreditCard,
   MonitorPlay,
   MessageSquare,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -122,6 +123,7 @@ const adminNavItems: NavItem[] = [
   { href: "/admin-payments", label: "Payments", icon: CreditCard },
   { href: "/admin-distribution", label: "Music Distribution", icon: Music },
   { href: "/admin-claims", label: "Claim Release", icon: ShieldCheck },
+  { href: "/admin-audit-log", label: "Audit Log", icon: ClipboardList },
   { href: "/admin-settings", label: "Settings", icon: Settings },
   { href: "/cms-dashboard", label: "YouTube CMS", icon: MonitorPlay },
 ];
