@@ -31,7 +31,8 @@ export interface StoredUser {
   status: "active" | "inactive" | "pending";
   joinedDate: string;
   category: string;
-  role: "client";
+  role: "client" | "company";
+  parentId?: string;
   networks?: NetworkAssignment[];
   channelNetworks?: ChannelNetworkAssignment[];
   customNetworks?: string[];
@@ -99,6 +100,19 @@ async function isAdmin(): Promise<boolean> {
   return ADMIN_EMAILS.includes(session.user.email.toLowerCase());
 }
 
+async function isCompany(): Promise<{ isCompany: boolean; companyUser?: StoredUser }> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return { isCompany: false };
+  const email = session.user.email.toLowerCase();
+  if (ADMIN_EMAILS.includes(email)) return { isCompany: false };
+  try {
+    const users = await getUsers();
+    const user = users.find((u) => u.email.toLowerCase() === email && u.role === "company");
+    if (user) return { isCompany: true, companyUser: user };
+  } catch { /* ignore */ }
+  return { isCompany: false };
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -122,9 +136,30 @@ export async function GET(request: Request) {
     }
   }
 
+  // Company: return only their own clients
+  if (action === "myClients") {
+    const { isCompany: isComp, companyUser } = await isCompany();
+    if (!isComp || !companyUser) {
+      return Response.json({ error: "Unauthorized — company access only" }, { status: 401 });
+    }
+    try {
+      const users = await getUsers();
+      const myClients = users.filter((u) => u.parentId === companyUser.id);
+      const safeClients = myClients.map(({ password, ...u }) => u);
+      return Response.json({ data: safeClients });
+    } catch (error) {
+      console.error("[Users GET myClients] Error:", error);
+      return Response.json({ error: "Storage error", kvError: true }, { status: 500 });
+    }
+  }
+
   // Admin-only: return all users
   if (!(await isAdmin())) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+    // Companies can also access the full user list in read-only mode
+    const { isCompany: isComp } = await isCompany();
+    if (!isComp) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   try {
@@ -138,7 +173,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!(await isAdmin())) {
+  const admin = await isAdmin();
+  const { isCompany: isComp, companyUser } = admin ? { isCompany: false, companyUser: undefined } : await isCompany();
+
+  if (!admin && !isComp) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -164,6 +202,16 @@ export async function POST(request: Request) {
       );
     }
 
+    // Determine role: admin can create companies, companies create clients
+    let newRole: "client" | "company" = "client";
+    let parentId: string | undefined;
+    if (admin && body.role === "company") {
+      newRole = "company";
+    } else if (isComp && companyUser) {
+      newRole = "client";
+      parentId = companyUser.id;
+    }
+
     const newUser: StoredUser = {
       id: crypto.randomUUID(),
       name: name.trim(),
@@ -178,9 +226,10 @@ export async function POST(request: Request) {
         year: "numeric",
       }),
       category: category || "Music",
-      role: "client",
+      role: newRole,
       networks: networks || [],
       channelNetworks: channelNetworks || [],
+      ...(parentId ? { parentId } : {}),
     };
 
     users.push(newUser);
@@ -204,7 +253,9 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  if (!(await isAdmin())) {
+  const admin = await isAdmin();
+  const { isCompany: isComp, companyUser } = admin ? { isCompany: false, companyUser: undefined } : await isCompany();
+  if (!admin && !isComp) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -290,6 +341,15 @@ export async function PUT(request: Request) {
     if (status) users[idx].status = status;
     if (networks !== undefined) users[idx].networks = networks;
     if (channelNetworks !== undefined) users[idx].channelNetworks = channelNetworks;
+    // Only admin can change role
+    if (admin && body.role && (body.role === "client" || body.role === "company")) {
+      users[idx].role = body.role;
+    }
+
+    // Company can only update their own clients
+    if (isComp && companyUser && users[idx].parentId !== companyUser.id) {
+      return Response.json({ error: "You can only update your own clients" }, { status: 403 });
+    }
 
     const saved = await saveUsers(users);
     if (!saved) {
@@ -389,7 +449,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!(await isAdmin())) {
+  const admin = await isAdmin();
+  const { isCompany: isComp, companyUser } = admin ? { isCompany: false, companyUser: undefined } : await isCompany();
+  if (!admin && !isComp) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -402,6 +464,15 @@ export async function DELETE(request: Request) {
     }
 
     const users = await getUsers();
+
+    // Company can only delete their own clients
+    if (isComp && companyUser) {
+      const target = users.find((u) => u.id === id);
+      if (!target || target.parentId !== companyUser.id) {
+        return Response.json({ error: "You can only delete your own clients" }, { status: 403 });
+      }
+    }
+
     const filtered = users.filter((u) => u.id !== id);
 
     if (filtered.length === users.length) {

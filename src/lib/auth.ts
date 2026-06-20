@@ -14,7 +14,7 @@ declare module "next-auth" {
       name?: string | null;
       email?: string | null;
       image?: string | null;
-      role?: "admin" | "client";
+      role?: "admin" | "company" | "client";
       userStatus?: "active" | "pending" | "inactive";
     };
   }
@@ -26,7 +26,7 @@ declare module "next-auth/jwt" {
     refreshToken?: string;
     accessTokenExpires?: number;
     error?: string;
-    role?: "admin" | "client";
+    role?: "admin" | "company" | "client";
     userStatus?: "active" | "pending" | "inactive";
   }
 }
@@ -59,7 +59,8 @@ interface StoredUser {
   password: string;
   channels: string[];
   status: "active" | "inactive" | "pending";
-  role: "client";
+  role: "client" | "company";
+  parentId?: string;
 }
 
 function hashPassword(password: string): string {
@@ -69,7 +70,7 @@ function hashPassword(password: string): string {
 async function verifyClientCredentials(
   email: string,
   password: string
-): Promise<{ name: string; email: string; status: string } | null> {
+): Promise<{ name: string; email: string; status: string; role: string } | null> {
   try {
     const users = await kv.get<StoredUser[]>("bainsla_users");
     if (!users) return null;
@@ -82,7 +83,7 @@ async function verifyClientCredentials(
     const hashed = hashPassword(password);
     if (user.password !== hashed) return null;
 
-    return { name: user.name, email: user.email, status: user.status };
+    return { name: user.name, email: user.email, status: user.status, role: user.role || "client" };
   } catch (error) {
     console.error("[Auth] Failed to verify client credentials:", error);
     return null;
@@ -237,7 +238,19 @@ export const authOptions: NextAuthOptions = {
       }
 
       const email = token.email?.toLowerCase() || "";
-      token.role = ADMIN_EMAILS.includes(email) ? "admin" : "client";
+      // Determine role: admin (hardcoded), or look up from KV (company/client)
+      if (ADMIN_EMAILS.includes(email)) {
+        token.role = "admin";
+      } else {
+        // Check KV for company role
+        try {
+          const users = await kv.get<StoredUser[]>("bainsla_users") || [];
+          const storedUser = users.find((u) => u.email.toLowerCase() === email);
+          token.role = storedUser?.role === "company" ? "company" : "client";
+        } catch {
+          token.role = "client";
+        }
+      }
       if (ADMIN_EMAILS.includes(email)) token.userStatus = "active";
 
       // Refresh user status from KV on each request (so admin approval takes effect)
@@ -266,7 +279,7 @@ export const authOptions: NextAuthOptions = {
       session.accessToken = token.accessToken as string | undefined;
       session.error = token.error as string | undefined;
       if (session.user) {
-        session.user.role = token.role as "admin" | "client" | undefined;
+        session.user.role = token.role as "admin" | "company" | "client" | undefined;
         session.user.email = (token.email as string) || session.user.email;
         session.user.name = (token.name as string) || session.user.name;
         session.user.userStatus = token.userStatus as "active" | "pending" | "inactive" | undefined;

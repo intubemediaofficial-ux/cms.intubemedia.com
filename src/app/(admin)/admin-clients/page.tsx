@@ -78,6 +78,8 @@ interface Client {
   status: "active" | "inactive" | "pending";
   joinedDate: string;
   category: string;
+  role?: "client" | "company";
+  parentId?: string;
   networks?: NetworkAssignment[];
   channelNetworks?: ChannelNetworkAssignment[];
 }
@@ -104,6 +106,7 @@ export default function AdminClientsPage() {
   const [formPassword, setFormPassword] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formCategory, setFormCategory] = useState("Music");
+  const [formRole, setFormRole] = useState<"client" | "company">("client");
   const [formChannels, setFormChannels] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -206,6 +209,7 @@ export default function AdminClientsPage() {
     setFormPassword("");
     setFormPhone("");
     setFormCategory("Music");
+    setFormRole("client");
     setFormChannels("");
     setFormNetworks([]);
     setFormChannelNetworks([]);
@@ -225,6 +229,7 @@ export default function AdminClientsPage() {
     setFormPassword("");
     setFormPhone(client.phone || "");
     setFormCategory(client.category);
+    setFormRole(client.role || "client");
     setFormChannels(client.channels.join(", "));
     setFormNetworks(client.networks || []);
     setFormChannelNetworks(client.channelNetworks || []);
@@ -298,6 +303,7 @@ export default function AdminClientsPage() {
             password: formPassword.trim(),
             phone: (formPhone || "").trim(),
             category: formCategory,
+            role: formRole,
             channels: channelIds,
             networks: formNetworks,
             channelNetworks: formChannelNetworks,
@@ -747,6 +753,7 @@ export default function AdminClientsPage() {
                   <th className="text-left px-4 py-3 font-semibold text-foreground">Email</th>
                   <th className="text-left px-4 py-3 font-semibold text-foreground">Phone</th>
                   <th className="text-left px-4 py-3 font-semibold text-foreground">Category</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Role</th>
                   <th className="text-left px-4 py-3 font-semibold text-foreground">Channels</th>
                   <th className="text-left px-4 py-3 font-semibold text-foreground">Status</th>
                   <th className="text-left px-4 py-3 font-semibold text-foreground">Joined</th>
@@ -771,6 +778,13 @@ export default function AdminClientsPage() {
                     <td className="px-4 py-3 text-muted">{client.email}</td>
                     <td className="px-4 py-3 text-muted">{client.phone || "-"}</td>
                     <td className="px-4 py-3 text-foreground">{client.category}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        client.role === "company" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
+                      }`}>
+                        {client.role === "company" ? "Company" : "Client"}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-1 text-foreground">
                         <Radio className="w-3.5 h-3.5 text-purple-500" />
@@ -1009,6 +1023,24 @@ export default function AdminClientsPage() {
                   <option value="Education">Education</option>
                   <option value="Other">Other</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  User Role
+                </label>
+                <select
+                  value={formRole}
+                  onChange={(e) => setFormRole(e.target.value as "client" | "company")}
+                  className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="client">Client</option>
+                  <option value="company">Company</option>
+                </select>
+                <p className="text-xs text-muted mt-1">
+                  {formRole === "company"
+                    ? "Company users can create and manage their own clients"
+                    : "Client users can add channels and view their dashboard"}
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
