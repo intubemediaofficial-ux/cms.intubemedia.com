@@ -16,7 +16,8 @@ interface StoredUser {
   status: "active" | "inactive" | "pending";
   joinedDate: string;
   category: string;
-  role: "client";
+  role: "client" | "company";
+  parentId?: string;
 }
 
 function hashPassword(password: string): string {

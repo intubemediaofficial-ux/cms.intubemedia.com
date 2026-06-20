@@ -1,6 +1,7 @@
 import { kv } from "@/lib/redis";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { sendEmail, getWelcomeEmailHtml } from "@/lib/email";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -240,6 +241,28 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    // Send welcome email (non-blocking — don't fail user creation if email fails)
+    const creatorName = isComp && companyUser ? companyUser.name : "InTubeMedia Admin";
+    sendEmail({
+      to: newUser.email,
+      subject: `Welcome to InTubeMedia — Your ${newRole === "company" ? "Company" : "Client"} Account`,
+      html: getWelcomeEmailHtml({
+        name: newUser.name,
+        email: newUser.email,
+        password: password,
+        role: newRole,
+        createdBy: creatorName,
+      }),
+    }).then((result) => {
+      if (result.success) {
+        console.log(`[Users] Welcome email sent to ${newUser.email}`);
+      } else {
+        console.error(`[Users] Failed to send welcome email to ${newUser.email}:`, result.error);
+      }
+    }).catch((err) => {
+      console.error(`[Users] Welcome email error for ${newUser.email}:`, err);
+    });
 
     const { password: _, ...safeUser } = newUser;
     return Response.json({ data: safeUser }, { status: 201 });
