@@ -66,6 +66,34 @@ const clientNavItems: NavItem[] = [
   { href: "/contact-admin", label: "Contact Admin", icon: MessageSquare },
 ];
 
+const companyNavItems: NavItem[] = [
+  { href: "/company-dashboard", label: "Company Dashboard", icon: Shield },
+  { href: "/company-clients", label: "My Clients", icon: Users },
+  { href: "/dashboard", label: "Channel Dashboard", icon: LayoutDashboard },
+  {
+    href: "/channels",
+    label: "Channels",
+    icon: Radio,
+    children: [
+      { href: "/channels", label: "Active Channels", icon: LinkIcon },
+      { href: "/delinked-channels", label: "Delinked Channels", icon: Unlink },
+    ],
+  },
+  { href: "/videos", label: "Videos", icon: Video },
+  {
+    href: "/reports",
+    label: "Reports",
+    icon: BarChart3,
+    children: [
+      { href: "/reports/video-revenue", label: "Video Revenue", icon: FileText },
+      { href: "/reports/channel-revenue", label: "Channel Revenue", icon: FileText },
+      { href: "/reports/summary-channel", label: "Summary Channel", icon: FileText },
+    ],
+  },
+  { href: "/payments", label: "Payments", icon: CreditCard },
+  { href: "/settings", label: "Settings", icon: Settings },
+];
+
 const adminNavItems: NavItem[] = [
   { href: "/admin-dashboard", label: "Admin Dashboard", icon: Shield },
   { href: "/admin-clients", label: "User Management", icon: Users },
@@ -104,7 +132,8 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "admin";
-  const navItems = isAdmin ? adminNavItems : clientNavItems;
+  const isCompany = session?.user?.role === "company";
+  const navItems = isAdmin ? adminNavItems : isCompany ? companyNavItems : clientNavItems;
 
   const toggleMenu = (href: string) => {
     setOpenMenus((prev) => ({ ...prev, [href]: !prev[href] }));
@@ -130,6 +159,13 @@ export default function Sidebar() {
                 <h1 className="text-lg font-bold leading-tight text-white">InTube</h1>
                 <p className="text-[10px] font-bold tracking-[0.25em] text-amber-400 uppercase">
                   Media
+                </p>
+              </>
+            ) : isCompany ? (
+              <>
+                <h1 className="text-lg font-bold leading-tight text-white">InTube</h1>
+                <p className="text-[10px] font-bold tracking-[0.25em] text-emerald-400 uppercase">
+                  Company
                 </p>
               </>
             ) : (

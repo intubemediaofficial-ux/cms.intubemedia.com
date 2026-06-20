@@ -163,7 +163,7 @@ function getDailyRevenueChartData(data: AnalyticsResponse | null | undefined) {
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const hasAccessToken = !!session?.accessToken;
-  const isAdminSession = session?.user?.role === "admin";
+  const isAdminSession = session?.user?.role === "admin" || session?.user?.role === "company";
   const isAuthenticated = status === "authenticated";
 
   const [datePreset, setDatePreset] = useState("28d");

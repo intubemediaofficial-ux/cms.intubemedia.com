@@ -40,7 +40,9 @@ export async function GET(request: Request) {
 
   switch (action) {
     case "getAllCachedData": {
-      if (!isAdmin) return Response.json({ error: "Admin only" }, { status: 403 });
+      // Allow admin and company users
+      const isCompanyUser = session.user?.role === "company";
+      if (!isAdmin && !isCompanyUser) return Response.json({ error: "Admin or Company only" }, { status: 403 });
       const data = await getAllCachedClientData();
       return Response.json({ data });
     }

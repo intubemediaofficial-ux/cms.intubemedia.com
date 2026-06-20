@@ -45,6 +45,8 @@ interface ClientUser {
   status: "active" | "inactive";
   joinedDate: string;
   category: string;
+  role?: "client" | "company";
+  parentId?: string;
 }
 
 interface ChannelInfo {
@@ -456,6 +458,7 @@ export default function AdminDashboardPage() {
 
   const stats = useMemo(() => {
     const totalClients = clients.length;
+    const totalCompanies = clients.filter((c) => c.role === "company").length;
     const activeClients = clients.filter((c) => c.status === "active").length;
     const inactiveClients = clients.filter((c) => c.status === "inactive").length;
     const totalChannels = clients.reduce((sum, c) => sum + c.channels.length, 0);
@@ -471,6 +474,7 @@ export default function AdminDashboardPage() {
     const invalidTokens = allChannelIds.length - validTokens;
     return {
       totalClients,
+      totalCompanies,
       activeClients,
       inactiveClients,
       totalChannels,
@@ -649,7 +653,7 @@ export default function AdminDashboardPage() {
       )}
 
       {/* Stats Cards Row 1 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white rounded-xl border border-border p-5">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -658,6 +662,18 @@ export default function AdminDashboardPage() {
             <div>
               <p className="text-sm text-muted">Total Users</p>
               <p className="text-2xl font-bold text-foreground">{stats.totalClients}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-emerald-200 p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+              <Crown className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted">Companies</p>
+              <p className="text-2xl font-bold text-emerald-600">{stats.totalCompanies}</p>
             </div>
           </div>
         </div>
