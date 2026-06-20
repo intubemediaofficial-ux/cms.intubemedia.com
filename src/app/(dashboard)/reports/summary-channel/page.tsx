@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import { downloadCSV } from "@/lib/csv-export";
+import { downloadExcel } from "@/lib/excel-export";
 
 interface YouTubeChannel {
   id?: string | null;
@@ -56,32 +57,37 @@ export default function SummaryChannelPage() {
               Sign in to see data
             </div>
           )}
-          <button
-            onClick={() => {
-              if (channels.length > 0) {
-                const now = new Date();
-                const monthName = now.toLocaleString("en-US", { month: "long", year: "numeric" });
-                const titleRow = `Summary Channel Report - ${monthName}`;
-                const csvFilename = `${monthName.replace(" ", "-")}-Summary-Channel-Report`;
-                downloadCSV(
-                  ["Month", "Channel", "Subscribers", "Videos", "Views"],
-                  channels.map((ch) => [
-                    monthName,
-                    ch.snippet?.title || "",
-                    Number(ch.statistics?.subscriberCount || 0),
-                    Number(ch.statistics?.videoCount || 0),
-                    Number(ch.statistics?.viewCount || 0),
-                  ]),
-                  csvFilename,
-                  titleRow
-                );
-              }
-            }}
-            className="flex items-center gap-2 text-sm text-primary hover:text-primary-dark font-medium px-3 py-2 border border-border rounded-lg"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
+          {channels.length > 0 && (() => {
+            const now = new Date();
+            const monthName = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+            const exportHeaders = ["Month", "Channel", "Subscribers", "Videos", "Views"];
+            const exportRows = channels.map((ch) => [
+              monthName,
+              ch.snippet?.title || "",
+              Number(ch.statistics?.subscriberCount || 0),
+              Number(ch.statistics?.videoCount || 0),
+              Number(ch.statistics?.viewCount || 0),
+            ] as (string | number)[]);
+            const exportFilename = `${monthName.replace(" ", "-")}-Summary-Channel-Report`;
+            return (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => downloadCSV(exportHeaders, exportRows, exportFilename, `Summary Channel Report - ${monthName}`)}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-border rounded-lg hover:bg-slate-50"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  CSV
+                </button>
+                <button
+                  onClick={() => downloadExcel(exportHeaders, exportRows, exportFilename, "Summary")}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Excel
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

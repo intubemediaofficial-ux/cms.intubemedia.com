@@ -73,3 +73,17 @@ export function useExchangeRate(currency: string = "USD"): ExchangeRateData {
 export function toINR(amount: number, rate: number): number {
   return Math.round(amount * rate);
 }
+
+export const SUPPORTED_CURRENCIES = [
+  { code: "USD", symbol: "$", name: "US Dollar" },
+  { code: "GBP", symbol: "£", name: "British Pound" },
+  { code: "EUR", symbol: "€", name: "Euro" },
+  { code: "CAD", symbol: "C$", name: "Canadian Dollar" },
+  { code: "AUD", symbol: "A$", name: "Australian Dollar" },
+  { code: "INR", symbol: "₹", name: "Indian Rupee" },
+] as const;
+
+export function getCurrencySymbol(code: string): string {
+  const c = SUPPORTED_CURRENCIES.find((s) => s.code === code);
+  return c?.symbol || code;
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -137,6 +137,22 @@ export default function Sidebar() {
   const isCompany = session?.user?.role === "company";
   const navItems = isAdmin ? adminNavItems : isCompany ? companyNavItems : clientNavItems;
 
+  const [branding, setBranding] = useState<{ brandName?: string; brandColor?: string; brandLogo?: string } | null>(null);
+  useEffect(() => {
+    if (!session?.user?.email || isAdmin) return;
+    fetch("/api/users?action=me").then((r) => r.json()).then((json) => {
+      const user = json.data;
+      if (user?.branding?.brandName) {
+        setBranding(user.branding);
+      } else if (user?.parentId) {
+        fetch("/api/users").then((r2) => r2.json()).then((json2) => {
+          const parent = (json2.data || []).find((u: { id: string }) => u.id === user.parentId);
+          if (parent?.branding?.brandName) setBranding(parent.branding);
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+  }, [session, isAdmin]);
+
   const toggleMenu = (href: string) => {
     setOpenMenus((prev) => ({ ...prev, [href]: !prev[href] }));
   };
@@ -149,14 +165,20 @@ export default function Sidebar() {
       )}
     >
       <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-        <div className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-700 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-            <path d="M8 5v14l11-7z"/>
-          </svg>
-        </div>
+        {branding?.brandLogo ? (
+          <img src={branding.brandLogo} alt="" className="w-9 h-9 rounded-lg shrink-0 object-contain" />
+        ) : (
+          <div className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-700 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </div>
+        )}
         {!collapsed && (
           <div className="overflow-hidden">
-            {isAdmin ? (
+            {branding?.brandName ? (
+              <h1 className="text-lg font-bold leading-tight text-white">{branding.brandName}</h1>
+            ) : isAdmin ? (
               <>
                 <h1 className="text-lg font-bold leading-tight text-white">InTube</h1>
                 <p className="text-[10px] font-bold tracking-[0.25em] text-amber-400 uppercase">
