@@ -17,11 +17,39 @@ import {
   DollarSign,
   ExternalLink,
   Key,
+  Ban,
+  CheckCircle2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useExchangeRate } from "@/lib/hooks/useExchangeRate";
+
+interface BankDetails {
+  accountName?: string;
+  accountNumber?: string;
+  bankName?: string;
+  ifscCode?: string;
+  upiId?: string;
+  panNumber?: string;
+}
+
+interface PaymentRecord {
+  id: string;
+  month: string;
+  totalAmount: number;
+  netTotal: number;
+  paidAmount: number;
+  status: "pending" | "paid" | "partial";
+  paidDate: string;
+}
+
+interface WithdrawRequest {
+  id: string;
+  amount: number;
+  status: "pending" | "approved" | "rejected" | "paid";
+  requestDate: string;
+}
 
 interface ClientUser {
   id: string;
@@ -257,9 +285,53 @@ function CompanyClientsContent() {
     }
   };
 
+  const handleToggleStatus = async (client: ClientUser) => {
+    const newStatus = client.status === "active" ? "inactive" : "active";
+    try {
+      const res = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: client.id, status: newStatus }),
+      });
+      if (res.ok) {
+        setSuccess(`Client ${newStatus === "active" ? "activated" : "blocked"}!`);
+        fetchData();
+      } else {
+        setError("Failed to update status");
+      }
+    } catch {
+      setError("Network error");
+    }
+  };
+
   // View specific client detail
   const viewClient = viewClientId ? clients.find((c) => c.id === viewClientId) : null;
   const viewClientData = viewClient ? clientDataMap.get(viewClient.id) : null;
+
+  const [viewBankDetails, setViewBankDetails] = useState<BankDetails | null>(null);
+  const [viewPayments, setViewPayments] = useState<PaymentRecord[]>([]);
+  const [viewWithdrawals, setViewWithdrawals] = useState<WithdrawRequest[]>([]);
+
+  useEffect(() => {
+    if (!viewClient) { setViewBankDetails(null); setViewPayments([]); setViewWithdrawals([]); return; }
+    fetch(`/api/client-data?action=getBankDetails&userId=${viewClient.email}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => { if (j?.data) setViewBankDetails(j.data); })
+      .catch(() => {});
+    fetch(`/api/payments?userId=${viewClient.id}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => { if (j?.data) setViewPayments(j.data); })
+      .catch(() => {});
+    fetch(`/api/payments?type=withdrawals`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => {
+        if (j?.data) {
+          const filtered = j.data.filter((w: WithdrawRequest & { userId?: string }) => w.userId === viewClient.id);
+          setViewWithdrawals(filtered);
+        }
+      })
+      .catch(() => {});
+  }, [viewClient]);
 
   const filteredClients = clients.filter((c) => {
     if (!searchQuery) return true;
@@ -310,6 +382,104 @@ function CompanyClientsContent() {
             <p className="text-2xl font-bold">{formatNumber(viewClientData?.totalViews || 0)}</p>
           </div>
         </div>
+
+        {/* Bank Details */}
+        {viewBankDetails && (viewBankDetails.accountNumber || viewBankDetails.upiId || viewBankDetails.panNumber) && (
+          <div className="bg-white rounded-xl border border-border p-5">
+            <h2 className="font-semibold mb-3">Bank Details</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+              {viewBankDetails.accountName && (
+                <div><p className="text-xs text-muted">Account Name</p><p className="font-medium">{viewBankDetails.accountName}</p></div>
+              )}
+              {viewBankDetails.accountNumber && (
+                <div><p className="text-xs text-muted">Account Number</p><p className="font-medium">{viewBankDetails.accountNumber}</p></div>
+              )}
+              {viewBankDetails.bankName && (
+                <div><p className="text-xs text-muted">Bank Name</p><p className="font-medium">{viewBankDetails.bankName}</p></div>
+              )}
+              {viewBankDetails.ifscCode && (
+                <div><p className="text-xs text-muted">IFSC Code</p><p className="font-medium">{viewBankDetails.ifscCode}</p></div>
+              )}
+              {viewBankDetails.upiId && (
+                <div><p className="text-xs text-muted">UPI ID</p><p className="font-medium">{viewBankDetails.upiId}</p></div>
+              )}
+              {viewBankDetails.panNumber && (
+                <div><p className="text-xs text-muted">PAN Number</p><p className="font-medium">{viewBankDetails.panNumber}</p></div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Payments */}
+        {viewPayments.length > 0 && (
+          <div className="bg-white rounded-xl border border-border p-5">
+            <h2 className="font-semibold mb-3">Payments</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 px-3 font-medium text-muted">Month</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted">Amount</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted">Net Total</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted">Paid</th>
+                    <th className="text-center py-2 px-3 font-medium text-muted">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {viewPayments.map((p) => (
+                    <tr key={p.id} className="border-b border-border/30">
+                      <td className="py-2 px-3">{p.month || "—"}</td>
+                      <td className="py-2 px-3 text-right">${p.totalAmount.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right font-medium">${p.netTotal.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right text-green-600">${p.paidAmount.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          p.status === "paid" ? "bg-green-100 text-green-700" :
+                          p.status === "partial" ? "bg-amber-100 text-amber-700" :
+                          "bg-red-100 text-red-700"
+                        }`}>{p.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Withdrawal Requests */}
+        {viewWithdrawals.length > 0 && (
+          <div className="bg-white rounded-xl border border-border p-5">
+            <h2 className="font-semibold mb-3">Withdrawal Requests</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-right py-2 px-3 font-medium text-muted">Amount</th>
+                    <th className="text-center py-2 px-3 font-medium text-muted">Status</th>
+                    <th className="text-left py-2 px-3 font-medium text-muted">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {viewWithdrawals.map((w) => (
+                    <tr key={w.id} className="border-b border-border/30">
+                      <td className="py-2 px-3 text-right font-medium">${w.amount.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          w.status === "paid" ? "bg-green-100 text-green-700" :
+                          w.status === "pending" ? "bg-amber-100 text-amber-700" :
+                          w.status === "approved" ? "bg-blue-100 text-blue-700" :
+                          "bg-red-100 text-red-700"
+                        }`}>{w.status}</span>
+                      </td>
+                      <td className="py-2 px-3 text-muted text-xs">{new Date(w.requestDate).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {channels.length > 0 && (
           <div className="bg-white rounded-xl border border-border p-5">
@@ -462,6 +632,13 @@ function CompanyClientsContent() {
                           </button>
                           <button onClick={() => { setPasswordClient(client); setNewPassword(""); setError(null); setShowPasswordModal(true); }} className="p-1.5 hover:bg-slate-100 rounded text-muted" title="Change Password">
                             <Key className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleToggleStatus(client)}
+                            className={`p-1.5 rounded ${client.status === "active" ? "hover:bg-amber-50 text-amber-600" : "hover:bg-green-50 text-green-600"}`}
+                            title={client.status === "active" ? "Block Client" : "Activate Client"}
+                          >
+                            {client.status === "active" ? <Ban className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
                           </button>
                           <button onClick={() => handleDelete(client)} className="p-1.5 hover:bg-red-50 rounded text-red-500" title="Delete">
                             <Trash2 className="w-4 h-4" />
