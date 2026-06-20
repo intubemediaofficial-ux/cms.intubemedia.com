@@ -1411,6 +1411,142 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {/* Company Overview — Drill-down */}
+      {clients.filter((c) => c.role === "company").length > 0 && (
+        <div className="bg-white rounded-xl border border-border p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <Crown className="w-5 h-5 text-emerald-600" />
+              Company Overview
+            </h2>
+            <span className="text-xs text-muted">{clients.filter((c) => c.role === "company").length} companies</span>
+          </div>
+          <div className="space-y-4">
+            {clients.filter((c) => c.role === "company").map((company) => {
+              const companyClients = clients.filter((c) => c.parentId === company.id && c.role !== "company");
+              const companyChannelCount = companyClients.reduce((sum, c) => sum + (c.channels?.length || 0), 0);
+              let companyRevenue = 0;
+              let companyViews = 0;
+              let companySubs = 0;
+              const companyChannelsList: Array<{ channelId: string; channelTitle: string; thumbnail: string; subscribers: number; views: number; estimatedRevenue: number; rpm: number; clientName: string }> = [];
+              for (const cl of companyClients) {
+                const cd = cachedClientData.find((d) => d.email?.toLowerCase() === cl.email.toLowerCase());
+                if (cd) {
+                  companyRevenue += cd.totalRevenue || 0;
+                  companyViews += cd.totalViews || 0;
+                  companySubs += cd.totalSubscribers || 0;
+                  for (const ch of cd.channels) {
+                    companyChannelsList.push({ ...ch, clientName: cl.name });
+                  }
+                }
+              }
+              return (
+                <div key={company.id} className="border border-border/50 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setExpandedClient(expandedClient === `company-${company.id}` ? null : `company-${company.id}`)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">
+                        {company.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="text-left">
+                        <p className="font-semibold text-foreground">{company.name}</p>
+                        <p className="text-xs text-muted">{company.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-6 text-sm">
+                      <div className="text-center">
+                        <p className="text-xs text-muted">Clients</p>
+                        <p className="font-bold text-blue-600">{companyClients.length}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-muted">Channels</p>
+                        <p className="font-bold text-purple-600">{companyChannelCount}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-muted">Revenue</p>
+                        <p className="font-bold text-green-600">{formatCurrency(companyRevenue)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-muted">INR</p>
+                        <p className="font-bold text-amber-600">{INR_RATE > 0 ? `₹${(companyRevenue * INR_RATE).toFixed(0)}` : "—"}</p>
+                      </div>
+                      {expandedClient === `company-${company.id}` ? <ChevronUp className="w-4 h-4 text-muted" /> : <ChevronDown className="w-4 h-4 text-muted" />}
+                    </div>
+                  </button>
+                  {expandedClient === `company-${company.id}` && (
+                    <div className="border-t border-border/50 bg-slate-50/50 p-4 space-y-3">
+                      {companyClients.length === 0 ? (
+                        <p className="text-sm text-muted text-center py-4">No clients added yet</p>
+                      ) : (
+                        companyClients.map((cl) => {
+                          const cd = cachedClientData.find((d) => d.email?.toLowerCase() === cl.email.toLowerCase());
+                          const channels = cd?.channels || [];
+                          return (
+                            <div key={cl.id} className="bg-white rounded-lg border border-border/50 p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                                    {cl.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-sm">{cl.name}</p>
+                                    <p className="text-xs text-muted">{cl.email}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs">
+                                  <span className="font-medium">{cl.channels?.length || 0} ch</span>
+                                  <span className="text-green-600 font-medium">{formatCurrency(cd?.totalRevenue || 0)}</span>
+                                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${cl.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                    {cl.status}
+                                  </span>
+                                </div>
+                              </div>
+                              {channels.length > 0 && (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="border-b border-border/30">
+                                        <th className="text-left py-1.5 px-2 font-medium text-muted">Channel</th>
+                                        <th className="text-right py-1.5 px-2 font-medium text-muted">Subs</th>
+                                        <th className="text-right py-1.5 px-2 font-medium text-muted">Views</th>
+                                        <th className="text-right py-1.5 px-2 font-medium text-muted">Revenue ($)</th>
+                                        <th className="text-right py-1.5 px-2 font-medium text-muted">RPM</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {channels.map((ch) => (
+                                        <tr key={ch.channelId} className="border-b border-border/20">
+                                          <td className="py-1.5 px-2">
+                                            <div className="flex items-center gap-1.5">
+                                              {ch.thumbnail && <img src={ch.thumbnail} alt="" className="w-4 h-4 rounded-full" />}
+                                              <span>{ch.channelTitle || ch.channelId}</span>
+                                            </div>
+                                          </td>
+                                          <td className="py-1.5 px-2 text-right">{formatNumber(ch.subscribers)}</td>
+                                          <td className="py-1.5 px-2 text-right">{formatNumber(ch.views)}</td>
+                                          <td className="py-1.5 px-2 text-right text-green-600">{formatCurrency(ch.estimatedRevenue)}</td>
+                                          <td className="py-1.5 px-2 text-right">${ch.rpm?.toFixed(2) || "0.00"}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* All Clients with Channels — Filterable Table */}
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-border">

@@ -11,6 +11,9 @@ import {
   Search,
   ChevronRight,
   ExternalLink,
+  ArrowDownCircle,
+  Clock,
+  CheckCircle2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -51,6 +54,18 @@ interface CachedClientData {
   lastUpdated: string;
 }
 
+interface WithdrawRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  amount: number;
+  status: "pending" | "approved" | "rejected" | "paid";
+  requestDate: string;
+  processedDate: string;
+  adminNote: string;
+}
+
 export default function CompanyDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -58,6 +73,7 @@ export default function CompanyDashboardPage() {
 
   const [clients, setClients] = useState<ClientUser[]>([]);
   const [cachedData, setCachedData] = useState<CachedClientData[]>([]);
+  const [withdrawals, setWithdrawals] = useState<WithdrawRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -71,9 +87,10 @@ export default function CompanyDashboardPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [clientsRes, cachedRes] = await Promise.all([
+      const [clientsRes, cachedRes, withdrawRes] = await Promise.all([
         fetch("/api/users?action=myClients"),
         fetch("/api/client-data?action=getAllCachedData"),
+        fetch("/api/payments?type=withdrawals"),
       ]);
       if (clientsRes.ok) {
         const j = await clientsRes.json();
@@ -82,6 +99,10 @@ export default function CompanyDashboardPage() {
       if (cachedRes.ok) {
         const j = await cachedRes.json();
         setCachedData(j.data || []);
+      }
+      if (withdrawRes.ok) {
+        const j = await withdrawRes.json();
+        setWithdrawals(j.data || []);
       }
     } catch (err) {
       console.error("Failed to fetch company data:", err);
@@ -311,6 +332,53 @@ export default function CompanyDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Withdrawal Requests */}
+      {withdrawals.length > 0 && (
+        <div className="bg-white rounded-xl border border-border p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <ArrowDownCircle className="w-5 h-5 text-amber-600" />
+              Client Withdrawal Requests
+            </h2>
+            <span className="text-xs text-muted">{withdrawals.filter((w) => w.status === "pending").length} pending</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 px-3 font-medium text-muted">Client</th>
+                  <th className="text-left py-2 px-3 font-medium text-muted">Email</th>
+                  <th className="text-right py-2 px-3 font-medium text-muted">Amount</th>
+                  <th className="text-center py-2 px-3 font-medium text-muted">Status</th>
+                  <th className="text-left py-2 px-3 font-medium text-muted">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {withdrawals.slice(0, 10).map((w) => (
+                  <tr key={w.id} className="border-b border-border/30">
+                    <td className="py-2 px-3 font-medium">{w.userName}</td>
+                    <td className="py-2 px-3 text-muted">{w.userEmail}</td>
+                    <td className="py-2 px-3 text-right font-medium text-green-600">${w.amount.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        w.status === "pending" ? "bg-amber-100 text-amber-700" :
+                        w.status === "paid" ? "bg-green-100 text-green-700" :
+                        w.status === "approved" ? "bg-blue-100 text-blue-700" :
+                        "bg-red-100 text-red-700"
+                      }`}>
+                        {w.status === "pending" ? <Clock className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
+                        {w.status}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-muted text-xs">{new Date(w.requestDate).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Per-Client Channel Breakdown */}
       {filteredClients.length > 0 && (

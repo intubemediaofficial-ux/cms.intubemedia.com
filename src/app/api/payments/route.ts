@@ -3,6 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import crypto from "crypto";
 
+const USERS_KEY = "bainsla_users";
+
+interface StoredUser {
+  id: string;
+  email: string;
+  role: "client" | "company";
+  parentId?: string;
+}
+
 export const dynamic = "force-dynamic";
 
 const PAYMENTS_KEY = "bainsla_payments";
@@ -90,6 +99,17 @@ async function checkAdmin(): Promise<boolean> {
   return ADMIN_EMAILS.includes(session.user.email.toLowerCase());
 }
 
+async function getCompanyClientIds(companyEmail: string): Promise<string[]> {
+  try {
+    const users = (await kv.get<StoredUser[]>(USERS_KEY)) || [];
+    const company = users.find((u) => u.email.toLowerCase() === companyEmail.toLowerCase() && u.role === "company");
+    if (!company) return [];
+    return users.filter((u) => u.parentId === company.id).map((u) => u.id);
+  } catch {
+    return [];
+  }
+}
+
 async function getPayments(): Promise<Payment[]> {
   try {
     return (await kv.get<Payment[]>(PAYMENTS_KEY)) || [];
@@ -130,15 +150,25 @@ export async function GET(request: Request) {
   }
 
   const admin = ADMIN_EMAILS.includes(session.user.email.toLowerCase());
+  const isCompanyRole = session.user?.role === "company";
   const url = new URL(request.url);
   const type = url.searchParams.get("type");
   const userId = url.searchParams.get("userId");
+
+  // Company: get client IDs for filtering
+  let companyClientIds: string[] = [];
+  if (isCompanyRole && !admin) {
+    companyClientIds = await getCompanyClientIds(session.user.email);
+  }
 
   // Get TDS settings
   if (type === "tds") {
     const tdsSettings = await getTdsSettings();
     if (admin) {
       return Response.json({ data: tdsSettings });
+    }
+    if (isCompanyRole) {
+      return Response.json({ data: tdsSettings.filter((t) => companyClientIds.includes(t.userId)) });
     }
     const myTds = tdsSettings.find((t) => t.userId === userId);
     return Response.json({ data: myTds || { tdsPercent: 0 } });
@@ -153,6 +183,11 @@ export async function GET(request: Request) {
       }
       return Response.json({ data: withdrawals });
     }
+    if (isCompanyRole) {
+      return Response.json({
+        data: withdrawals.filter((w) => companyClientIds.includes(w.userId)),
+      });
+    }
     return Response.json({
       data: withdrawals.filter((w) => w.userEmail.toLowerCase() === session.user!.email!.toLowerCase()),
     });
@@ -165,6 +200,11 @@ export async function GET(request: Request) {
       return Response.json({ data: payments.filter((p) => p.userId === userId) });
     }
     return Response.json({ data: payments });
+  }
+  if (isCompanyRole) {
+    return Response.json({
+      data: payments.filter((p) => companyClientIds.includes(p.userId)),
+    });
   }
 
   return Response.json({

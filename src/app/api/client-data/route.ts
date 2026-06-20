@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { kv } from "@/lib/redis";
 import {
   cacheClientData,
   getCachedClientData,
@@ -23,6 +24,33 @@ import type { CachedClientData, BankDetails, Agreement, AdminWarning, SupportReq
 
 export const dynamic = "force-dynamic";
 
+const USERS_KEY = "bainsla_users";
+
+interface StoredUserBasic {
+  id: string;
+  email: string;
+  role: "client" | "company";
+  parentId?: string;
+}
+
+async function getCompanyClientIds(companyEmail: string): Promise<string[]> {
+  try {
+    const users = (await kv.get<StoredUserBasic[]>(USERS_KEY)) || [];
+    const company = users.find((u) => u.email.toLowerCase() === companyEmail.toLowerCase() && u.role === "company");
+    if (!company) return [];
+    return users.filter((u) => u.parentId === company.id).map((u) => u.id);
+  } catch { return []; }
+}
+
+async function getCompanyClientEmails(companyEmail: string): Promise<string[]> {
+  try {
+    const users = (await kv.get<StoredUserBasic[]>(USERS_KEY)) || [];
+    const company = users.find((u) => u.email.toLowerCase() === companyEmail.toLowerCase() && u.role === "company");
+    if (!company) return [];
+    return users.filter((u) => u.parentId === company.id).map((u) => u.email.toLowerCase());
+  } catch { return []; }
+}
+
 const ADMIN_EMAILS = [
   "ajeetgurjarofficial@gmail.com",
   "bainslamusicofficial@gmail.com",
@@ -40,10 +68,15 @@ export async function GET(request: Request) {
 
   switch (action) {
     case "getAllCachedData": {
-      // Allow admin and company users
       const isCompanyUser = session.user?.role === "company";
       if (!isAdmin && !isCompanyUser) return Response.json({ error: "Admin or Company only" }, { status: 403 });
       const data = await getAllCachedClientData();
+      if (isCompanyUser && !isAdmin) {
+        const clientIds = await getCompanyClientIds(session.user?.email || "");
+        const clientEmails = await getCompanyClientEmails(session.user?.email || "");
+        const filtered = data.filter((d) => clientIds.includes(d.userId) || clientEmails.includes(d.email?.toLowerCase()));
+        return Response.json({ data: filtered });
+      }
       return Response.json({ data });
     }
     case "getCachedData": {
@@ -53,7 +86,15 @@ export async function GET(request: Request) {
     }
     case "getBankDetails": {
       if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
-      if (!isAdmin && session.user?.email?.toLowerCase() !== userId.toLowerCase()) {
+      const isCompanyUser = session.user?.role === "company";
+      const isOwnData = session.user?.email?.toLowerCase() === userId.toLowerCase();
+      let isCompanyClient = false;
+      if (isCompanyUser && !isOwnData) {
+        const clientIds = await getCompanyClientIds(session.user?.email || "");
+        const clientEmails = await getCompanyClientEmails(session.user?.email || "");
+        isCompanyClient = clientIds.includes(userId) || clientEmails.includes(userId.toLowerCase());
+      }
+      if (!isAdmin && !isOwnData && !isCompanyClient) {
         return Response.json({ error: "Unauthorized" }, { status: 403 });
       }
       const data = await getBankDetails(userId);
