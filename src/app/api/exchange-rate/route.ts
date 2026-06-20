@@ -3,7 +3,7 @@ import { kv } from "@/lib/redis";
 export const dynamic = "force-dynamic";
 
 const RATE_PREFIX = "exchange_rate:";
-const CACHE_TTL = 86400; // 24 hours
+const CACHE_TTL = 21600; // 6 hours
 
 function isKVAvailable(): boolean {
   return true; // Always available — using DigitalOcean Redis
@@ -66,7 +66,7 @@ async function getStoredRate(currency: string, date: string): Promise<DailyRate 
 async function storeRate(rate: DailyRate): Promise<void> {
   if (!isKVAvailable()) return;
   try {
-    await kv.set(`${RATE_PREFIX}${rate.currency}:${rate.date}`, rate, { ex: CACHE_TTL * 30 });
+    await kv.set(`${RATE_PREFIX}${rate.currency}:${rate.date}`, rate, { ex: CACHE_TTL });
   } catch { /* ignore */ }
 }
 

@@ -2,6 +2,7 @@ import { kv } from "@/lib/redis";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sendEmail, getWelcomeEmailHtml } from "@/lib/email";
+import { addAuditLog } from "@/lib/audit-log";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -264,6 +265,16 @@ export async function POST(request: Request) {
       console.error(`[Users] Welcome email error for ${newUser.email}:`, err);
     });
 
+    const session = await getServerSession(authOptions);
+    addAuditLog({
+      action: "user_created",
+      performedBy: session?.user?.email || "unknown",
+      performedByRole: admin ? "admin" : "company",
+      targetUser: newUser.name,
+      targetEmail: newUser.email,
+      details: `Created ${newRole} user "${newUser.name}" (${newUser.email})`,
+    }).catch(() => {});
+
     const { password: _, ...safeUser } = newUser;
     return Response.json({ data: safeUser }, { status: 201 });
   } catch (error) {
@@ -317,6 +328,15 @@ export async function PUT(request: Request) {
       }
       const saved = await saveUsers(users);
       if (!saved) return Response.json({ error: "Failed to update" }, { status: 500 });
+      const session = await getServerSession(authOptions);
+      addAuditLog({
+        action: `channel_${body.type}`,
+        performedBy: session?.user?.email || "unknown",
+        performedByRole: admin ? "admin" : "company",
+        targetUser: users[userIdx].name,
+        targetEmail: users[userIdx].email,
+        details: `${body.type.replace("_", " ")} channel ${channelId} for "${users[userIdx].name}"`,
+      }).catch(() => {});
       return Response.json({ data: { success: true, action: body.type, channelId, user: users[userIdx].name } });
     }
 
@@ -341,6 +361,15 @@ export async function PUT(request: Request) {
       }
       const saved = await saveUsers(users);
       if (!saved) return Response.json({ error: "Failed to transfer" }, { status: 500 });
+      const session = await getServerSession(authOptions);
+      addAuditLog({
+        action: "channel_transfer",
+        performedBy: session?.user?.email || "unknown",
+        performedByRole: admin ? "admin" : "company",
+        targetUser: users[fromIdx].name,
+        targetEmail: users[fromIdx].email,
+        details: `Transferred channel ${channelId} from "${users[fromIdx].name}" to "${users[toIdx].name}"`,
+      }).catch(() => {});
       return Response.json({ data: { success: true, fromUser: users[fromIdx].name, toUser: users[toIdx].name, channelId } });
     }
 
@@ -381,6 +410,23 @@ export async function PUT(request: Request) {
         { status: 500 }
       );
     }
+
+    const changes: string[] = [];
+    if (name) changes.push(`name→"${name.trim()}"`);
+    if (email) changes.push(`email→"${email}"`);
+    if (password) changes.push("password changed");
+    if (status) changes.push(`status→${status}`);
+    if (channels) changes.push(`channels updated (${channels.length})`);
+    if (body.role) changes.push(`role→${body.role}`);
+    const session = await getServerSession(authOptions);
+    addAuditLog({
+      action: status ? "user_status_changed" : password ? "user_password_changed" : "user_updated",
+      performedBy: session?.user?.email || "unknown",
+      performedByRole: admin ? "admin" : "company",
+      targetUser: users[idx].name,
+      targetEmail: users[idx].email,
+      details: `Updated "${users[idx].name}": ${changes.join(", ")}`,
+    }).catch(() => {});
 
     const { password: _, ...safeUser } = users[idx];
     return Response.json({ data: safeUser });
@@ -496,6 +542,7 @@ export async function DELETE(request: Request) {
       }
     }
 
+    const deletedUser = users.find((u) => u.id === id);
     const filtered = users.filter((u) => u.id !== id);
 
     if (filtered.length === users.length) {
@@ -509,6 +556,16 @@ export async function DELETE(request: Request) {
         { status: 500 }
       );
     }
+
+    const session = await getServerSession(authOptions);
+    addAuditLog({
+      action: "user_deleted",
+      performedBy: session?.user?.email || "unknown",
+      performedByRole: admin ? "admin" : "company",
+      targetUser: deletedUser?.name || id,
+      targetEmail: deletedUser?.email || "",
+      details: `Deleted user "${deletedUser?.name || id}" (${deletedUser?.email || ""})`,
+    }).catch(() => {});
 
     return Response.json({ data: { success: true } });
   } catch (error) {

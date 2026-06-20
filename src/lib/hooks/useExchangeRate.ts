@@ -1,19 +1,41 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface ExchangeRateData {
   rate: number;
   loading: boolean;
   date: string;
+  lastFetched: string;
 }
 
-const rateCache: Record<string, number> = {};
+const REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
+const rateCache: Record<string, { rate: number; date: string; fetchedAt: number }> = {};
 
 export function useExchangeRate(currency: string = "USD"): ExchangeRateData {
   const [rate, setRate] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState("");
+  const [lastFetched, setLastFetched] = useState("");
+
+  const fetchRate = useCallback(async (key: string) => {
+    try {
+      const res = await fetch(`/api/exchange-rate?action=getTodayRate&currencies=${key}`);
+      if (res.ok) {
+        const json = await res.json();
+        const r = json.data?.rates?.[key];
+        if (r) {
+          const now = Date.now();
+          rateCache[key] = { rate: r, date: json.data?.date || "", fetchedAt: now };
+          setRate(r);
+          setDate(json.data?.date || "");
+          setLastFetched(new Date(now).toLocaleTimeString());
+        }
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     const key = currency.toUpperCase();
@@ -22,32 +44,30 @@ export function useExchangeRate(currency: string = "USD"): ExchangeRateData {
       setLoading(false);
       return;
     }
-    if (rateCache[key]) {
-      setRate(rateCache[key]);
+
+    const cached = rateCache[key];
+    const isStale = !cached || (Date.now() - cached.fetchedAt > REFRESH_INTERVAL);
+
+    if (cached && !isStale) {
+      setRate(cached.rate);
+      setDate(cached.date);
+      setLastFetched(new Date(cached.fetchedAt).toLocaleTimeString());
       setLoading(false);
-      return;
+    } else {
+      if (cached) {
+        setRate(cached.rate);
+        setDate(cached.date);
+        setLastFetched(new Date(cached.fetchedAt).toLocaleTimeString());
+        setLoading(false);
+      }
+      fetchRate(key);
     }
 
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/exchange-rate?action=getTodayRate&currencies=${key}`);
-        if (res.ok) {
-          const json = await res.json();
-          const r = json.data?.rates?.[key];
-          if (r && !cancelled) {
-            rateCache[key] = r;
-            setRate(r);
-            setDate(json.data?.date || "");
-          }
-        }
-      } catch { /* ignore */ }
-      if (!cancelled) setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, [currency]);
+    const interval = setInterval(() => fetchRate(key), REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [currency, fetchRate]);
 
-  return { rate, loading, date };
+  return { rate, loading, date, lastFetched };
 }
 
 export function toINR(amount: number, rate: number): number {
