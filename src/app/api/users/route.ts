@@ -46,6 +46,8 @@ export interface StoredUser {
   channelNetworks?: ChannelNetworkAssignment[];
   customNetworks?: string[];
   branding?: CompanyBranding;
+  whiteLabelEnabled?: boolean;
+  revenueSharePercent?: number;
 }
 
 function hashPassword(password: string): string {
@@ -240,6 +242,8 @@ export async function POST(request: Request) {
       networks: networks || [],
       channelNetworks: channelNetworks || [],
       ...(parentId ? { parentId } : {}),
+      ...(body.whiteLabelEnabled ? { whiteLabelEnabled: true } : {}),
+      ...(body.revenueSharePercent ? { revenueSharePercent: Number(body.revenueSharePercent) } : {}),
     };
 
     users.push(newUser);
@@ -305,7 +309,9 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   const admin = await isAdmin();
   const { isCompany: isComp, companyUser } = admin ? { isCompany: false, companyUser: undefined } : await isCompany();
-  if (!admin && !isComp) {
+  const putSession = await getServerSession(authOptions);
+  const isSelfUpdate = !admin && !isComp && !!putSession?.user?.email;
+  if (!admin && !isComp && !isSelfUpdate) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -399,6 +405,22 @@ export async function PUT(request: Request) {
       return Response.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Self-update: client can only update their own limited fields
+    if (isSelfUpdate && !admin && !isComp) {
+      if (users[idx].email.toLowerCase() !== putSession!.user!.email!.toLowerCase()) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (body.branding !== undefined) users[idx].branding = body.branding;
+      if (body.revenueSharePercent !== undefined) users[idx].revenueSharePercent = body.revenueSharePercent;
+      if (Array.isArray(body.customNetworks)) {
+        users[idx].customNetworks = body.customNetworks.filter((n: unknown) => typeof n === "string" && (n as string).trim().length > 0).map((n: unknown) => (n as string).trim());
+      }
+      const saved = await saveUsers(users);
+      if (!saved) return Response.json({ error: "Failed to save" }, { status: 500 });
+      const { password: _, ...safe } = users[idx];
+      return Response.json({ data: safe });
+    }
+
     if (name) users[idx].name = name.trim();
     if (email) users[idx].email = email.toLowerCase().trim();
     if (password) users[idx].password = hashPassword(password);
@@ -410,6 +432,11 @@ export async function PUT(request: Request) {
     if (networks !== undefined) users[idx].networks = networks;
     if (channelNetworks !== undefined) users[idx].channelNetworks = channelNetworks;
     if (body.branding !== undefined) users[idx].branding = body.branding;
+    if (body.whiteLabelEnabled !== undefined) users[idx].whiteLabelEnabled = body.whiteLabelEnabled;
+    if (body.revenueSharePercent !== undefined) users[idx].revenueSharePercent = body.revenueSharePercent;
+    if (Array.isArray(body.customNetworks)) {
+      users[idx].customNetworks = body.customNetworks.filter((n: unknown) => typeof n === "string" && (n as string).trim().length > 0).map((n: unknown) => (n as string).trim());
+    }
     // Only admin can change role
     if (admin && body.role && (body.role === "client" || body.role === "company")) {
       users[idx].role = body.role;

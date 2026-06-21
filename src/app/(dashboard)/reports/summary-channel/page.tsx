@@ -1,11 +1,10 @@
 "use client";
 
-import { Loader2, Wifi, WifiOff, Download } from "lucide-react";
+import { Loader2, Wifi, WifiOff } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
-import { downloadCSV } from "@/lib/csv-export";
-import { downloadExcel } from "@/lib/excel-export";
+import RevenueShareExport from "@/components/features/RevenueShareExport";
 
 interface YouTubeChannel {
   id?: string | null;
@@ -70,22 +69,15 @@ export default function SummaryChannelPage() {
             ] as (string | number)[]);
             const exportFilename = `${monthName.replace(" ", "-")}-Summary-Channel-Report`;
             return (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => downloadCSV(exportHeaders, exportRows, exportFilename, `Summary Channel Report - ${monthName}`)}
-                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-border rounded-lg hover:bg-slate-50"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  CSV
-                </button>
-                <button
-                  onClick={() => downloadExcel(exportHeaders, exportRows, exportFilename, "Summary")}
-                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Excel
-                </button>
-              </div>
+              <RevenueShareExport
+                baseHeaders={exportHeaders}
+                baseRows={exportRows}
+                filename={exportFilename}
+                csvTitle={`Summary Channel Report - ${monthName}`}
+                sheetName="Summary"
+                totalRevenue={0}
+                exchangeRate={1}
+              />
             );
           })()}
         </div>

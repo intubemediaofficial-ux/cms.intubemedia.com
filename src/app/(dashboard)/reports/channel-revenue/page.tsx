@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from "react";
 import {
-  Download,
   Loader2,
   Wifi,
   WifiOff,
@@ -12,11 +11,8 @@ import {
 import { useSession } from "next-auth/react";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
-import { downloadCSV } from "@/lib/csv-export";
-import { downloadExcel } from "@/lib/excel-export";
-import { generateMonthlyPDFReport } from "@/lib/pdf-report";
 import { useExchangeRate } from "@/lib/hooks/useExchangeRate";
-import { FileText } from "lucide-react";
+import RevenueShareExport from "@/components/features/RevenueShareExport";
 
 const CHANNELS_STORAGE_KEY = "bainsla_channels";
 
@@ -207,53 +203,38 @@ export default function ChannelRevenuePage() {
             });
             const exportFilename = monthLabel ? `${monthLabel.replace(" ", "-")}-Channel-Revenue-Report` : "channel-revenue-report";
             return (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => downloadCSV(exportHeaders, exportRows, exportFilename, `Channel Revenue Report - ${monthName}`)}
-                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-border rounded-lg hover:bg-slate-50"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  CSV
-                </button>
-                <button
-                  onClick={() => downloadExcel(exportHeaders, exportRows, exportFilename, "Channel Revenue")}
-                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Excel
-                </button>
-                <button
-                  onClick={() => {
-                    generateMonthlyPDFReport({
-                      title: "Channel Revenue Report",
-                      period: monthName,
-                      channels: channels.map((ch) => {
-                        const revInfo = channelRevenueMap[ch.id || ""];
-                        const rev = revInfo ? revInfo.revenue : 0;
-                        return {
-                          channelName: ch.snippet?.title || "",
-                          subscribers: Number(ch.statistics?.subscriberCount || 0),
-                          views: Number(ch.statistics?.viewCount || 0),
-                          videos: Number(ch.statistics?.videoCount || 0),
-                          revenue: rev,
-                          revenueINR: Math.round(rev * INR_RATE),
-                          rpm: revInfo?.rpm || 0,
-                        };
-                      }),
-                      totalRevenue,
-                      totalRevenueINR: Math.round(totalRevenue * INR_RATE),
-                      totalSubscribers: channels.reduce((s, c) => s + Number(c.statistics?.subscriberCount || 0), 0),
-                      totalViews: channels.reduce((s, c) => s + Number(c.statistics?.viewCount || 0), 0),
-                      exchangeRate: INR_RATE,
-                      generatedBy: session?.user?.email || "User",
-                    });
-                  }}
-                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  PDF
-                </button>
-              </div>
+              <RevenueShareExport
+                baseHeaders={exportHeaders}
+                baseRows={exportRows}
+                filename={exportFilename}
+                csvTitle={`Channel Revenue Report - ${monthName}`}
+                sheetName="Channel Revenue"
+                totalRevenue={totalRevenue}
+                exchangeRate={INR_RATE}
+                pdfOptions={{
+                  title: "Channel Revenue Report",
+                  period: monthName,
+                  channels: channels.map((ch) => {
+                    const revInfo = channelRevenueMap[ch.id || ""];
+                    const rev = revInfo ? revInfo.revenue : 0;
+                    return {
+                      channelName: ch.snippet?.title || "",
+                      subscribers: Number(ch.statistics?.subscriberCount || 0),
+                      views: Number(ch.statistics?.viewCount || 0),
+                      videos: Number(ch.statistics?.videoCount || 0),
+                      revenue: rev,
+                      revenueINR: Math.round(rev * INR_RATE),
+                      rpm: revInfo?.rpm || 0,
+                    };
+                  }),
+                  totalRevenue,
+                  totalRevenueINR: Math.round(totalRevenue * INR_RATE),
+                  totalSubscribers: channels.reduce((s, c) => s + Number(c.statistics?.subscriberCount || 0), 0),
+                  totalViews: channels.reduce((s, c) => s + Number(c.statistics?.viewCount || 0), 0),
+                  exchangeRate: INR_RATE,
+                  generatedBy: session?.user?.email || "User",
+                }}
+              />
             );
           })()}
         </div>

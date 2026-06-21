@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useExchangeRate } from "@/lib/hooks/useExchangeRate";
 import BrandingSettings from "@/components/features/BrandingSettings";
+import NetworkSettings from "@/components/features/NetworkSettings";
 
 interface ClientUser {
   id: string;
@@ -77,7 +78,7 @@ export default function CompanyDashboardPage() {
   const [withdrawals, setWithdrawals] = useState<WithdrawRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [meData, setMeData] = useState<{ id: string; branding?: { brandName?: string; brandColor?: string; brandLogo?: string } } | null>(null);
+  const [meData, setMeData] = useState<{ id: string; branding?: { brandName?: string; brandColor?: string; brandLogo?: string }; whiteLabelEnabled?: boolean; revenueSharePercent?: number; customNetworks?: string[] } | null>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -452,6 +453,16 @@ export default function CompanyDashboardPage() {
       )}
 
       {meData && (
+        <NetworkSettings
+          userId={meData.id}
+          currentNetworkName={meData.customNetworks?.[0] || ""}
+          currentRevenueShare={meData.revenueSharePercent || 0}
+          role="company"
+          onSave={() => fetchData()}
+        />
+      )}
+
+      {meData?.whiteLabelEnabled && (
         <BrandingSettings
           userId={meData.id}
           currentBranding={meData.branding}
