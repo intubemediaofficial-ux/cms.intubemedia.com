@@ -19,6 +19,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useExchangeRate } from "@/lib/hooks/useExchangeRate";
+import BrandingSettings from "@/components/features/BrandingSettings";
 
 interface ClientUser {
   id: string;
@@ -76,6 +77,7 @@ export default function CompanyDashboardPage() {
   const [withdrawals, setWithdrawals] = useState<WithdrawRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [meData, setMeData] = useState<{ id: string; branding?: { brandName?: string; brandColor?: string; brandLogo?: string } } | null>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -87,10 +89,11 @@ export default function CompanyDashboardPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [clientsRes, cachedRes, withdrawRes] = await Promise.all([
+      const [clientsRes, cachedRes, withdrawRes, meRes] = await Promise.all([
         fetch("/api/users?action=myClients"),
         fetch("/api/client-data?action=getAllCachedData"),
         fetch("/api/payments?type=withdrawals"),
+        fetch("/api/users?action=me"),
       ]);
       if (clientsRes.ok) {
         const j = await clientsRes.json();
@@ -103,6 +106,10 @@ export default function CompanyDashboardPage() {
       if (withdrawRes.ok) {
         const j = await withdrawRes.json();
         setWithdrawals(j.data || []);
+      }
+      if (meRes.ok) {
+        const j = await meRes.json();
+        if (j.data) setMeData(j.data);
       }
     } catch (err) {
       console.error("Failed to fetch company data:", err);
@@ -442,6 +449,14 @@ export default function CompanyDashboardPage() {
             })}
           </div>
         </div>
+      )}
+
+      {meData && (
+        <BrandingSettings
+          userId={meData.id}
+          currentBranding={meData.branding}
+          onSave={() => fetchData()}
+        />
       )}
     </div>
   );

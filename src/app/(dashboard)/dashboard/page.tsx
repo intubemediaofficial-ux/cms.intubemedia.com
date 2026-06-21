@@ -35,6 +35,8 @@ import type { DateRange } from "@/components/dashboard/DateRangeFilter";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import { useExchangeRate, toINR } from "@/lib/hooks/useExchangeRate";
+import { ChannelHealthSummary } from "@/components/features/ChannelHealthCard";
+import RevenueComparisonChart from "@/components/features/RevenueComparisonChart";
 
 const CHANNELS_STORAGE_KEY = "bainsla_channels";
 
@@ -171,7 +173,7 @@ export default function DashboardPage() {
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
   const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all">(7);
 
-  const { rate: INR_RATE } = useExchangeRate("USD");
+  const { rate: INR_RATE, lastFetched: rateLastFetched } = useExchangeRate("USD");
 
   // Channel detail modal month filter
   const [channelModalPeriod, setChannelModalPeriod] = useState<string>("current");
@@ -807,7 +809,7 @@ export default function DashboardPage() {
               <MetricCard
                 title="Revenue (INR)"
                 value={`₹${formatNumber(Math.round(curEstRevenue * INR_RATE))}`}
-                tooltip={`Estimated revenue in INR (1 USD = ₹${INR_RATE}). Total: $${curEstRevenue.toFixed(2)} × ${INR_RATE}`}
+                tooltip={`Estimated revenue in INR (1 USD = ₹${INR_RATE})${rateLastFetched ? ` | Updated: ${rateLastFetched}` : ""}. Total: $${curEstRevenue.toFixed(2)} × ${INR_RATE}`}
                 color="#f59e0b"
               />
               <MetricCard
@@ -1269,6 +1271,45 @@ export default function DashboardPage() {
           )}
         </>
       )}
+
+      {/* Channel Health Scores */}
+      {channels.length > 0 && channelRevenueMap && (() => {
+        const healthData = channels.map((ch) => {
+          const revInfo = channelRevenueMap[ch.id || ""];
+          const prevPca = perChannelAnalytics[ch.id || ""];
+          const prevRevRaw = prevPca?.prevRevenue as { rows?: unknown[][]; columnHeaders?: Array<{ name?: string | null }> } | null | undefined;
+          let prevRev = 0;
+          if (prevRevRaw?.rows?.length && prevRevRaw.columnHeaders) {
+            const hd = prevRevRaw.columnHeaders.map((h) => h.name || "");
+            const ri = hd.indexOf("estimatedRevenue");
+            if (ri !== -1) prevRev = prevRevRaw.rows.reduce((s, r) => s + (Number(r[ri]) || 0), 0);
+          }
+          return {
+            channelName: ch.snippet?.title || ch.id || "",
+            thumbnail: ch.snippet?.thumbnails?.default?.url || undefined,
+            currentRevenue: revInfo?.revenue || 0,
+            previousRevenue: prevRev,
+            currentViews: revInfo?.views || Number(ch.statistics?.viewCount || 0),
+            previousViews: 0,
+            subscribers: Number(ch.statistics?.subscriberCount || 0),
+            subscriberChange: 0,
+            videoCount: Number(ch.statistics?.videoCount || 0),
+          };
+        }).filter((h) => h.currentRevenue > 0 || h.subscribers > 0);
+        if (healthData.length === 0) return null;
+        return <ChannelHealthSummary channels={healthData} />;
+      })()}
+
+      {/* Revenue Comparison Chart */}
+      {channels.length > 1 && channelRevenueMap && (() => {
+        const compData = channels.map((ch) => ({
+          channelName: ch.snippet?.title || ch.id || "",
+          currentRevenue: channelRevenueMap[ch.id || ""]?.revenue || 0,
+          previousRevenue: 0,
+        })).filter((c) => c.currentRevenue > 0);
+        if (compData.length < 2) return null;
+        return <RevenueComparisonChart channels={compData} currentLabel="Current Period" previousLabel="Previous Period" />;
+      })()}
 
       {/* Channel Detail Modal */}
       {selectedChannel && (() => {

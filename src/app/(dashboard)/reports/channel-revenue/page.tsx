@@ -13,7 +13,10 @@ import { useSession } from "next-auth/react";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import { downloadCSV } from "@/lib/csv-export";
+import { downloadExcel } from "@/lib/excel-export";
+import { generateMonthlyPDFReport } from "@/lib/pdf-report";
 import { useExchangeRate } from "@/lib/hooks/useExchangeRate";
+import { FileText } from "lucide-react";
 
 const CHANNELS_STORAGE_KEY = "bainsla_channels";
 
@@ -183,42 +186,76 @@ export default function ChannelRevenuePage() {
               ))}
             </optgroup>
           </select>
-          <button
-            onClick={() => {
-              if (channels.length > 0) {
-                const monthLabel = getMonthOptions().find((m) => m.value === dateRange)?.label;
-                const monthName = monthLabel || dateRange;
-                const titleRow = `Channel Revenue Report - ${monthName}`;
-                const csvFilename = monthLabel
-                  ? `${monthLabel.replace(" ", "-")}-Channel-Revenue-Report`
-                  : "channel-revenue-report";
-                downloadCSV(
-                  ["Month", "Channel", "Channel Link", "Subscribers", "Videos", "Views", "Est. Revenue ($)", "Revenue (INR)", "RPM ($)"],
-                  channels.map((ch) => {
-                    const revInfo = channelRevenueMap[ch.id || ""];
-                    const rev = revInfo ? revInfo.revenue : 0;
-                    return [
-                      monthName,
-                      ch.snippet?.title || "",
-                      `https://www.youtube.com/channel/${ch.id || ""}`,
-                      Number(ch.statistics?.subscriberCount || 0),
-                      Number(ch.statistics?.videoCount || 0),
-                      Number(ch.statistics?.viewCount || 0),
-                      rev.toFixed(2),
-                      Math.round(rev * INR_RATE).toString(),
-                      revInfo ? revInfo.rpm.toFixed(2) : "0.00",
-                    ];
-                  }),
-                  csvFilename,
-                  titleRow
-                );
-              }
-            }}
-            className="flex items-center gap-2 text-sm text-primary hover:text-primary-dark font-medium px-3 py-2 border border-border rounded-lg"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
+          {channels.length > 0 && (() => {
+            const monthLabel = getMonthOptions().find((m) => m.value === dateRange)?.label;
+            const monthName = monthLabel || dateRange;
+            const exportHeaders = ["Month", "Channel", "Channel Link", "Subscribers", "Videos", "Views", "Est. Revenue ($)", "Revenue (INR)", "RPM ($)"];
+            const exportRows = channels.map((ch) => {
+              const revInfo = channelRevenueMap[ch.id || ""];
+              const rev = revInfo ? revInfo.revenue : 0;
+              return [
+                monthName,
+                ch.snippet?.title || "",
+                `https://www.youtube.com/channel/${ch.id || ""}`,
+                Number(ch.statistics?.subscriberCount || 0),
+                Number(ch.statistics?.videoCount || 0),
+                Number(ch.statistics?.viewCount || 0),
+                rev.toFixed(2),
+                Math.round(rev * INR_RATE).toString(),
+                revInfo ? revInfo.rpm.toFixed(2) : "0.00",
+              ] as (string | number)[];
+            });
+            const exportFilename = monthLabel ? `${monthLabel.replace(" ", "-")}-Channel-Revenue-Report` : "channel-revenue-report";
+            return (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => downloadCSV(exportHeaders, exportRows, exportFilename, `Channel Revenue Report - ${monthName}`)}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-border rounded-lg hover:bg-slate-50"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  CSV
+                </button>
+                <button
+                  onClick={() => downloadExcel(exportHeaders, exportRows, exportFilename, "Channel Revenue")}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Excel
+                </button>
+                <button
+                  onClick={() => {
+                    generateMonthlyPDFReport({
+                      title: "Channel Revenue Report",
+                      period: monthName,
+                      channels: channels.map((ch) => {
+                        const revInfo = channelRevenueMap[ch.id || ""];
+                        const rev = revInfo ? revInfo.revenue : 0;
+                        return {
+                          channelName: ch.snippet?.title || "",
+                          subscribers: Number(ch.statistics?.subscriberCount || 0),
+                          views: Number(ch.statistics?.viewCount || 0),
+                          videos: Number(ch.statistics?.videoCount || 0),
+                          revenue: rev,
+                          revenueINR: Math.round(rev * INR_RATE),
+                          rpm: revInfo?.rpm || 0,
+                        };
+                      }),
+                      totalRevenue,
+                      totalRevenueINR: Math.round(totalRevenue * INR_RATE),
+                      totalSubscribers: channels.reduce((s, c) => s + Number(c.statistics?.subscriberCount || 0), 0),
+                      totalViews: channels.reduce((s, c) => s + Number(c.statistics?.viewCount || 0), 0),
+                      exchangeRate: INR_RATE,
+                      generatedBy: session?.user?.email || "User",
+                    });
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  PDF
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

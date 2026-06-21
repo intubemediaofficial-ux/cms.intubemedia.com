@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sendEmail, getWelcomeEmailHtml } from "@/lib/email";
 import { addAuditLog } from "@/lib/audit-log";
+import { createSystemNotification } from "@/lib/notifications";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,12 @@ export interface ChannelNetworkAssignment {
   revenueSharePercent: number;
 }
 
+export interface CompanyBranding {
+  brandName?: string;
+  brandColor?: string;
+  brandLogo?: string;
+}
+
 export interface StoredUser {
   id: string;
   name: string;
@@ -38,6 +45,7 @@ export interface StoredUser {
   networks?: NetworkAssignment[];
   channelNetworks?: ChannelNetworkAssignment[];
   customNetworks?: string[];
+  branding?: CompanyBranding;
 }
 
 function hashPassword(password: string): string {
@@ -275,6 +283,14 @@ export async function POST(request: Request) {
       details: `Created ${newRole} user "${newUser.name}" (${newUser.email})`,
     }).catch(() => {});
 
+    createSystemNotification(
+      newUser.id,
+      newUser.email,
+      "welcome",
+      "Welcome to InTubeMedia!",
+      `Your ${newRole} account has been created. Login at cms.intubemedia.com with your email.`
+    ).catch(() => {});
+
     const { password: _, ...safeUser } = newUser;
     return Response.json({ data: safeUser }, { status: 201 });
   } catch (error) {
@@ -393,6 +409,7 @@ export async function PUT(request: Request) {
     if (status) users[idx].status = status;
     if (networks !== undefined) users[idx].networks = networks;
     if (channelNetworks !== undefined) users[idx].channelNetworks = channelNetworks;
+    if (body.branding !== undefined) users[idx].branding = body.branding;
     // Only admin can change role
     if (admin && body.role && (body.role === "client" || body.role === "company")) {
       users[idx].role = body.role;

@@ -126,7 +126,9 @@ export default function TopBar() {
                       <div className="flex items-start gap-2">
                         <CheckCircle2 className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
                           n.type === "payment_paid" || n.type === "withdraw_approved" ? "text-green-500" :
-                          n.type === "withdraw_rejected" ? "text-red-500" : "text-blue-500"
+                          n.type === "withdraw_rejected" || n.type === "revenue_alert" ? "text-red-500" :
+                          n.type === "welcome" || n.type === "user_created" ? "text-purple-500" :
+                          n.type === "channel_added" || n.type === "channel_approved" ? "text-emerald-500" : "text-blue-500"
                         }`} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground">{n.title}</p>

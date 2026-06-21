@@ -11,7 +11,7 @@ export interface Notification {
   id: string;
   userId: string;
   userEmail: string;
-  type: "payment_paid" | "payment_created" | "withdraw_approved" | "withdraw_rejected" | "channel_transfer" | "channel_approved" | "info";
+  type: "payment_paid" | "payment_created" | "withdraw_approved" | "withdraw_rejected" | "channel_transfer" | "channel_approved" | "info" | "user_created" | "channel_added" | "revenue_alert" | "welcome";
   title: string;
   message: string;
   read: boolean;
@@ -60,7 +60,8 @@ export async function POST(request: Request) {
   }
 
   const admin = ADMIN_EMAILS.includes(session.user.email.toLowerCase());
-  if (!admin) {
+  const isCompany = session.user.role === "company";
+  if (!admin && !isCompany) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

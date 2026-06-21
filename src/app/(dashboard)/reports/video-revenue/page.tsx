@@ -14,6 +14,7 @@ import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import { downloadCSV } from "@/lib/csv-export";
+import { downloadExcel } from "@/lib/excel-export";
 
 interface VideoItem {
   id?: string | null;
@@ -133,34 +134,37 @@ export default function VideoRevenuePage() {
           >
             {PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n} per page</option>)}
           </select>
-          <button
-            onClick={() => {
-              if (filteredVideos.length > 0) {
-                const monthLabel = getMonthOptions().find((m) => m.value === dateRange)?.label;
-                const monthName = monthLabel || dateRange;
-                const titleRow = `Video Revenue Report - ${monthName}`;
-                const csvFilename = monthLabel
-                  ? `${monthLabel.replace(" ", "-")}-Video-Revenue-Report`
-                  : "video-revenue-report";
-                downloadCSV(
-                  ["Month", "Title", "Views", "Likes", "Published"],
-                  filteredVideos.map((v) => [
-                    monthName,
-                    v.snippet?.title || "",
-                    Number(v.statistics?.viewCount || 0),
-                    Number(v.statistics?.likeCount || 0),
-                    v.snippet?.publishedAt ? new Date(v.snippet.publishedAt).toLocaleDateString() : "-",
-                  ]),
-                  csvFilename,
-                  titleRow
-                );
-              }
-            }}
-            className="flex items-center gap-2 text-sm text-primary hover:text-primary-dark font-medium px-3 py-2 border border-border rounded-lg"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
+          {filteredVideos.length > 0 && (() => {
+            const monthLabel = getMonthOptions().find((m) => m.value === dateRange)?.label;
+            const monthName = monthLabel || dateRange;
+            const exportHeaders = ["Month", "Title", "Views", "Likes", "Published"];
+            const exportRows = filteredVideos.map((v) => [
+              monthName,
+              v.snippet?.title || "",
+              Number(v.statistics?.viewCount || 0),
+              Number(v.statistics?.likeCount || 0),
+              v.snippet?.publishedAt ? new Date(v.snippet.publishedAt).toLocaleDateString() : "-",
+            ] as (string | number)[]);
+            const exportFilename = monthLabel ? `${monthLabel.replace(" ", "-")}-Video-Revenue-Report` : "video-revenue-report";
+            return (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => downloadCSV(exportHeaders, exportRows, exportFilename, `Video Revenue Report - ${monthName}`)}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-border rounded-lg hover:bg-slate-50"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  CSV
+                </button>
+                <button
+                  onClick={() => downloadExcel(exportHeaders, exportRows, exportFilename, "Video Revenue")}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Excel
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
