@@ -62,6 +62,8 @@ interface ClientUser {
   joinedDate: string;
   category: string;
   parentId?: string;
+  revenueSharePercent?: number;
+  customNetworks?: string[];
 }
 
 interface CachedChannelData {
@@ -118,6 +120,7 @@ function CompanyClientsContent() {
   const [formPassword, setFormPassword] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formCategory, setFormCategory] = useState("Music");
+  const [formRevenueShare, setFormRevenueShare] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
 
@@ -167,6 +170,7 @@ function CompanyClientsContent() {
     setFormPassword("");
     setFormPhone("");
     setFormCategory("Music");
+    setFormRevenueShare(0);
     setError(null);
     setSuccess(null);
     setShowModal(true);
@@ -179,6 +183,7 @@ function CompanyClientsContent() {
     setFormPassword("");
     setFormPhone(client.phone || "");
     setFormCategory(client.category || "Music");
+    setFormRevenueShare(client.revenueSharePercent || 0);
     setError(null);
     setSuccess(null);
     setShowModal(true);
@@ -208,6 +213,7 @@ function CompanyClientsContent() {
             email: formEmail,
             phone: formPhone,
             category: formCategory,
+            revenueSharePercent: formRevenueShare,
             ...(formPassword ? { password: formPassword } : {}),
           }),
         });
@@ -227,6 +233,7 @@ function CompanyClientsContent() {
             password: formPassword,
             phone: formPhone,
             category: formCategory,
+            revenueSharePercent: formRevenueShare,
           }),
         });
         if (!res.ok) {
@@ -588,6 +595,7 @@ function CompanyClientsContent() {
                   <th className="text-left py-3 px-4 font-medium text-muted">Phone</th>
                   <th className="text-center py-3 px-4 font-medium text-muted">Channels</th>
                   <th className="text-right py-3 px-4 font-medium text-muted">Revenue</th>
+                  <th className="text-center py-3 px-4 font-medium text-muted">Share %</th>
                   <th className="text-center py-3 px-4 font-medium text-muted">Status</th>
                   <th className="text-left py-3 px-4 font-medium text-muted">Joined</th>
                   <th className="text-center py-3 px-4 font-medium text-muted">Actions</th>
@@ -611,6 +619,13 @@ function CompanyClientsContent() {
                       <td className="py-3 px-4 text-center">{client.channels?.length || 0}</td>
                       <td className="py-3 px-4 text-right text-green-600 font-medium">
                         {formatCurrency(cd?.totalRevenue || 0)}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {client.revenueSharePercent ? (
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                            {client.revenueSharePercent}%
+                          </span>
+                        ) : <span className="text-muted">—</span>}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -700,6 +715,11 @@ function CompanyClientsContent() {
                   <option>News</option>
                   <option>Other</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Revenue Share %</label>
+                <input type="number" min={0} max={100} value={formRevenueShare} onChange={(e) => setFormRevenueShare(Number(e.target.value))} className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none" placeholder="0" />
+                <p className="text-xs text-muted mt-0.5">Your share: {formRevenueShare}% — Client gets: {100 - formRevenueShare}%</p>
               </div>
             </div>
 

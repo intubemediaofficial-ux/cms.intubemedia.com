@@ -11,7 +11,7 @@ interface ChannelReportData {
   rpm: number;
 }
 
-interface PDFReportOptions {
+export interface PDFReportOptions {
   title: string;
   subtitle?: string;
   brandName?: string;
@@ -24,6 +24,7 @@ interface PDFReportOptions {
   exchangeRate: number;
   period: string;
   generatedBy: string;
+  revenueSharePercent?: number;
 }
 
 export function generateMonthlyPDFReport(options: PDFReportOptions) {
@@ -58,7 +59,7 @@ export function generateMonthlyPDFReport(options: PDFReportOptions) {
   doc.text("Summary", 14, y);
   y += 8;
 
-  const summaryData = [
+  const summaryData: string[][] = [
     ["Total Channels", String(options.channels.length)],
     ["Total Subscribers", options.totalSubscribers.toLocaleString()],
     ["Total Views", options.totalViews.toLocaleString()],
@@ -66,6 +67,12 @@ export function generateMonthlyPDFReport(options: PDFReportOptions) {
     ["Total Revenue (INR)", `₹${options.totalRevenueINR.toLocaleString()}`],
     ["Exchange Rate", `1 USD = ₹${options.exchangeRate}`],
   ];
+  if (options.revenueSharePercent && options.revenueSharePercent > 0) {
+    const netPay = options.totalRevenue * ((100 - options.revenueSharePercent) / 100);
+    summaryData.push(["Deal / Share %", `${options.revenueSharePercent}%`]);
+    summaryData.push(["Net Payment (USD)", `$${netPay.toFixed(2)}`]);
+    summaryData.push(["Net Payment (INR)", `₹${Math.round(netPay * options.exchangeRate).toLocaleString()}`]);
+  }
 
   autoTable(doc, {
     startY: y,

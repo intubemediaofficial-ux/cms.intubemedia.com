@@ -82,6 +82,8 @@ interface Client {
   parentId?: string;
   networks?: NetworkAssignment[];
   channelNetworks?: ChannelNetworkAssignment[];
+  whiteLabelEnabled?: boolean;
+  revenueSharePercent?: number;
 }
 
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
@@ -113,6 +115,8 @@ export default function AdminClientsPage() {
   const [formNetworks, setFormNetworks] = useState<NetworkAssignment[]>([]);
   const [formChannelNetworks, setFormChannelNetworks] = useState<ChannelNetworkAssignment[]>([]);
   const [availableNetworks, setAvailableNetworks] = useState<NetworkOption[]>([]);
+  const [formWhiteLabel, setFormWhiteLabel] = useState(false);
+  const [formRevenueShare, setFormRevenueShare] = useState<number>(0);
 
   // Channel transfer
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -213,6 +217,8 @@ export default function AdminClientsPage() {
     setFormChannels("");
     setFormNetworks([]);
     setFormChannelNetworks([]);
+    setFormWhiteLabel(false);
+    setFormRevenueShare(0);
     setFormError(null);
     setEditingClient(null);
   };
@@ -233,6 +239,8 @@ export default function AdminClientsPage() {
     setFormChannels(client.channels.join(", "));
     setFormNetworks(client.networks || []);
     setFormChannelNetworks(client.channelNetworks || []);
+    setFormWhiteLabel(client.whiteLabelEnabled || false);
+    setFormRevenueShare(client.revenueSharePercent || 0);
     setFormError(null);
     setShowModal(true);
   };
@@ -278,6 +286,8 @@ export default function AdminClientsPage() {
           channels: channelIds,
           networks: formNetworks,
           channelNetworks: formChannelNetworks,
+          whiteLabelEnabled: formWhiteLabel,
+          revenueSharePercent: formRevenueShare,
         };
         if (formPassword.trim()) {
           body.password = formPassword.trim();
@@ -307,6 +317,8 @@ export default function AdminClientsPage() {
             channels: channelIds,
             networks: formNetworks,
             channelNetworks: formChannelNetworks,
+            whiteLabelEnabled: formWhiteLabel,
+            revenueSharePercent: formRevenueShare,
           }),
         });
         const data = await res.json();
@@ -779,11 +791,16 @@ export default function AdminClientsPage() {
                     <td className="px-4 py-3 text-muted">{client.phone || "-"}</td>
                     <td className="px-4 py-3 text-foreground">{client.category}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        client.role === "company" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
-                      }`}>
-                        {client.role === "company" ? "Company" : "Client"}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          client.role === "company" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
+                        }`}>
+                          {client.role === "company" ? "Company" : "Client"}
+                        </span>
+                        {client.whiteLabelEnabled && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-purple-100 text-purple-700">WL</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-1 text-foreground">
@@ -1042,6 +1059,37 @@ export default function AdminClientsPage() {
                     : "Client users can add channels and view their dashboard"}
                 </p>
               </div>
+              {formRole === "company" && (
+                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium text-foreground">White-Label Access</label>
+                      <p className="text-xs text-muted">Enable custom branding for this company</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormWhiteLabel(!formWhiteLabel)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formWhiteLabel ? "bg-emerald-500" : "bg-gray-300"}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formWhiteLabel ? "translate-x-6" : "translate-x-1"}`} />
+                    </button>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Revenue Share %</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={formRevenueShare}
+                        onChange={(e) => setFormRevenueShare(Number(e.target.value))}
+                        className="w-24 px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <span className="text-sm text-muted">% (company keeps this, client gets rest)</span>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
                   YouTube Channel IDs

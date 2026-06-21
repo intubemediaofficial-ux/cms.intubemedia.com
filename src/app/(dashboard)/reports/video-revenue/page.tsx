@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import {
   Search,
-  Download,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -13,8 +12,7 @@ import {
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
-import { downloadCSV } from "@/lib/csv-export";
-import { downloadExcel } from "@/lib/excel-export";
+import RevenueShareExport from "@/components/features/RevenueShareExport";
 
 interface VideoItem {
   id?: string | null;
@@ -147,22 +145,15 @@ export default function VideoRevenuePage() {
             ] as (string | number)[]);
             const exportFilename = monthLabel ? `${monthLabel.replace(" ", "-")}-Video-Revenue-Report` : "video-revenue-report";
             return (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => downloadCSV(exportHeaders, exportRows, exportFilename, `Video Revenue Report - ${monthName}`)}
-                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-border rounded-lg hover:bg-slate-50"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  CSV
-                </button>
-                <button
-                  onClick={() => downloadExcel(exportHeaders, exportRows, exportFilename, "Video Revenue")}
-                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Excel
-                </button>
-              </div>
+              <RevenueShareExport
+                baseHeaders={exportHeaders}
+                baseRows={exportRows}
+                filename={exportFilename}
+                csvTitle={`Video Revenue Report - ${monthName}`}
+                sheetName="Video Revenue"
+                totalRevenue={0}
+                exchangeRate={1}
+              />
             );
           })()}
         </div>

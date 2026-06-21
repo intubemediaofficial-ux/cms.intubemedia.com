@@ -142,12 +142,12 @@ export default function Sidebar() {
     if (!session?.user?.email || isAdmin) return;
     fetch("/api/users?action=me").then((r) => r.json()).then((json) => {
       const user = json.data;
-      if (user?.branding?.brandName) {
+      if (user?.whiteLabelEnabled && user?.branding?.brandName) {
         setBranding(user.branding);
       } else if (user?.parentId) {
         fetch("/api/users").then((r2) => r2.json()).then((json2) => {
           const parent = (json2.data || []).find((u: { id: string }) => u.id === user.parentId);
-          if (parent?.branding?.brandName) setBranding(parent.branding);
+          if (parent?.whiteLabelEnabled && parent?.branding?.brandName) setBranding(parent.branding);
         }).catch(() => {});
       }
     }).catch(() => {});
