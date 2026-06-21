@@ -136,6 +136,16 @@ export async function POST(request: Request) {
                 await cacheChannelVideos(channelId, filtered);
               }
             } catch { /* cache update best-effort */ }
+          } else if (deleteRes.status === 404) {
+            // Video already deleted on YouTube — treat as success, clean cache
+            results.push({ videoId, success: true });
+            try {
+              const cached = await getCachedChannelVideos(channelId);
+              if (cached?.videos) {
+                const filtered = cached.videos.filter((v) => v && (v as { id?: string }).id !== videoId);
+                await cacheChannelVideos(channelId, filtered);
+              }
+            } catch { /* cache cleanup best-effort */ }
           } else {
             const data = await deleteRes.json().catch(() => ({}));
             const errMsg = (data as Record<string, Record<string, string>>)?.error?.message || "Failed";
@@ -252,6 +262,17 @@ export async function DELETE(request: Request) {
       const data = await deleteRes.json().catch(() => ({}));
       const errMsg = (data as Record<string, Record<string, string>>)?.error?.message || "Failed to delete video";
       console.error(`[YouTube Video] Single delete failed for ${videoId} channel=${channelId} googleCh=${tokenData?.googleChannelId} (status ${deleteRes.status}):`, errMsg);
+      if (deleteRes.status === 404) {
+        // Video already deleted or not found on YouTube — remove from local cache
+        try {
+          const cached = await getCachedChannelVideos(channelId);
+          if (cached?.videos) {
+            const filtered = cached.videos.filter((v) => v && (v as { id?: string }).id !== videoId);
+            await cacheChannelVideos(channelId, filtered);
+          }
+        } catch { /* cache cleanup best-effort */ }
+        return Response.json({ data: { success: true, alreadyDeleted: true } });
+      }
       if (deleteRes.status === 403) {
         const mismatchHint = tokenData?.googleChannelId && tokenData.googleChannelId !== channelId
           ? ` The token is authorized for a DIFFERENT channel (${tokenData.googleChannelId}). You must validate the token using the Google account that OWNS this channel.`
