@@ -148,6 +148,30 @@ export async function GET(request: Request) {
     }
   }
 
+  if (action === "branding") {
+    try {
+      const users = await getUsers();
+      const me = users.find((u) => u.email.toLowerCase() === session.user!.email!.toLowerCase());
+      if (!me) return Response.json({ data: null });
+
+      if (me.whiteLabelEnabled && me.branding) {
+        return Response.json({ data: me.branding });
+      }
+
+      if (me.parentId) {
+        const parent = users.find((u) => u.id === me.parentId);
+        if (parent?.whiteLabelEnabled && parent.branding) {
+          return Response.json({ data: parent.branding });
+        }
+      }
+
+      return Response.json({ data: null });
+    } catch (error) {
+      console.error("[Users GET branding] Error:", error);
+      return Response.json({ error: "Storage error", kvError: true }, { status: 500 });
+    }
+  }
+
   // Company: return only their own clients
   if (action === "myClients") {
     const { isCompany: isComp, companyUser } = await isCompany();
@@ -403,6 +427,18 @@ export async function PUT(request: Request) {
     const idx = users.findIndex((u) => u.id === id);
     if (idx === -1) {
       return Response.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (isComp && companyUser && users[idx].id === companyUser.id) {
+      if (body.branding !== undefined) users[idx].branding = body.branding;
+      if (body.revenueSharePercent !== undefined) users[idx].revenueSharePercent = body.revenueSharePercent;
+      if (Array.isArray(body.customNetworks)) {
+        users[idx].customNetworks = body.customNetworks.filter((n: unknown) => typeof n === "string" && (n as string).trim().length > 0).map((n: unknown) => (n as string).trim());
+      }
+      const saved = await saveUsers(users);
+      if (!saved) return Response.json({ error: "Failed to save company settings" }, { status: 500 });
+      const { password: _, ...safe } = users[idx];
+      return Response.json({ data: safe });
     }
 
     // Self-update: client can only update their own limited fields
