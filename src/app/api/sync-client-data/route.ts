@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { kv } from "@/lib/redis";
 import { getValidAccessToken } from "@/lib/channel-tokens";
-import { cacheClientData } from "@/lib/client-data-cache";
+import { cacheClientData, getCachedClientData } from "@/lib/client-data-cache";
 import type { CachedChannelData, CachedClientData } from "@/lib/client-data-cache";
 import { getChannelStatsById, getRevenueData } from "@/lib/youtube";
 import { syncChannelToBackend } from "@/lib/backend-sync";
@@ -80,6 +80,12 @@ export async function GET(request: Request) {
         let totalViews = 0;
         let totalSubscribers = 0;
         const cachedChannels: CachedChannelData[] = [];
+        const previousData =
+          (await getCachedClientData(user.email)) ||
+          (await getCachedClientData(user.id));
+        const previousChannelMap = new Map(
+          (previousData?.channels || []).map((channel) => [channel.channelId, channel])
+        );
 
         for (const ch of channelStats) {
           const chId = (ch as Record<string, unknown>).id as string || "";
@@ -96,9 +102,9 @@ export async function GET(request: Request) {
           totalSubscribers += subs;
           totalViews += views;
 
-          // Try to get revenue for this channel
-          let channelRevenue = 0;
-          let channelRpm = 0;
+          const previousChannel = previousChannelMap.get(chId);
+          let channelRevenue = previousChannel?.estimatedRevenue || 0;
+          let channelRpm = previousChannel?.rpm || 0;
           try {
             const chToken = await getValidAccessToken(chId) || validToken;
             const revData = await getRevenueData(chToken, startStr, endStr, chId);
@@ -110,16 +116,16 @@ export async function GET(request: Request) {
                 channelRevenue = (revData.rows as Array<Array<string | number>>).reduce(
                   (s: number, r) => s + (Number(r[revIdx]) || 0), 0
                 );
+                const analyticsViews = viewIdx !== -1
+                  ? (revData.rows as Array<Array<string | number>>).reduce(
+                      (s: number, r) => s + (Number(r[viewIdx]) || 0), 0
+                    )
+                  : 0;
+                channelRpm = analyticsViews > 0 ? (channelRevenue / analyticsViews) * 1000 : 0;
               }
-              const analyticsViews = viewIdx !== -1
-                ? (revData.rows as Array<Array<string | number>>).reduce(
-                    (s: number, r) => s + (Number(r[viewIdx]) || 0), 0
-                  )
-                : 0;
-              channelRpm = analyticsViews > 0 ? (channelRevenue / analyticsViews) * 1000 : 0;
             }
           } catch {
-            // Revenue fetch failed for this channel, continue
+            // Keep the most recent successful revenue when analytics is unavailable.
           }
 
           totalRevenue += channelRevenue;
