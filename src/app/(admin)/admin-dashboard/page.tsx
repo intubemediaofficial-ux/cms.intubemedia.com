@@ -101,6 +101,7 @@ interface DashboardFullData {
   prevPerformance?: AnalyticsResponse | null;
   dailyRevenue?: AnalyticsResponse | null;
   perChannelAnalytics?: Record<string, PerChannelAnalytics>;
+  channelRevenueMap?: Record<string, { revenue: number; views: number; rpm: number }>;
   tokenizedChannels?: string[];
   _debug?: {
     totalChannelIds: number;
@@ -420,30 +421,21 @@ export default function AdminDashboardPage() {
 
   const channelMetricsMap = useMemo(() => {
     const map: Record<string, { revenue: number; views: number; subscribers: number }> = {};
-    const perChannelAnalytics = dashData?.perChannelAnalytics || {};
+    const channelRevenueMap = dashData?.channelRevenueMap || {};
 
     for (const channelId of allChannelIds) {
-      const analytics = perChannelAnalytics[channelId];
+      const live = channelRevenueMap[channelId];
       const cached = cachedChannelMap[channelId];
-      const hasRevenueAnalytics = Boolean(
-        analytics?.revenueViews?.rows?.length || analytics?.revenue?.rows?.length
-      );
-      const hasPerformanceAnalytics = Boolean(analytics?.performance?.rows?.length);
-      const revenueFromAnalytics =
-        sumMetric(analytics?.revenueViews, "estimatedRevenue") ||
-        sumMetric(analytics?.revenue, "estimatedRevenue");
 
       map[channelId] = {
-        revenue: hasRevenueAnalytics ? revenueFromAnalytics : cached?.estimatedRevenue || 0,
-        views: hasPerformanceAnalytics
-          ? sumMetric(analytics?.performance, "views")
-          : cached?.views || 0,
+        revenue: live?.revenue || cached?.estimatedRevenue || 0,
+        views: live?.views || cached?.views || 0,
         subscribers: cached?.subscribers || 0,
       };
     }
 
     return map;
-  }, [allChannelIds, cachedChannelMap, dashData]);
+  }, [allChannelIds, cachedChannelMap, dashData?.channelRevenueMap]);
 
   const channelOwnerMap = useMemo(() => {
     const map: Record<string, ClientUser> = {};
@@ -1097,12 +1089,8 @@ export default function AdminDashboardPage() {
                             <p className="text-[10px] text-muted">Revenue</p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-blue-600">{formatCurrency(summary.netPayment)}</p>
-                            <p className="text-[10px] text-muted">Net Payment</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-emerald-600">{formatCurrency(summary.paidAmount)}</p>
-                            <p className="text-[10px] text-muted">Paid</p>
+                            <p className="font-bold text-amber-600">₹{formatNumber(Math.round(summary.revenue * INR_RATE))}</p>
+                            <p className="text-[10px] text-muted">Revenue INR</p>
                           </div>
                           <span className={`rounded-full px-2 py-1 font-medium ${client.status === "active" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
                             {client.status}
@@ -1784,8 +1772,8 @@ export default function AdminDashboardPage() {
                           <p className="text-xs text-muted">revenue</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-bold text-blue-600">{formatCurrency(summary.netPayment)}</p>
-                          <p className="text-xs text-muted">net payment</p>
+                          <p className="text-sm font-bold text-amber-600">₹{formatNumber(Math.round(summary.revenue * INR_RATE))}</p>
+                          <p className="text-xs text-muted">revenue INR</p>
                         </div>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                           client.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
@@ -1912,14 +1900,6 @@ export default function AdminDashboardPage() {
                         <div className="text-center">
                           <p className="text-xs text-muted">Revenue</p>
                           <p className="font-bold text-green-600">{formatCurrency(companySummary.revenue)}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-muted">Net Payment</p>
-                          <p className="font-bold text-blue-600">{formatCurrency(companySummary.netPayment)}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-muted">Paid</p>
-                          <p className="font-bold text-emerald-600">{formatCurrency(companySummary.paidAmount)}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-xs text-muted">Revenue INR</p>
@@ -2139,8 +2119,7 @@ export default function AdminDashboardPage() {
                   </div>
                 </th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Revenue</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Net Payment</th>
-                <th className="text-left px-4 py-3 font-semibold text-foreground">Paid</th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground">Revenue INR</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Joined</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Details</th>
               </tr>
@@ -2205,8 +2184,7 @@ export default function AdminDashboardPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 font-semibold text-green-600">{formatCurrency(summary.revenue)}</td>
-                      <td className="px-4 py-3 font-semibold text-blue-600">{formatCurrency(summary.netPayment)}</td>
-                      <td className="px-4 py-3 font-semibold text-emerald-600">{formatCurrency(summary.paidAmount)}</td>
+                      <td className="px-4 py-3 font-semibold text-amber-600">₹{formatNumber(Math.round(summary.revenue * INR_RATE))}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 text-xs text-muted">
                           <Calendar className="w-3 h-3" />
@@ -2227,7 +2205,7 @@ export default function AdminDashboardPage() {
                     </tr>
                     {expandedClient === client.id && summary.channelIds.length > 0 && (
                       <tr className="bg-slate-50">
-                        <td colSpan={10} className="px-8 py-4">
+                        <td colSpan={9} className="px-8 py-4">
                           <div className="space-y-2">
                             <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
                               Channels and revenue for {client.name}
