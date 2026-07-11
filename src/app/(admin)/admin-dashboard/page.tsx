@@ -30,6 +30,7 @@ import {
   Pencil,
   Power,
   Trash2,
+  X,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -152,6 +153,7 @@ export default function AdminDashboardPage() {
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, { status: string; channelTitle?: string; updatedAt?: string }>>({});
   const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all" | string>(7);
   const [tokenFilter, setTokenFilter] = useState<"all" | "valid" | "invalid" | null>(null);
+  const [quickView, setQuickView] = useState<"users" | "channels" | null>(null);
   const [companyActionId, setCompanyActionId] = useState<string | null>(null);
   const [companyActionError, setCompanyActionError] = useState<string | null>(null);
   const { rate: INR_RATE } = useExchangeRate("USD");
@@ -187,7 +189,7 @@ export default function AdminDashboardPage() {
     dailyBreakdown: Array<{ date: string; views: number; subscribers: number; watchTime: number; revenue: number }>;
   } | null>(null);
   const [realtime48Loading, setRealtime48Loading] = useState(false);
-  const [realtimeEnabled, setRealtimeEnabled] = useState(true);
+  const [realtimeEnabled, setRealtimeEnabled] = useState<boolean | null>(null);
   const [realtimeChannel, setRealtimeChannel] = useState<string>("all");
   const [realtimeUserSettings, setRealtimeUserSettings] = useState<Record<string, boolean>>({});
 
@@ -298,7 +300,7 @@ export default function AdminDashboardPage() {
   // Fetch realtime 48h data for admin
   useEffect(() => {
     queueMicrotask(() => {
-      if (!realtimeEnabled || allChannelIds.length === 0) {
+      if (realtimeEnabled !== true || allChannelIds.length === 0) {
         setRealtime48(null);
         return;
       }
@@ -314,11 +316,38 @@ export default function AdminDashboardPage() {
 
   // Fetch realtime user settings (admin control)
   useEffect(() => {
+    const adminEmail = session?.user?.email?.toLowerCase();
+    if (!adminEmail) return;
+
     fetch("/api/admin-settings?setting=realtime")
       .then(res => res.json())
-      .then(data => { if (data.data) setRealtimeUserSettings(data.data); })
-      .catch(() => {});
-  }, []);
+      .then(data => {
+        const settings = data.data || {};
+        setRealtimeUserSettings(settings);
+        setRealtimeEnabled(settings[adminEmail] ?? true);
+      })
+      .catch(() => setRealtimeEnabled(false));
+  }, [session?.user?.email]);
+
+  const toggleAdminRealtime = async (enabled: boolean) => {
+    const adminEmail = session?.user?.email?.toLowerCase();
+    if (!adminEmail || realtimeEnabled === null) return;
+
+    const previous = realtimeEnabled;
+    setRealtimeEnabled(enabled);
+    try {
+      const res = await fetch("/api/admin-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ setting: "realtime", email: adminEmail, enabled }),
+      });
+      if (!res.ok) throw new Error("Failed to save realtime setting");
+      const data = await res.json();
+      setRealtimeUserSettings(data.data || {});
+    } catch {
+      setRealtimeEnabled(previous);
+    }
+  };
 
   const toggleUserRealtime = async (email: string, enabled: boolean) => {
     try {
@@ -556,18 +585,15 @@ export default function AdminDashboardPage() {
       .sort(([, a], [, b]) => b - a);
   }, [stats.categories]);
 
-  const focusSection = (sectionId: string, filter?: string) => {
-    if (filter) setClientFilter(filter);
-    requestAnimationFrame(() => {
-      document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+  const showUsers = (filter: string) => {
+    setClientFilter(filter);
+    setTokenFilter(null);
+    setQuickView("users");
   };
 
   const showTokenChannels = (filter: "all" | "valid" | "invalid") => {
     setTokenFilter(filter);
-    requestAnimationFrame(() => {
-      document.getElementById("token-channels-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    setQuickView("channels");
   };
 
   const toggleSort = (field: typeof sortBy) => {
@@ -623,6 +649,22 @@ export default function AdminDashboardPage() {
       setCompanyActionId(null);
     }
   };
+
+  const quickViewTitle = quickView === "channels"
+    ? tokenFilter === "valid"
+      ? "Valid Token Channels"
+      : tokenFilter === "invalid"
+        ? "Invalid Token Channels"
+        : "All Channels"
+    : clientFilter === "companies"
+      ? "Companies"
+      : clientFilter === "active"
+        ? "Active Users"
+        : clientFilter === "inactive"
+          ? "Inactive Users"
+          : clientFilter === "with-channels"
+            ? "Users with Channels"
+            : "Total Users";
 
   if (status === "loading" || loading) {
     return (
@@ -737,7 +779,7 @@ export default function AdminDashboardPage() {
 
       {/* Stats Cards Row 1 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <button onClick={() => focusSection("users-section", "all")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
+        <button onClick={() => showUsers("all")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
               <Users className="w-6 h-6 text-blue-600" />
@@ -749,7 +791,7 @@ export default function AdminDashboardPage() {
           </div>
         </button>
 
-        <button onClick={() => focusSection("users-section", "companies")} className="bg-white rounded-xl border border-emerald-200 p-5 hover:shadow-md transition-shadow text-left">
+        <button onClick={() => showUsers("companies")} className="bg-white rounded-xl border border-emerald-200 p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
               <Crown className="w-6 h-6 text-emerald-600" />
@@ -761,7 +803,7 @@ export default function AdminDashboardPage() {
           </div>
         </button>
 
-        <button onClick={() => focusSection("users-section", "active")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
+        <button onClick={() => showUsers("active")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
               <Activity className="w-6 h-6 text-green-600" />
@@ -829,7 +871,7 @@ export default function AdminDashboardPage() {
           </div>
         </button>
 
-        <button onClick={() => focusSection("users-section", "with-channels")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
+        <button onClick={() => showUsers("with-channels")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-cyan-100 rounded-xl flex items-center justify-center">
               <Radio className="w-6 h-6 text-cyan-600" />
@@ -841,7 +883,7 @@ export default function AdminDashboardPage() {
           </div>
         </button>
 
-        <button onClick={() => focusSection("users-section", "inactive")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
+        <button onClick={() => showUsers("inactive")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
               <UserPlus className="w-6 h-6 text-orange-600" />
@@ -853,6 +895,97 @@ export default function AdminDashboardPage() {
           </div>
         </button>
       </div>
+
+      {quickView && (
+        <section className="rounded-xl border border-primary/20 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-primary">Quick View</p>
+              <h2 className="text-lg font-bold text-foreground">{quickViewTitle}</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              {quickView === "users" && (
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search users"
+                    className="w-48 rounded-lg border border-border py-1.5 pl-8 pr-3 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+              )}
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                {quickView === "users" ? filteredClients.length : filteredTokenChannelIds.length}
+              </span>
+              <button
+                onClick={() => setQuickView(null)}
+                className="rounded-lg p-2 text-muted hover:bg-slate-100 hover:text-foreground"
+                title="Close quick view"
+                aria-label="Close quick view"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-80 overflow-y-auto">
+            {quickView === "users" ? (
+              filteredClients.length === 0 ? (
+                <p className="p-6 text-center text-sm text-muted">No matching users found</p>
+              ) : (
+                filteredClients.map((client) => (
+                  <div key={client.id} className="flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3 last:border-b-0 hover:bg-slate-50">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-foreground">{client.name}</p>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${client.role === "company" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
+                          {client.role === "company" ? "Company" : "Client"}
+                        </span>
+                      </div>
+                      <p className="truncate text-xs text-muted">{client.email}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-4 text-xs">
+                      <span className="font-medium text-purple-600">{client.channels?.length || 0} channels</span>
+                      <span className={`rounded-full px-2 py-1 font-medium ${client.status === "active" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
+                        {client.status}
+                      </span>
+                      <button
+                        onClick={() => router.push(`/admin-clients?edit=${encodeURIComponent(client.id)}`)}
+                        className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
+                        title="Edit user"
+                        aria-label={`Edit ${client.name}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )
+            ) : filteredTokenChannelIds.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted">No matching channels found</p>
+            ) : (
+              filteredTokenChannelIds.map((channelId) => {
+                const tokenStatus = tokenStatuses[channelId]?.status;
+                const valid = tokenStatus === "valid";
+                return (
+                  <div key={channelId} className="flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3 last:border-b-0 hover:bg-slate-50">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {tokenStatuses[channelId]?.channelTitle || cachedChannelMap[channelId]?.channelTitle || channelId}
+                      </p>
+                      <p className="truncate font-mono text-xs text-muted">{channelId}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${valid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                      {valid ? "Valid" : "Invalid"}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ===== REALTIME 48 HOURS (Admin) ===== */}
       <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-5">
@@ -866,7 +999,8 @@ export default function AdminDashboardPage() {
             <select
               value={realtimeChannel}
               onChange={(e) => setRealtimeChannel(e.target.value)}
-              className="text-xs border border-purple-200 rounded-lg px-2 py-1 bg-white"
+              disabled={realtimeEnabled !== true}
+              className="text-xs border border-purple-200 rounded-lg px-2 py-1 bg-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <option value="all">All Channels</option>
               {allChannelIds.map(id => {
@@ -877,15 +1011,16 @@ export default function AdminDashboardPage() {
             <label className="flex items-center gap-1.5 text-xs text-purple-700 cursor-pointer">
               <input
                 type="checkbox"
-                checked={realtimeEnabled}
-                onChange={(e) => setRealtimeEnabled(e.target.checked)}
-                className="rounded border-purple-300"
+                checked={realtimeEnabled === true}
+                disabled={realtimeEnabled === null}
+                onChange={(e) => void toggleAdminRealtime(e.target.checked)}
+                className="rounded border-purple-300 disabled:cursor-wait"
               />
-              Enabled
+              {realtimeEnabled === null ? "Loading..." : "Enabled"}
             </label>
           </div>
         </div>
-        {realtimeEnabled && realtime48 && (
+        {realtimeEnabled === true && realtime48 && (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-white rounded-lg p-3 border border-purple-100">
@@ -918,7 +1053,7 @@ export default function AdminDashboardPage() {
             )}
           </>
         )}
-        {!realtimeEnabled && (
+        {realtimeEnabled === false && (
           <p className="text-sm text-purple-600">Realtime is OFF — API quota saved. Enable to see last 48h data.</p>
         )}
 
