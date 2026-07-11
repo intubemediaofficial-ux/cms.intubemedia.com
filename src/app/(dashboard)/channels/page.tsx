@@ -201,8 +201,13 @@ export default function ChannelsPage() {
 
   useEffect(() => {
     if (!isAuthenticated || !storageIdentity) return;
+    const stored = getStoredChannels(storageIdentity);
+    const history = stored.filter(
+      (channel) =>
+        channel.status === "delinked" || channel.status === "transferred"
+    );
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setStoredChannels(getStoredChannels(storageIdentity));
+    setStoredChannels(history);
     setChannelRequests(getChannelRequests(storageIdentity));
     setChannelDataMap({});
   }, [isAuthenticated, storageIdentity]);
@@ -313,12 +318,19 @@ export default function ChannelsPage() {
   useEffect(() => {
     if (!isAuthenticated || !storageIdentity) return;
 
-    fetch("/api/users?action=me", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((json) => {
-        if (!json.data) return;
-        const approvedIds: string[] = json.data.channels || [];
-        const pendingIds: string[] = json.data.pendingChannels || [];
+    Promise.all([
+      fetch("/api/users?action=me", { cache: "no-store" }),
+      fetch("/api/users?action=channelScope", { cache: "no-store" }),
+    ])
+      .then(async ([meResponse, scopeResponse]) => {
+        if (!meResponse.ok || !scopeResponse.ok) {
+          throw new Error("Failed to load server channel assignments");
+        }
+        return Promise.all([meResponse.json(), scopeResponse.json()]);
+      })
+      .then(([meJson, scopeJson]) => {
+        const approvedIds: string[] = scopeJson.data?.channelIds || [];
+        const pendingIds: string[] = meJson.data?.pendingChannels || [];
         const currentStored = getStoredChannels(storageIdentity);
         const currentById = new Map(currentStored.map((channel) => [channel.id, channel]));
         const today = new Date().toISOString().split("T")[0];
@@ -358,7 +370,14 @@ export default function ChannelsPage() {
         writeStoredChannels(storageIdentity, reconciled);
         setStoredChannels(reconciled);
       })
-      .catch(() => {});
+      .catch(() => {
+        const history = getStoredChannels(storageIdentity).filter(
+          (channel) =>
+            channel.status === "delinked" || channel.status === "transferred"
+        );
+        writeStoredChannels(storageIdentity, history);
+        setStoredChannels(history);
+      });
   }, [isAuthenticated, storageIdentity]);
 
   // Fetch user's assigned networks from admin + custom networks + admin-created networks

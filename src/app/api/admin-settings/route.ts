@@ -12,7 +12,7 @@ const ADMIN_EMAILS = [
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email || !ADMIN_EMAILS.includes(session.user.email)) {
+  if (!session?.user?.email || !ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email || !ADMIN_EMAILS.includes(session.user.email)) {
+  if (!session?.user?.email || !ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
         return Response.json({ error: "email required" }, { status: 400 });
       }
       const realtimeSettings = await kv.get<Record<string, boolean>>("realtime_settings") || {};
-      realtimeSettings[email] = enabled;
+      realtimeSettings[email.toLowerCase()] = enabled;
       await kv.set("realtime_settings", realtimeSettings);
       return Response.json({ data: realtimeSettings });
     }
