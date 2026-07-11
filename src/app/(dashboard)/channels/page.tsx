@@ -238,53 +238,30 @@ export default function ChannelsPage() {
         }
       } catch { /* ignore bulk cache errors */ }
 
-      // Step 2: Refresh remaining channels from YouTube API in background (parallel)
-      const stillMissing = idsToFetch.filter((id) => !channelDataMap[id]);
-      if (stillMissing.length > 0) {
-        Promise.allSettled(
-          stillMissing.map((id) =>
-            fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}`)
-              .then((r) => r.json())
-              .then((json) => {
-                if (json.data?.length) {
-                  setChannelDataMap((prev) => ({ ...prev, [id]: json.data[0] }));
-                }
-              })
-          )
-        );
-      }
     };
     fetchChannels();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, storedChannels]);
 
-  // Auto-refresh channel stats (subscribers, views, videos) every 60s
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const refreshChannelStats = useCallback(async () => {
-    const activeStored = storedChannels.filter((c) => c.status === "active" || c.status === "pending_approval");
-    if (activeStored.length === 0) return;
-    const results = await Promise.allSettled(
-      activeStored.map((c) =>
-        fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(c.id)}`)
-          .then((r) => r.json())
-          .then((j) => ({ id: c.id, data: j.data?.[0] as YouTubeChannel | undefined }))
-      )
-    );
-    const newMap: Record<string, YouTubeChannel> = { ...channelDataMap };
-    for (const r of results) {
-      if (r.status === "fulfilled" && r.value.data) {
-        newMap[r.value.id] = r.value.data;
-      }
-    }
-    setChannelDataMap(newMap);
-    setLastRefresh(new Date());
-  }, [storedChannels, channelDataMap]);
+    const channelIds = storedChannels
+      .filter((channel) => channel.status === "active" || channel.status === "pending_approval")
+      .map((channel) => channel.id);
+    if (channelIds.length === 0) return;
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const interval = setInterval(refreshChannelStats, 60000);
-    return () => clearInterval(interval);
-  }, [isAuthenticated, refreshChannelStats]);
+    try {
+      const response = await fetch(
+        `/api/youtube?action=bulkCachedChannels&channelIds=${encodeURIComponent(channelIds.join(","))}`
+      );
+      const json = await response.json();
+      if (response.ok && json.data) {
+        setChannelDataMap((previous) => ({ ...previous, ...json.data }));
+      }
+    } finally {
+      setLastRefresh(new Date());
+    }
+  }, [storedChannels]);
 
   // Fetch token statuses for all stored channels + auto-refresh every 30s
   const fetchTokenStatuses = useCallback(() => {
@@ -1072,14 +1049,14 @@ export default function ChannelsPage() {
                   Total Channels: <span className="font-semibold text-primary">{filteredChannels.length}</span>
                 </p>
                 <div className="flex items-center gap-1.5 text-xs text-green-600">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span>Live Stats</span>
-                  <span className="text-muted">· Updated {lastRefresh.toLocaleTimeString()}</span>
+                  <span className="w-2 h-2 bg-green-500 rounded-full" />
+                  <span>Cached Stats</span>
+                  <span className="text-muted">· Loaded {lastRefresh.toLocaleTimeString()}</span>
                 </div>
                 <button
                   onClick={refreshChannelStats}
                   className="flex items-center gap-1 text-xs text-primary hover:text-primary-dark transition-colors"
-                  title="Refresh channel stats now"
+                  title="Reload the latest server snapshot"
                 >
                   <RefreshCw className="w-3 h-3" />
                   Refresh

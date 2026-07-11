@@ -11,6 +11,8 @@ export interface CachedChannelData {
   rpm: number;
   cpm: number;
   lastUpdated: string;
+  statsUpdatedAt?: string;
+  revenueUpdatedAt?: string;
 }
 
 export interface CachedClientData {
@@ -21,21 +23,143 @@ export interface CachedClientData {
   totalViews: number;
   totalSubscribers: number;
   lastUpdated: string;
+  lastStatsSync?: string;
+  lastRevenueSync?: string;
+  source?: string;
 }
 
 const CACHE_PREFIX = "client_data_cache:";
+const CACHE_BACKUP_PREFIX = "client_data_backup:";
+const CACHE_SNAPSHOT_PREFIX = "client_data_snapshot:";
+const SNAPSHOT_TTL_SECONDS = 45 * 24 * 60 * 60;
+
+export interface CacheClientDataOptions {
+  preserveRevenue?: boolean;
+  source?: string;
+}
 
 function isKVAvailable(): boolean {
   return true; // Always available — using DigitalOcean Redis
 }
 
-export async function cacheClientData(userId: string, data: CachedClientData): Promise<void> {
+function hasPositiveRevenue(data: CachedClientData): boolean {
+  return data.channels.some((channel) => channel.estimatedRevenue > 0);
+}
+
+function mergeCachedClientData(
+  previous: CachedClientData | null,
+  incoming: CachedClientData,
+  options: CacheClientDataOptions
+): CachedClientData {
+  const previousChannels = new Map(
+    (previous?.channels || []).map((channel) => [channel.channelId, channel])
+  );
+  const channels = incoming.channels.map((channel) => {
+    const previousChannel = previousChannels.get(channel.channelId);
+    if (options.preserveRevenue === false || !previousChannel) return channel;
+    return {
+      ...channel,
+      estimatedRevenue: previousChannel.estimatedRevenue,
+      rpm: previousChannel.rpm,
+      cpm: previousChannel.cpm,
+      revenueUpdatedAt: previousChannel.revenueUpdatedAt,
+    };
+  });
+
+  return {
+    ...incoming,
+    channels,
+    totalRevenue: channels.reduce(
+      (total, channel) => total + (channel.estimatedRevenue || 0),
+      0
+    ),
+    totalViews: channels.reduce(
+      (total, channel) => total + (channel.views || 0),
+      0
+    ),
+    totalSubscribers: channels.reduce(
+      (total, channel) => total + (channel.subscribers || 0),
+      0
+    ),
+    source: options.source || incoming.source,
+  };
+}
+
+export async function cacheClientData(
+  userId: string,
+  data: CachedClientData,
+  options: CacheClientDataOptions = { preserveRevenue: true }
+): Promise<void> {
   if (!isKVAvailable()) return;
   try {
-    await kv.set(`${CACHE_PREFIX}${userId}`, data);
+    const currentKey = `${CACHE_PREFIX}${userId}`;
+    const previous = await kv.get<CachedClientData>(currentKey);
+    const merged = mergeCachedClientData(previous, data, options);
+
+    if (previous) {
+      const previousUpdatedAt = Date.parse(previous.lastUpdated);
+      const snapshotDate = Number.isFinite(previousUpdatedAt)
+        ? new Date(previousUpdatedAt).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+      await kv.setex(
+        `${CACHE_SNAPSHOT_PREFIX}${userId}:${snapshotDate}`,
+        SNAPSHOT_TTL_SECONDS,
+        previous
+      );
+      if (hasPositiveRevenue(previous)) {
+        await kv.set(`${CACHE_BACKUP_PREFIX}${userId}`, previous);
+      }
+    }
+
+    await kv.set(currentKey, merged);
+    const backup = await kv.get<CachedClientData>(`${CACHE_BACKUP_PREFIX}${userId}`);
+    if (!backup || hasPositiveRevenue(merged)) {
+      await kv.set(`${CACHE_BACKUP_PREFIX}${userId}`, merged);
+    }
   } catch (error) {
     console.error(`[Cache] Failed to cache data for ${userId}:`, error);
+    throw error;
   }
+}
+
+export async function getCachedClientDataBackup(userId: string): Promise<CachedClientData | null> {
+  if (!isKVAvailable()) return null;
+  try {
+    return await kv.get<CachedClientData>(`${CACHE_BACKUP_PREFIX}${userId}`);
+  } catch (error) {
+    console.error(`[Cache] Failed to get backup data for ${userId}:`, error);
+    return null;
+  }
+}
+
+export async function restoreCachedClientDataBackup(
+  userId: string,
+  allowedChannelIds: string[]
+): Promise<CachedClientData | null> {
+  const backup = await getCachedClientDataBackup(userId);
+  if (!backup) return null;
+
+  const allowedChannels = new Set(allowedChannelIds);
+  const channels = (backup.channels || []).filter((channel) =>
+    allowedChannels.has(channel.channelId)
+  );
+  const restored: CachedClientData = {
+    ...backup,
+    channels,
+    totalRevenue: channels.reduce(
+      (total, channel) => total + (channel.estimatedRevenue || 0),
+      0
+    ),
+    totalViews: channels.reduce((total, channel) => total + (channel.views || 0), 0),
+    totalSubscribers: channels.reduce(
+      (total, channel) => total + (channel.subscribers || 0),
+      0
+    ),
+    lastUpdated: new Date().toISOString(),
+    source: "backup_restore",
+  };
+  await kv.set(`${CACHE_PREFIX}${userId}`, restored);
+  return restored;
 }
 
 export async function getCachedClientData(userId: string): Promise<CachedClientData | null> {
@@ -51,12 +175,35 @@ export async function getCachedClientData(userId: string): Promise<CachedClientD
 export async function removeChannelFromAllCaches(channelId: string): Promise<void> {
   if (!isKVAvailable()) return;
   try {
-    const keys = await kv.keys(`${CACHE_PREFIX}*`);
-    for (const key of keys) {
+    const editableKeys = [
+      ...(await kv.keys(`${CACHE_PREFIX}*`)),
+      ...(await kv.keys(`${CACHE_BACKUP_PREFIX}*`)),
+    ];
+    for (const key of editableKeys) {
       const data = await kv.get<CachedClientData>(key);
-      if (data && data.channels?.some((ch) => ch.channelId === channelId)) {
-        data.channels = data.channels.filter((ch) => ch.channelId !== channelId);
-        await kv.set(key, data);
+      if (!data?.channels?.some((channel) => channel.channelId === channelId)) continue;
+
+      const channels = data.channels.filter((channel) => channel.channelId !== channelId);
+      await kv.set(key, {
+        ...data,
+        channels,
+        totalRevenue: channels.reduce(
+          (total, channel) => total + (channel.estimatedRevenue || 0),
+          0
+        ),
+        totalViews: channels.reduce((total, channel) => total + (channel.views || 0), 0),
+        totalSubscribers: channels.reduce(
+          (total, channel) => total + (channel.subscribers || 0),
+          0
+        ),
+      });
+    }
+
+    const snapshotKeys = await kv.keys(`${CACHE_SNAPSHOT_PREFIX}*`);
+    for (const key of snapshotKeys) {
+      const data = await kv.get<CachedClientData>(key);
+      if (data?.channels?.some((channel) => channel.channelId === channelId)) {
+        await kv.del(key);
       }
     }
   } catch (error) {

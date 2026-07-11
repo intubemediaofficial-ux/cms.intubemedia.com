@@ -5,6 +5,7 @@ import {
   cacheClientData,
   getCachedClientData,
   getAllCachedClientData,
+  restoreCachedClientDataBackup,
   removeChannelFromAllCaches,
   saveBankDetails,
   getBankDetails,
@@ -260,7 +261,10 @@ export async function POST(request: Request) {
         { ...data, lastUpdated: new Date().toISOString() },
         user
       );
-      await cacheClientData(userId, sanitized);
+      await cacheClientData(userId, sanitized, {
+        preserveRevenue: true,
+        source: "client_dashboard",
+      });
       return Response.json({ success: true, data: sanitized });
     }
     case "saveBankDetails": {
@@ -278,6 +282,22 @@ export async function POST(request: Request) {
       if (!channelId) return Response.json({ error: "channelId required" }, { status: 400 });
       await removeChannelFromAllCaches(channelId);
       return Response.json({ success: true });
+    }
+    case "restoreCachedData": {
+      if (!isAdmin) return Response.json({ error: "Admin only" }, { status: 403 });
+      const { userId } = body as { userId: string };
+      if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
+      const users = (await kv.get<StoredUserBasic[]>(USERS_KEY)) || [];
+      const user = findStoredUser(users, userId);
+      if (!user) return Response.json({ error: "User not found" }, { status: 404 });
+      const allowedChannels = user.channels || [];
+      const restored =
+        (await restoreCachedClientDataBackup(userId, allowedChannels)) ||
+        (user.email.toLowerCase() !== userId.toLowerCase()
+          ? await restoreCachedClientDataBackup(user.email, allowedChannels)
+          : null);
+      if (!restored) return Response.json({ error: "No backup found" }, { status: 404 });
+      return Response.json({ success: true, data: restored });
     }
     case "saveAgreements": {
       if (!isAdmin) return Response.json({ error: "Admin only" }, { status: 403 });
