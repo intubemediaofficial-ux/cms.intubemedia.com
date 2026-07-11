@@ -29,8 +29,9 @@ const USERS_KEY = "bainsla_users";
 interface StoredUserBasic {
   id: string;
   email: string;
-  role: "client" | "company";
+  role: "admin" | "client" | "company";
   parentId?: string;
+  channels?: string[];
 }
 
 async function getCompanyClientIds(companyEmail: string): Promise<string[]> {
@@ -57,6 +58,41 @@ const ADMIN_EMAILS = [
   "shivlalbainslaofficial@gmail.com",
 ];
 
+function findStoredUser(users: StoredUserBasic[], identifier: string): StoredUserBasic | undefined {
+  const normalized = identifier.toLowerCase();
+  return users.find(
+    (user) => user.id === identifier || user.email.toLowerCase() === normalized
+  );
+}
+
+function sanitizeCachedData(
+  data: CachedClientData,
+  user: StoredUserBasic
+): CachedClientData {
+  const approvedChannels = new Set(user.channels || []);
+  const channels = (data.channels || []).filter((channel) =>
+    approvedChannels.has(channel.channelId)
+  );
+
+  return {
+    ...data,
+    email: user.email,
+    channels,
+    totalRevenue: channels.reduce(
+      (total, channel) => total + (channel.estimatedRevenue || 0),
+      0
+    ),
+    totalViews: channels.reduce(
+      (total, channel) => total + (channel.views || 0),
+      0
+    ),
+    totalSubscribers: channels.reduce(
+      (total, channel) => total + (channel.subscribers || 0),
+      0
+    ),
+  };
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -72,15 +108,37 @@ export async function GET(request: Request) {
   switch (action) {
     case "getAllCachedData": {
       const isCompanyUser = session.user?.role === "company";
-      if (!isAdmin && !isCompanyUser) return Response.json({ error: "Admin or Company only" }, { status: 403 });
-      const data = await getAllCachedClientData();
-      if (isCompanyUser && !isAdmin) {
-        const clientIds = await getCompanyClientIds(session.user?.email || "");
-        const clientEmails = await getCompanyClientEmails(session.user?.email || "");
-        const filtered = data.filter((d) => clientIds.includes(d.userId) || clientEmails.includes(d.email?.toLowerCase()));
-        return Response.json({ data: filtered });
+      if (!isAdmin && !isCompanyUser) {
+        return Response.json({ error: "Admin or Company only" }, { status: 403 });
       }
-      return Response.json({ data });
+
+      const [data, users] = await Promise.all([
+        getAllCachedClientData(),
+        kv.get<StoredUserBasic[]>(USERS_KEY).then((stored) => stored || []),
+      ]);
+      const company = isCompanyUser && !isAdmin
+        ? users.find(
+            (user) =>
+              user.email.toLowerCase() === session.user?.email?.toLowerCase() &&
+              user.role === "company"
+          )
+        : undefined;
+      const allowedUsers = isAdmin
+        ? users
+        : company
+          ? [company, ...users.filter((user) => user.parentId === company.id)]
+          : [];
+      const allowedIds = new Set(allowedUsers.map((user) => user.id));
+
+      const sanitized = data.flatMap((cached) => {
+        const user =
+          findStoredUser(allowedUsers, cached.userId) ||
+          findStoredUser(allowedUsers, cached.email || "");
+        if (!user || !allowedIds.has(user.id)) return [];
+        return [sanitizeCachedData(cached, user)];
+      });
+
+      return Response.json({ data: sanitized });
     }
     case "getCachedData": {
       if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
@@ -97,8 +155,13 @@ export async function GET(request: Request) {
       if (!isAdmin && !isOwnData && !isCompanyClient) {
         return Response.json({ error: "Unauthorized" }, { status: 403 });
       }
-      const data = await getCachedClientData(userId);
-      return Response.json({ data });
+      const [data, users] = await Promise.all([
+        getCachedClientData(userId),
+        kv.get<StoredUserBasic[]>(USERS_KEY).then((stored) => stored || []),
+      ]);
+      if (!data) return Response.json({ data: null });
+      const user = findStoredUser(users, userId);
+      return Response.json({ data: user ? sanitizeCachedData(data, user) : null });
     }
     case "getBankDetails": {
       if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
@@ -179,13 +242,26 @@ export async function POST(request: Request) {
   switch (action) {
     case "cacheData": {
       const { userId, data } = body as { userId: string; data: CachedClientData };
-      if (!userId || !data) return Response.json({ error: "userId and data required" }, { status: 400 });
+      if (!userId || !data) {
+        return Response.json({ error: "userId and data required" }, { status: 400 });
+      }
       const isOwnData = session.user?.email?.toLowerCase() === userId.toLowerCase();
       if (!isAdmin && !isOwnData) {
         return Response.json({ error: "Unauthorized" }, { status: 403 });
       }
-      await cacheClientData(userId, { ...data, lastUpdated: new Date().toISOString() });
-      return Response.json({ success: true });
+
+      const users = (await kv.get<StoredUserBasic[]>(USERS_KEY)) || [];
+      const user = findStoredUser(users, userId);
+      if (!user) {
+        return Response.json({ error: "User not found" }, { status: 404 });
+      }
+
+      const sanitized = sanitizeCachedData(
+        { ...data, lastUpdated: new Date().toISOString() },
+        user
+      );
+      await cacheClientData(userId, sanitized);
+      return Response.json({ success: true, data: sanitized });
     }
     case "saveBankDetails": {
       const { userId, bankDetails } = body as { userId: string; bankDetails: BankDetails };

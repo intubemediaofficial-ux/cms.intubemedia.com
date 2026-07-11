@@ -1497,12 +1497,22 @@ export default function AdminDashboardPage() {
             {clients.filter((c) => c.role === "company").map((company) => {
               const companyClients = clients.filter((c) => c.parentId === company.id && c.role !== "company");
               const companyUsers = [company, ...companyClients];
-              const companyChannelCount = companyUsers.reduce((sum, user) => sum + (user.channels?.length || 0), 0);
-              let companyRevenue = 0;
-              for (const companyUser of companyUsers) {
-                const cd = cachedClientData.find((d) => d.email?.toLowerCase() === companyUser.email.toLowerCase());
-                if (cd) companyRevenue += cd.totalRevenue || 0;
+              const companyChannelIds = new Set(
+                companyUsers.flatMap((user) => user.channels || [])
+              );
+              const companyCachedChannels = new Map<string, CachedChannelData>();
+              for (const cached of cachedClientData) {
+                for (const channel of cached.channels || []) {
+                  if (companyChannelIds.has(channel.channelId)) {
+                    companyCachedChannels.set(channel.channelId, channel);
+                  }
+                }
               }
+              const companyChannelCount = companyChannelIds.size;
+              const companyRevenue = Array.from(companyCachedChannels.values()).reduce(
+                (total, channel) => total + (channel.estimatedRevenue || 0),
+                0
+              );
               return (
                 <div key={company.id} className="border border-border/50 rounded-lg overflow-hidden">
                   <button
@@ -1557,7 +1567,14 @@ export default function AdminDashboardPage() {
                       ) : (
                         companyClients.map((cl) => {
                           const cd = cachedClientData.find((d) => d.email?.toLowerCase() === cl.email.toLowerCase());
-                          const channels = cd?.channels || [];
+                          const approvedChannelIds = new Set(cl.channels || []);
+                          const channels = (cd?.channels || []).filter((channel) =>
+                            approvedChannelIds.has(channel.channelId)
+                          );
+                          const clientRevenue = channels.reduce(
+                            (total, channel) => total + (channel.estimatedRevenue || 0),
+                            0
+                          );
                           return (
                             <div key={cl.id} className="bg-white rounded-lg border border-border/50 p-3">
                               <div className="flex items-center justify-between mb-2">
@@ -1572,7 +1589,7 @@ export default function AdminDashboardPage() {
                                 </div>
                                 <div className="flex items-center gap-4 text-xs">
                                   <span className="font-medium">{cl.channels?.length || 0} ch</span>
-                                  <span className="text-green-600 font-medium">{formatCurrency(cd?.totalRevenue || 0)}</span>
+                                  <span className="text-green-600 font-medium">{formatCurrency(clientRevenue)}</span>
                                   <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${cl.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                                     {cl.status}
                                   </span>

@@ -147,6 +147,7 @@ export default function CompanyDashboardPage() {
 
   const [clients, setClients] = useState<ClientUser[]>([]);
   const [cachedData, setCachedData] = useState<CachedClientData[]>([]);
+  const [scopedChannelIds, setScopedChannelIds] = useState<string[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawRequest[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,9 +166,10 @@ export default function CompanyDashboardPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [clientsRes, cachedRes, withdrawRes, paymentsRes] = await Promise.all([
+      const [clientsRes, cachedRes, scopeRes, withdrawRes, paymentsRes] = await Promise.all([
         fetch("/api/users?action=myClients"),
         fetch("/api/client-data?action=getAllCachedData"),
+        fetch("/api/users?action=channelScope", { cache: "no-store" }),
         fetch("/api/payments?type=withdrawals"),
         fetch("/api/payments"),
       ]);
@@ -179,6 +181,12 @@ export default function CompanyDashboardPage() {
         const j = await cachedRes.json();
         setCachedData(j.data || []);
       }
+      if (scopeRes.ok) {
+        const j = await scopeRes.json();
+        setScopedChannelIds(j.data?.channelIds || []);
+      } else {
+        setScopedChannelIds([]);
+      }
       if (withdrawRes.ok) {
         const j = await withdrawRes.json();
         setWithdrawals(j.data || []);
@@ -188,6 +196,7 @@ export default function CompanyDashboardPage() {
         setPayments(j.data || []);
       }
     } catch (err) {
+      setScopedChannelIds([]);
       console.error("Failed to fetch company data:", err);
     } finally {
       setLoading(false);
@@ -216,16 +225,13 @@ export default function CompanyDashboardPage() {
     return map;
   }, [cachedData]);
 
-  const allChannelIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const client of clients) {
-      for (const channelId of client.channels || []) ids.add(channelId);
-    }
-    for (const cached of cachedData) {
-      for (const channel of cached.channels || []) ids.add(channel.channelId);
-    }
-    return Array.from(ids).filter((id) => id && !id.startsWith("UCtest") && id !== "test");
-  }, [clients, cachedData]);
+  const allChannelIds = useMemo(
+    () =>
+      Array.from(new Set(scopedChannelIds)).filter(
+        (id) => id && !id.startsWith("UCtest") && id !== "test"
+      ),
+    [scopedChannelIds]
+  );
 
   const channelOwnerMap = useMemo(() => {
     const map = new Map<string, ClientUser>();
@@ -304,13 +310,18 @@ export default function CompanyDashboardPage() {
     let revenue = 0;
     let views = 0;
     let subscribers = 0;
-    for (const cached of clientDataMap.values()) {
-      revenue += cached.totalRevenue || 0;
-      views += cached.totalViews || 0;
-      subscribers += cached.totalSubscribers || 0;
+    const approvedChannelIds = new Set(allChannelIds);
+
+    for (const cached of cachedData) {
+      for (const channel of cached.channels || []) {
+        if (!approvedChannelIds.has(channel.channelId)) continue;
+        revenue += channel.estimatedRevenue || 0;
+        views += channel.views || 0;
+        subscribers += channel.subscribers || 0;
+      }
     }
     return { revenue, views, subscribers };
-  }, [clientDataMap]);
+  }, [allChannelIds, cachedData]);
 
   const analyticsTotals = useMemo(() => {
     const revenue = channelAnalytics.reduce((sum, channel) => sum + channel.currentRevenue, 0);
