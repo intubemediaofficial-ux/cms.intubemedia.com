@@ -27,6 +27,9 @@ import {
   Phone,
   Mail,
   Calendar,
+  Pencil,
+  Power,
+  Trash2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -1515,53 +1518,71 @@ export default function AdminDashboardPage() {
               );
               return (
                 <div key={company.id} className="border border-border/50 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => setExpandedClient(expandedClient === `company-${company.id}` ? null : `company-${company.id}`)}
-                    className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">
-                        {company.name.charAt(0).toUpperCase()}
+                  <div className="flex items-stretch">
+                    <button
+                      onClick={() => setExpandedClient(expandedClient === `company-${company.id}` ? null : `company-${company.id}`)}
+                      className="min-w-0 flex-1 flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">
+                          {company.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="text-left">
+                          <p className="font-semibold text-foreground">{company.name}</p>
+                          <p className="text-xs text-muted">{company.email}</p>
+                        </div>
                       </div>
-                      <div className="text-left">
-                        <p className="font-semibold text-foreground">{company.name}</p>
-                        <p className="text-xs text-muted">{company.email}</p>
+                      <div className="flex items-center gap-6 text-sm">
+                        <div className="text-center">
+                          <p className="text-xs text-muted">Clients</p>
+                          <p className="font-bold text-blue-600">{companyClients.length}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-muted">Channels</p>
+                          <p className="font-bold text-purple-600">{companyChannelCount}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-muted">Revenue</p>
+                          <p className="font-bold text-green-600">{formatCurrency(companyRevenue)}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-muted">INR</p>
+                          <p className="font-bold text-amber-600">{INR_RATE > 0 ? `₹${(companyRevenue * INR_RATE).toFixed(0)}` : "—"}</p>
+                        </div>
+                        {expandedClient === `company-${company.id}` ? <ChevronUp className="w-4 h-4 text-muted" /> : <ChevronDown className="w-4 h-4 text-muted" />}
                       </div>
+                    </button>
+                    <div className="flex items-center gap-1 border-l border-border/50 px-3">
+                      <button
+                        onClick={() => router.push(`/admin-clients?edit=${encodeURIComponent(company.id)}`)}
+                        className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
+                        title="Edit account or password"
+                        aria-label={`Edit ${company.name}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => updateCompanyStatus(company)}
+                        disabled={companyActionId === company.id}
+                        className={`rounded-lg p-2 disabled:opacity-50 ${company.status === "active" ? "text-amber-600 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"}`}
+                        title={company.status === "active" ? "Deactivate company" : "Activate company"}
+                        aria-label={`${company.status === "active" ? "Deactivate" : "Activate"} ${company.name}`}
+                      >
+                        {companyActionId === company.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
+                      </button>
+                      <button
+                        onClick={() => deleteCompany(company)}
+                        disabled={companyActionId === company.id}
+                        className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        title="Delete company"
+                        aria-label={`Delete ${company.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                    <div className="flex items-center gap-6 text-sm">
-                      <div className="text-center">
-                        <p className="text-xs text-muted">Clients</p>
-                        <p className="font-bold text-blue-600">{companyClients.length}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs text-muted">Channels</p>
-                        <p className="font-bold text-purple-600">{companyChannelCount}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs text-muted">Revenue</p>
-                        <p className="font-bold text-green-600">{formatCurrency(companyRevenue)}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs text-muted">INR</p>
-                        <p className="font-bold text-amber-600">{INR_RATE > 0 ? `₹${(companyRevenue * INR_RATE).toFixed(0)}` : "—"}</p>
-                      </div>
-                      {expandedClient === `company-${company.id}` ? <ChevronUp className="w-4 h-4 text-muted" /> : <ChevronDown className="w-4 h-4 text-muted" />}
-                    </div>
-                  </button>
+                  </div>
                   {expandedClient === `company-${company.id}` && (
                     <div className="border-t border-border/50 bg-slate-50/50 p-4 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-white p-3">
-                        <button onClick={() => router.push(`/admin-clients?edit=${encodeURIComponent(company.id)}`)} className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-white hover:bg-primary-dark">
-                          Edit Account / Password
-                        </button>
-                        <button onClick={() => updateCompanyStatus(company)} disabled={companyActionId === company.id} className={`rounded-lg px-3 py-2 text-xs font-medium text-white disabled:opacity-50 ${company.status === "active" ? "bg-amber-600 hover:bg-amber-700" : "bg-green-600 hover:bg-green-700"}`}>
-                          {companyActionId === company.id ? "Saving..." : company.status === "active" ? "Deactivate Company" : "Activate Company"}
-                        </button>
-                        <button onClick={() => deleteCompany(company)} disabled={companyActionId === company.id} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50">
-                          Delete Company
-                        </button>
-                        <span className="text-xs text-muted">Companies with child clients cannot be deleted until those clients are reassigned or removed.</span>
-                      </div>
                       {companyClients.length === 0 ? (
                         <p className="text-sm text-muted text-center py-4">No clients added yet</p>
                       ) : (
