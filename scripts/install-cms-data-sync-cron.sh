@@ -15,8 +15,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Lightweight channel statistics refresh every 30 minutes.
 */30 * * * * root ${RUNNER} stats >> /var/log/cms-data-sync-stats.log 2>&1
-# Revenue refresh once daily at 00:15 UTC (05:45 India time).
-15 0 * * * root ${RUNNER} revenue >> /var/log/cms-data-sync-revenue.log 2>&1
+# Retry delayed YouTube revenue at 06:05, 08:05, 10:05, 12:05, and 14:05 India time.
+# Successful channels are skipped for later attempts on the same reporting date.
+35 0,2,4,6,8 * * * root ${RUNNER} revenue >> /var/log/cms-data-sync-revenue.log 2>&1
 EOF
 chmod 0644 /etc/cron.d/cms-data-sync
 

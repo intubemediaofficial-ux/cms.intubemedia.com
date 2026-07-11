@@ -44,6 +44,7 @@ export interface ClientDataSyncResult {
   revenue: number;
   revenueUpdated: number;
   revenuePreserved: number;
+  revenueSkipped: number;
   noToken: number;
   quotaExceeded: number;
   analyticsEmpty: number;
@@ -57,6 +58,7 @@ export interface ClientDataSyncSummary {
   startedAt: string;
   completedAt?: string;
   statsUpdated: number;
+  revenueTargetDate?: string;
   results: ClientDataSyncResult[];
   error?: string;
 }
@@ -131,6 +133,7 @@ function channelFromStats(
     lastUpdated: now,
     statsUpdatedAt: now,
     revenueUpdatedAt: previous?.revenueUpdatedAt,
+    revenueSyncedThrough: previous?.revenueSyncedThrough,
   };
 }
 
@@ -277,7 +280,7 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
     );
     const statsMap = new Map<string, Record<string, unknown>>();
 
-    if (channelIds.length > 0) {
+    if (mode === "stats" && channelIds.length > 0) {
       const statsResult = await fetchChannelStats(channelIds);
       for (const rawStats of statsResult.stats) {
         const channelId = getString(rawStats, "id");
@@ -290,6 +293,7 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
     }
 
     const revenueRange = getRevenueDateRange();
+    if (mode === "revenue") summary.revenueTargetDate = revenueRange.endDate;
     for (const user of activeUsers) {
       const now = new Date().toISOString();
       const assignedChannelIds = Array.from(new Set(user.channels || []));
@@ -309,7 +313,7 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
           totalViews: 0,
           totalSubscribers: 0,
           lastUpdated: now,
-          lastStatsSync: now,
+          lastStatsSync: mode === "stats" ? now : previous?.lastStatsSync,
           lastRevenueSync: previous?.lastRevenueSync,
           source: `server_${mode}_sync`,
         };
@@ -324,6 +328,7 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
           revenue: 0,
           revenueUpdated: 0,
           revenuePreserved: 0,
+          revenueSkipped: 0,
           noToken: 0,
           quotaExceeded: 0,
           analyticsEmpty: 0,
@@ -338,14 +343,20 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
       );
       let revenueUpdated = 0;
       let revenuePreserved = assignedChannelIds.length;
+      let revenueSkipped = 0;
       let noToken = 0;
       let quotaExceeded = 0;
       let analyticsEmpty = 0;
       let failed = 0;
 
       if (mode === "revenue") {
+        const pendingChannelIds = assignedChannelIds.filter(
+          (channelId) =>
+            previousMap.get(channelId)?.revenueSyncedThrough !== revenueRange.endDate
+        );
+        revenueSkipped = assignedChannelIds.length - pendingChannelIds.length;
         const revenueResults = await fetchRevenueWithConcurrency(
-          assignedChannelIds,
+          pendingChannelIds,
           revenueRange.startDate,
           revenueRange.endDate
         );
@@ -367,6 +378,7 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
             estimatedRevenue: revenueResult.revenue || 0,
             rpm: revenueResult.rpm || 0,
             revenueUpdatedAt: now,
+            revenueSyncedThrough: revenueRange.endDate,
           };
         });
         revenuePreserved = assignedChannelIds.length - revenueUpdated;
@@ -409,8 +421,11 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
         }).catch(() => {});
       }
 
-      const hasToken = await getAnyValidAccessToken(assignedChannelIds);
-      const hadFreshData = assignedChannelIds.some((channelId) => statsMap.has(channelId)) || revenueUpdated > 0;
+      const hadFreshData =
+        assignedChannelIds.some((channelId) => statsMap.has(channelId)) || revenueUpdated > 0;
+      const hasToken =
+        revenueSkipped === assignedChannelIds.length ||
+        (await getAnyValidAccessToken(assignedChannelIds));
       summary.results.push({
         userId: user.id,
         email: user.email,
@@ -418,6 +433,7 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
         revenue: data.totalRevenue,
         revenueUpdated,
         revenuePreserved,
+        revenueSkipped,
         noToken,
         quotaExceeded,
         analyticsEmpty,
