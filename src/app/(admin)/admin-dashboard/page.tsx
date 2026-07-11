@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { Fragment, useState, useEffect, useMemo, useCallback } from "react";
 import {
   Users,
   Radio,
@@ -51,6 +51,7 @@ interface ClientUser {
   category: string;
   role?: "client" | "company";
   parentId?: string;
+  revenueSharePercent?: number;
 }
 
 interface ChannelInfo {
@@ -110,6 +111,26 @@ interface DashboardFullData {
   };
 }
 
+interface Payment {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  month: string;
+  totalAmount: number;
+  revenueSharePercent: number;
+  netTotal: number;
+  paidAmount: number;
+  status: "pending" | "paid" | "partial";
+}
+
+interface AccountSummary {
+  channelIds: string[];
+  revenue: number;
+  netPayment: number;
+  paidAmount: number;
+}
+
 function sumMetric(data: AnalyticsResponse | undefined | null, metricName: string): number {
   if (!data?.rows?.length || !data.columnHeaders) return 0;
   const headers = data.columnHeaders.map((h) => h.name || "");
@@ -154,6 +175,8 @@ export default function AdminDashboardPage() {
   const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all" | string>(7);
   const [tokenFilter, setTokenFilter] = useState<"all" | "valid" | "invalid" | null>(null);
   const [quickView, setQuickView] = useState<"users" | "channels" | null>(null);
+  const [expandedQuickViewUser, setExpandedQuickViewUser] = useState<string | null>(null);
+  const [expandedTopClient, setExpandedTopClient] = useState<string | null>(null);
   const [companyActionId, setCompanyActionId] = useState<string | null>(null);
   const [companyActionError, setCompanyActionError] = useState<string | null>(null);
   const { rate: INR_RATE } = useExchangeRate("USD");
@@ -181,6 +204,7 @@ export default function AdminDashboardPage() {
     lastUpdated: string;
   }
   const [cachedClientData, setCachedClientData] = useState<CachedClientData[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [syncing, setSyncing] = useState(false);
 
   // Realtime 48-hour state
@@ -228,11 +252,18 @@ export default function AdminDashboardPage() {
   // Fetch cached data first, then trigger server-side sync in background
   const fetchCachedData = useCallback(async () => {
     try {
-      // 1. Load existing cached data immediately
-      const res = await fetch("/api/client-data?action=getAllCachedData");
+      // 1. Load existing cached data and recorded payments immediately
+      const [res, paymentsRes] = await Promise.all([
+        fetch("/api/client-data?action=getAllCachedData"),
+        fetch("/api/payments"),
+      ]);
       if (res.ok) {
         const json = await res.json();
         setCachedClientData(json.data || []);
+      }
+      if (paymentsRes.ok) {
+        const json = await paymentsRes.json();
+        setPayments(json.data || []);
       }
       // 2. Trigger background sync — fetches fresh YouTube data for all clients
       setSyncing(true);
@@ -387,6 +418,90 @@ export default function AdminDashboardPage() {
     return map;
   }, [cachedClientData]);
 
+  const channelMetricsMap = useMemo(() => {
+    const map: Record<string, { revenue: number; views: number; subscribers: number }> = {};
+    const perChannelAnalytics = dashData?.perChannelAnalytics || {};
+
+    for (const channelId of allChannelIds) {
+      const analytics = perChannelAnalytics[channelId];
+      const cached = cachedChannelMap[channelId];
+      const hasRevenueAnalytics = Boolean(
+        analytics?.revenueViews?.rows?.length || analytics?.revenue?.rows?.length
+      );
+      const hasPerformanceAnalytics = Boolean(analytics?.performance?.rows?.length);
+      const revenueFromAnalytics =
+        sumMetric(analytics?.revenueViews, "estimatedRevenue") ||
+        sumMetric(analytics?.revenue, "estimatedRevenue");
+
+      map[channelId] = {
+        revenue: hasRevenueAnalytics ? revenueFromAnalytics : cached?.estimatedRevenue || 0,
+        views: hasPerformanceAnalytics
+          ? sumMetric(analytics?.performance, "views")
+          : cached?.views || 0,
+        subscribers: cached?.subscribers || 0,
+      };
+    }
+
+    return map;
+  }, [allChannelIds, cachedChannelMap, dashData]);
+
+  const channelOwnerMap = useMemo(() => {
+    const map: Record<string, ClientUser> = {};
+    for (const client of clients) {
+      for (const channelId of client.channels || []) {
+        if (!map[channelId]) map[channelId] = client;
+      }
+    }
+    return map;
+  }, [clients]);
+
+  const accountSummaryMap = useMemo(() => {
+    const childrenByParent = new Map<string, ClientUser[]>();
+    for (const client of clients) {
+      if (!client.parentId) continue;
+      const children = childrenByParent.get(client.parentId) || [];
+      children.push(client);
+      childrenByParent.set(client.parentId, children);
+    }
+
+    const paymentsByUser = new Map<string, { netPayment: number; paidAmount: number }>();
+    for (const payment of payments) {
+      const totals = paymentsByUser.get(payment.userId) || { netPayment: 0, paidAmount: 0 };
+      totals.netPayment += payment.netTotal || 0;
+      totals.paidAmount += payment.paidAmount || 0;
+      paymentsByUser.set(payment.userId, totals);
+    }
+
+    const map: Record<string, AccountSummary> = {};
+    for (const client of clients) {
+      const scopedUsers = client.role === "company"
+        ? [client, ...(childrenByParent.get(client.id) || [])]
+        : [client];
+      const channelIds = Array.from(
+        new Set(scopedUsers.flatMap((scopedUser) => scopedUser.channels || []))
+      );
+      let netPayment = 0;
+      let paidAmount = 0;
+      for (const scopedUser of scopedUsers) {
+        const paymentTotals = paymentsByUser.get(scopedUser.id);
+        netPayment += paymentTotals?.netPayment || 0;
+        paidAmount += paymentTotals?.paidAmount || 0;
+      }
+
+      map[client.id] = {
+        channelIds,
+        revenue: channelIds.reduce(
+          (total, channelId) => total + (channelMetricsMap[channelId]?.revenue || 0),
+          0
+        ),
+        netPayment,
+        paidAmount,
+      };
+    }
+
+    return map;
+  }, [channelMetricsMap, clients, payments]);
+
   // Aggregate YouTube analytics data (with cached data fallback)
   const ytStats = useMemo(() => {
     const perChannelAnalytics = dashData?.perChannelAnalytics || {};
@@ -502,10 +617,14 @@ export default function AdminDashboardPage() {
     const totalCompanies = clients.filter((c) => c.role === "company").length;
     const activeClients = clients.filter((c) => c.status === "active").length;
     const inactiveClients = clients.filter((c) => c.status === "inactive").length;
-    const totalChannels = clients.reduce((sum, c) => sum + c.channels.length, 0);
+    const totalChannels = new Set(clients.flatMap((client) => client.channels || [])).size;
     const avgChannelsPerClient = totalClients > 0 ? totalChannels / totalClients : 0;
-    const clientsWithChannels = clients.filter((c) => c.channels.length > 0).length;
-    const clientsWithoutChannels = clients.filter((c) => c.channels.length === 0).length;
+    const clientsWithChannels = clients.filter(
+      (client) => (accountSummaryMap[client.id]?.channelIds.length || 0) > 0
+    ).length;
+    const clientsWithoutChannels = clients.filter(
+      (client) => (accountSummaryMap[client.id]?.channelIds.length || 0) === 0
+    ).length;
     const categories = clients.reduce((acc, c) => {
       acc[c.category] = (acc[c.category] || 0) + 1;
       return acc;
@@ -526,7 +645,7 @@ export default function AdminDashboardPage() {
       validTokens,
       invalidTokens,
     };
-  }, [clients, allChannelIds, tokenStatuses]);
+  }, [accountSummaryMap, clients, allChannelIds, tokenStatuses]);
 
   const filteredTokenChannelIds = useMemo(() => {
     if (!tokenFilter) return [];
@@ -548,9 +667,9 @@ export default function AdminDashboardPage() {
     } else if (clientFilter === "inactive") {
       result = result.filter((c) => c.status === "inactive");
     } else if (clientFilter === "with-channels") {
-      result = result.filter((c) => c.channels.length > 0);
+      result = result.filter((c) => (accountSummaryMap[c.id]?.channelIds.length || 0) > 0);
     } else if (clientFilter === "without-channels") {
-      result = result.filter((c) => c.channels.length === 0);
+      result = result.filter((c) => (accountSummaryMap[c.id]?.channelIds.length || 0) === 0);
     }
 
     if (searchQuery) {
@@ -559,26 +678,30 @@ export default function AdminDashboardPage() {
         (c) =>
           c.name.toLowerCase().includes(q) ||
           c.email.toLowerCase().includes(q) ||
-          c.channels.some((ch) => ch.toLowerCase().includes(q))
+          (accountSummaryMap[c.id]?.channelIds || []).some((ch) => ch.toLowerCase().includes(q))
       );
     }
 
     result.sort((a, b) => {
       let cmp = 0;
-      if (sortBy === "channels") cmp = a.channels.length - b.channels.length;
+      if (sortBy === "channels") cmp = (accountSummaryMap[a.id]?.channelIds.length || 0) - (accountSummaryMap[b.id]?.channelIds.length || 0);
       else if (sortBy === "name") cmp = a.name.localeCompare(b.name);
       else if (sortBy === "status") cmp = a.status.localeCompare(b.status);
       return sortDir === "desc" ? -cmp : cmp;
     });
 
     return result;
-  }, [clients, clientFilter, searchQuery, sortBy, sortDir]);
+  }, [accountSummaryMap, clients, clientFilter, searchQuery, sortBy, sortDir]);
 
   const topClientsByChannels = useMemo(() => {
     return [...clients]
-      .sort((a, b) => b.channels.length - a.channels.length)
+      .sort(
+        (a, b) =>
+          (accountSummaryMap[b.id]?.channelIds.length || 0) -
+          (accountSummaryMap[a.id]?.channelIds.length || 0)
+      )
       .slice(0, 5);
-  }, [clients]);
+  }, [accountSummaryMap, clients]);
 
   const categoryBreakdown = useMemo(() => {
     return Object.entries(stats.categories)
@@ -588,11 +711,13 @@ export default function AdminDashboardPage() {
   const showUsers = (filter: string) => {
     setClientFilter(filter);
     setTokenFilter(null);
+    setExpandedQuickViewUser(null);
     setQuickView("users");
   };
 
   const showTokenChannels = (filter: "all" | "valid" | "invalid") => {
     setTokenFilter(filter);
+    setExpandedQuickViewUser(null);
     setQuickView("channels");
   };
 
@@ -919,7 +1044,10 @@ export default function AdminDashboardPage() {
                 {quickView === "users" ? filteredClients.length : filteredTokenChannelIds.length}
               </span>
               <button
-                onClick={() => setQuickView(null)}
+                onClick={() => {
+                  setQuickView(null);
+                  setExpandedQuickViewUser(null);
+                }}
                 className="rounded-lg p-2 text-muted hover:bg-slate-100 hover:text-foreground"
                 title="Close quick view"
                 aria-label="Close quick view"
@@ -929,38 +1057,104 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-[32rem] overflow-y-auto">
             {quickView === "users" ? (
               filteredClients.length === 0 ? (
                 <p className="p-6 text-center text-sm text-muted">No matching users found</p>
               ) : (
-                filteredClients.map((client) => (
-                  <div key={client.id} className="flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3 last:border-b-0 hover:bg-slate-50">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-foreground">{client.name}</p>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${client.role === "company" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
-                          {client.role === "company" ? "Company" : "Client"}
-                        </span>
+                filteredClients.map((client) => {
+                  const summary = accountSummaryMap[client.id] || {
+                    channelIds: [],
+                    revenue: 0,
+                    netPayment: 0,
+                    paidAmount: 0,
+                  };
+                  const expanded = expandedQuickViewUser === client.id;
+                  return (
+                    <div key={client.id} className="border-b border-border/50 last:border-b-0">
+                      <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 hover:bg-slate-50">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-semibold text-foreground">{client.name}</p>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${client.role === "company" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
+                              {client.role === "company" ? "Company" : "Client"}
+                            </span>
+                          </div>
+                          <p className="truncate text-xs text-muted">{client.email}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-end gap-4 text-xs">
+                          <button
+                            onClick={() => setExpandedQuickViewUser(expanded ? null : client.id)}
+                            disabled={summary.channelIds.length === 0}
+                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 font-semibold text-purple-600 hover:bg-purple-50 disabled:cursor-default disabled:opacity-60"
+                            title={summary.channelIds.length > 0 ? "View channel revenue" : "No channels assigned"}
+                          >
+                            {summary.channelIds.length} channels
+                            {summary.channelIds.length > 0 && (expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />)}
+                          </button>
+                          <div className="text-right">
+                            <p className="font-bold text-green-600">{formatCurrency(summary.revenue)}</p>
+                            <p className="text-[10px] text-muted">Revenue</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-blue-600">{formatCurrency(summary.netPayment)}</p>
+                            <p className="text-[10px] text-muted">Net Payment</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-emerald-600">{formatCurrency(summary.paidAmount)}</p>
+                            <p className="text-[10px] text-muted">Paid</p>
+                          </div>
+                          <span className={`rounded-full px-2 py-1 font-medium ${client.status === "active" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
+                            {client.status}
+                          </span>
+                          <button
+                            onClick={() => router.push(`/admin-clients?edit=${encodeURIComponent(client.id)}`)}
+                            className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
+                            title="Edit user"
+                            aria-label={`Edit ${client.name}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
-                      <p className="truncate text-xs text-muted">{client.email}</p>
+                      {expanded && (
+                        <div className="grid grid-cols-1 gap-2 bg-slate-50/70 px-4 py-3 md:grid-cols-2">
+                          {summary.channelIds.map((channelId) => {
+                            const cached = cachedChannelMap[channelId];
+                            const metrics = channelMetricsMap[channelId];
+                            const owner = channelOwnerMap[channelId];
+                            const valid = tokenStatuses[channelId]?.status === "valid";
+                            return (
+                              <div key={channelId} className="rounded-lg border border-border bg-white p-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-foreground">
+                                      {tokenStatuses[channelId]?.channelTitle || cached?.channelTitle || channelId}
+                                    </p>
+                                    <p className="truncate font-mono text-[10px] text-muted">{channelId}</p>
+                                    {client.role === "company" && owner && (
+                                      <p className="mt-1 truncate text-[10px] text-blue-600">Client: {owner.name}</p>
+                                    )}
+                                  </div>
+                                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${valid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                    {valid ? "Valid" : "Invalid"}
+                                  </span>
+                                </div>
+                                <div className="mt-2 flex items-center justify-between text-xs">
+                                  <span className="text-muted">{formatNumber(metrics?.views || 0)} views</span>
+                                  <div className="text-right">
+                                    <p className="font-bold text-green-600">{formatCurrency(metrics?.revenue || 0)}</p>
+                                    <p className="text-[10px] text-amber-600">₹{formatNumber(Math.round((metrics?.revenue || 0) * INR_RATE))}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex shrink-0 items-center gap-4 text-xs">
-                      <span className="font-medium text-purple-600">{client.channels?.length || 0} channels</span>
-                      <span className={`rounded-full px-2 py-1 font-medium ${client.status === "active" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
-                        {client.status}
-                      </span>
-                      <button
-                        onClick={() => router.push(`/admin-clients?edit=${encodeURIComponent(client.id)}`)}
-                        className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
-                        title="Edit user"
-                        aria-label={`Edit ${client.name}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )
             ) : filteredTokenChannelIds.length === 0 ? (
               <p className="p-6 text-center text-sm text-muted">No matching channels found</p>
@@ -968,17 +1162,30 @@ export default function AdminDashboardPage() {
               filteredTokenChannelIds.map((channelId) => {
                 const tokenStatus = tokenStatuses[channelId]?.status;
                 const valid = tokenStatus === "valid";
+                const metrics = channelMetricsMap[channelId];
+                const owner = channelOwnerMap[channelId];
                 return (
-                  <div key={channelId} className="flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3 last:border-b-0 hover:bg-slate-50">
-                    <div className="min-w-0">
+                  <div key={channelId} className="flex flex-wrap items-center justify-between gap-4 border-b border-border/50 px-4 py-3 last:border-b-0 hover:bg-slate-50">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-foreground">
                         {tokenStatuses[channelId]?.channelTitle || cachedChannelMap[channelId]?.channelTitle || channelId}
                       </p>
                       <p className="truncate font-mono text-xs text-muted">{channelId}</p>
+                      {owner && <p className="truncate text-[10px] text-blue-600">{owner.name} · {owner.email}</p>}
                     </div>
-                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${valid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                      {valid ? "Valid" : "Invalid"}
-                    </span>
+                    <div className="flex items-center gap-5 text-xs">
+                      <div className="text-right">
+                        <p className="font-bold text-green-600">{formatCurrency(metrics?.revenue || 0)}</p>
+                        <p className="text-[10px] text-muted">Revenue</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-amber-600">₹{formatNumber(Math.round((metrics?.revenue || 0) * INR_RATE))}</p>
+                        <p className="text-[10px] text-muted">INR</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 font-semibold ${valid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                        {valid ? "Valid" : "Invalid"}
+                      </span>
+                    </div>
                   </div>
                 );
               })
@@ -1541,36 +1748,69 @@ export default function AdminDashboardPage() {
             ) : (
               <div className="space-y-3">
                 {topClientsByChannels.map((client, idx) => {
-                  const clientCached = cachedClientData.find((cd) => cd.email === client.email);
+                  const summary = accountSummaryMap[client.id] || {
+                    channelIds: [],
+                    revenue: 0,
+                    netPayment: 0,
+                    paidAmount: 0,
+                  };
+                  const expanded = expandedTopClient === client.id;
                   return (
-                    <div
-                      key={client.id}
-                      className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
-                    >
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${
-                        idx === 0 ? "bg-amber-500" : idx === 1 ? "bg-slate-400" : idx === 2 ? "bg-amber-700" : "bg-slate-300"
-                      }`}>
-                        {idx + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{client.name}</p>
-                        <p className="text-xs text-muted truncate">{client.email}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-foreground">{client.channels.length}</p>
-                        <p className="text-xs text-muted">channels</p>
-                      </div>
-                      {clientCached && clientCached.totalRevenue > 0 && (
+                    <div key={client.id} className="overflow-hidden rounded-lg bg-slate-50">
+                      <div className="flex items-center gap-3 p-3 hover:bg-slate-100 transition-colors">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                          idx === 0 ? "bg-amber-500" : idx === 1 ? "bg-slate-400" : idx === 2 ? "bg-amber-700" : "bg-slate-300"
+                        }`}>
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{client.name}</p>
+                          <p className="text-xs text-muted truncate">{client.email}</p>
+                        </div>
+                        <button
+                          onClick={() => setExpandedTopClient(expanded ? null : client.id)}
+                          disabled={summary.channelIds.length === 0}
+                          className="rounded-lg px-2 py-1 text-right hover:bg-purple-50 disabled:cursor-default disabled:opacity-60"
+                          title={summary.channelIds.length > 0 ? "View channels and revenue" : "No channels assigned"}
+                        >
+                          <p className="flex items-center justify-end gap-1 text-sm font-bold text-purple-600">
+                            {summary.channelIds.length}
+                            {summary.channelIds.length > 0 && (expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                          </p>
+                          <p className="text-xs text-muted">channels</p>
+                        </button>
                         <div className="text-right">
-                          <p className="text-sm font-bold text-green-600">${clientCached.totalRevenue.toFixed(2)}</p>
+                          <p className="text-sm font-bold text-green-600">{formatCurrency(summary.revenue)}</p>
                           <p className="text-xs text-muted">revenue</p>
                         </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-blue-600">{formatCurrency(summary.netPayment)}</p>
+                          <p className="text-xs text-muted">net payment</p>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          client.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                        }`}>
+                          {client.status}
+                        </span>
+                      </div>
+                      {expanded && (
+                        <div className="max-h-52 space-y-1 overflow-y-auto border-t border-border/50 bg-white p-2">
+                          {summary.channelIds.map((channelId) => {
+                            const cached = cachedChannelMap[channelId];
+                            const metrics = channelMetricsMap[channelId];
+                            const owner = channelOwnerMap[channelId];
+                            return (
+                              <div key={channelId} className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-slate-50">
+                                <div className="min-w-0">
+                                  <p className="truncate font-medium text-foreground">{cached?.channelTitle || tokenStatuses[channelId]?.channelTitle || channelId}</p>
+                                  {client.role === "company" && owner && <p className="truncate text-[10px] text-blue-600">{owner.name}</p>}
+                                </div>
+                                <p className="shrink-0 font-bold text-green-600">{formatCurrency(metrics?.revenue || 0)}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        client.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                      }`}>
-                        {client.status}
-                      </span>
                     </div>
                   );
                 })}
@@ -1634,23 +1874,16 @@ export default function AdminDashboardPage() {
           <div className="space-y-4">
             {clients.filter((c) => c.role === "company").map((company) => {
               const companyClients = clients.filter((c) => c.parentId === company.id && c.role !== "company");
-              const companyUsers = [company, ...companyClients];
-              const companyChannelIds = new Set(
-                companyUsers.flatMap((user) => user.channels || [])
-              );
-              const companyCachedChannels = new Map<string, CachedChannelData>();
-              for (const cached of cachedClientData) {
-                for (const channel of cached.channels || []) {
-                  if (companyChannelIds.has(channel.channelId)) {
-                    companyCachedChannels.set(channel.channelId, channel);
-                  }
-                }
-              }
-              const companyChannelCount = companyChannelIds.size;
-              const companyRevenue = Array.from(companyCachedChannels.values()).reduce(
-                (total, channel) => total + (channel.estimatedRevenue || 0),
-                0
-              );
+              const companyHasDirectPayment = payments.some((payment) => payment.userId === company.id);
+              const companyAccounts = company.channels.length > 0 || companyHasDirectPayment
+                ? [company, ...companyClients]
+                : companyClients;
+              const companySummary = accountSummaryMap[company.id] || {
+                channelIds: [],
+                revenue: 0,
+                netPayment: 0,
+                paidAmount: 0,
+              };
               return (
                 <div key={company.id} className="border border-border/50 rounded-lg overflow-hidden">
                   <div className="flex items-stretch">
@@ -1667,22 +1900,30 @@ export default function AdminDashboardPage() {
                           <p className="text-xs text-muted">{company.email}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-6 text-sm">
+                      <div className="flex flex-wrap items-center justify-end gap-4 text-sm">
                         <div className="text-center">
                           <p className="text-xs text-muted">Clients</p>
                           <p className="font-bold text-blue-600">{companyClients.length}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-xs text-muted">Channels</p>
-                          <p className="font-bold text-purple-600">{companyChannelCount}</p>
+                          <p className="font-bold text-purple-600">{companySummary.channelIds.length}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-xs text-muted">Revenue</p>
-                          <p className="font-bold text-green-600">{formatCurrency(companyRevenue)}</p>
+                          <p className="font-bold text-green-600">{formatCurrency(companySummary.revenue)}</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-xs text-muted">INR</p>
-                          <p className="font-bold text-amber-600">{INR_RATE > 0 ? `₹${(companyRevenue * INR_RATE).toFixed(0)}` : "—"}</p>
+                          <p className="text-xs text-muted">Net Payment</p>
+                          <p className="font-bold text-blue-600">{formatCurrency(companySummary.netPayment)}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-muted">Paid</p>
+                          <p className="font-bold text-emerald-600">{formatCurrency(companySummary.paidAmount)}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-muted">Revenue INR</p>
+                          <p className="font-bold text-amber-600">{INR_RATE > 0 ? `₹${(companySummary.revenue * INR_RATE).toFixed(0)}` : "—"}</p>
                         </div>
                         {expandedClient === `company-${company.id}` ? <ChevronUp className="w-4 h-4 text-muted" /> : <ChevronDown className="w-4 h-4 text-muted" />}
                       </div>
@@ -1718,40 +1959,54 @@ export default function AdminDashboardPage() {
                   </div>
                   {expandedClient === `company-${company.id}` && (
                     <div className="border-t border-border/50 bg-slate-50/50 p-4 space-y-3">
-                      {companyClients.length === 0 ? (
-                        <p className="text-sm text-muted text-center py-4">No clients added yet</p>
+                      {companyAccounts.length === 0 ? (
+                        <p className="text-sm text-muted text-center py-4">No clients or company channels added yet</p>
                       ) : (
-                        companyClients.map((cl) => {
-                          const cd = cachedClientData.find((d) => d.email?.toLowerCase() === cl.email.toLowerCase());
-                          const approvedChannelIds = new Set(cl.channels || []);
-                          const channels = (cd?.channels || []).filter((channel) =>
-                            approvedChannelIds.has(channel.channelId)
-                          );
-                          const clientRevenue = channels.reduce(
-                            (total, channel) => total + (channel.estimatedRevenue || 0),
-                            0
-                          );
+                        companyAccounts.map((cl) => {
+                          const isCompanyAccount = cl.id === company.id;
+                          const directPayments = payments.filter((payment) => payment.userId === cl.id);
+                          const accountSummary = isCompanyAccount
+                            ? {
+                                channelIds: Array.from(new Set(cl.channels || [])),
+                                revenue: (cl.channels || []).reduce(
+                                  (total, channelId) => total + (channelMetricsMap[channelId]?.revenue || 0),
+                                  0
+                                ),
+                                netPayment: directPayments.reduce((total, payment) => total + (payment.netTotal || 0), 0),
+                                paidAmount: directPayments.reduce((total, payment) => total + (payment.paidAmount || 0), 0),
+                              }
+                            : accountSummaryMap[cl.id] || {
+                                channelIds: [],
+                                revenue: 0,
+                                netPayment: 0,
+                                paidAmount: 0,
+                              };
                           return (
                             <div key={cl.id} className="bg-white rounded-lg border border-border/50 p-3">
-                              <div className="flex items-center justify-between mb-2">
+                              <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
                                 <div className="flex items-center gap-2">
                                   <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
                                     {cl.name.charAt(0).toUpperCase()}
                                   </div>
                                   <div>
-                                    <p className="font-medium text-sm">{cl.name}</p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium text-sm">{cl.name}</p>
+                                      {isCompanyAccount && <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700">Company Account</span>}
+                                    </div>
                                     <p className="text-xs text-muted">{cl.email}</p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-4 text-xs">
-                                  <span className="font-medium">{cl.channels?.length || 0} ch</span>
-                                  <span className="text-green-600 font-medium">{formatCurrency(clientRevenue)}</span>
+                                <div className="flex flex-wrap items-center gap-4 text-xs">
+                                  <span className="font-medium text-purple-600">{accountSummary.channelIds.length} channels</span>
+                                  <span className="text-green-600 font-semibold">Revenue {formatCurrency(accountSummary.revenue)}</span>
+                                  <span className="text-blue-600 font-semibold">Net Payment {formatCurrency(accountSummary.netPayment)}</span>
+                                  <span className="text-emerald-600 font-semibold">Paid {formatCurrency(accountSummary.paidAmount)}</span>
                                   <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${cl.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                                     {cl.status}
                                   </span>
                                 </div>
                               </div>
-                              {channels.length > 0 && (
+                              {accountSummary.channelIds.length > 0 && (
                                 <div className="overflow-x-auto">
                                   <table className="w-full text-xs">
                                     <thead>
@@ -1759,25 +2014,39 @@ export default function AdminDashboardPage() {
                                         <th className="text-left py-1.5 px-2 font-medium text-muted">Channel</th>
                                         <th className="text-right py-1.5 px-2 font-medium text-muted">Subs</th>
                                         <th className="text-right py-1.5 px-2 font-medium text-muted">Views</th>
-                                        <th className="text-right py-1.5 px-2 font-medium text-muted">Revenue ($)</th>
-                                        <th className="text-right py-1.5 px-2 font-medium text-muted">RPM</th>
+                                        <th className="text-right py-1.5 px-2 font-medium text-muted">Revenue</th>
+                                        <th className="text-right py-1.5 px-2 font-medium text-muted">Revenue INR</th>
+                                        <th className="text-right py-1.5 px-2 font-medium text-muted">Token</th>
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {channels.map((ch) => (
-                                        <tr key={ch.channelId} className="border-b border-border/20">
-                                          <td className="py-1.5 px-2">
-                                            <div className="flex items-center gap-1.5">
-                                              {ch.thumbnail && <img src={ch.thumbnail} alt="" className="w-4 h-4 rounded-full" />}
-                                              <span>{ch.channelTitle || ch.channelId}</span>
-                                            </div>
-                                          </td>
-                                          <td className="py-1.5 px-2 text-right">{formatNumber(ch.subscribers)}</td>
-                                          <td className="py-1.5 px-2 text-right">{formatNumber(ch.views)}</td>
-                                          <td className="py-1.5 px-2 text-right text-green-600">{formatCurrency(ch.estimatedRevenue)}</td>
-                                          <td className="py-1.5 px-2 text-right">${ch.rpm?.toFixed(2) || "0.00"}</td>
-                                        </tr>
-                                      ))}
+                                      {accountSummary.channelIds.map((channelId) => {
+                                        const cached = cachedChannelMap[channelId];
+                                        const metrics = channelMetricsMap[channelId];
+                                        const valid = tokenStatuses[channelId]?.status === "valid";
+                                        return (
+                                          <tr key={channelId} className="border-b border-border/20">
+                                            <td className="py-1.5 px-2">
+                                              <div className="flex items-center gap-1.5">
+                                                {cached?.thumbnail && <img src={cached.thumbnail} alt="" className="w-4 h-4 rounded-full" />}
+                                                <div>
+                                                  <p>{tokenStatuses[channelId]?.channelTitle || cached?.channelTitle || channelId}</p>
+                                                  <p className="font-mono text-[9px] text-muted">{channelId}</p>
+                                                </div>
+                                              </div>
+                                            </td>
+                                            <td className="py-1.5 px-2 text-right">{formatNumber(metrics?.subscribers || 0)}</td>
+                                            <td className="py-1.5 px-2 text-right">{formatNumber(metrics?.views || 0)}</td>
+                                            <td className="py-1.5 px-2 text-right font-semibold text-green-600">{formatCurrency(metrics?.revenue || 0)}</td>
+                                            <td className="py-1.5 px-2 text-right font-semibold text-amber-600">₹{formatNumber(Math.round((metrics?.revenue || 0) * INR_RATE))}</td>
+                                            <td className="py-1.5 px-2 text-right">
+                                              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${valid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                                {valid ? "Valid" : "Invalid"}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
                                     </tbody>
                                   </table>
                                 </div>
@@ -1870,142 +2139,144 @@ export default function AdminDashboardPage() {
                   </div>
                 </th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Revenue</th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground">Net Payment</th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground">Paid</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Joined</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Details</th>
               </tr>
             </thead>
             <tbody>
-              {filteredClients.map((client, idx) => (
-                <>
-                  <tr key={client.id} className="border-b border-border hover:bg-slate-50">
-                    <td className="px-4 py-3 text-muted">{idx + 1}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-sm">
-                          {client.name[0]}
-                        </div>
-                        <div>
-                          <span className="font-medium text-foreground block">{client.name}</span>
-                          <span className="text-[10px] text-muted">{client.category}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1 text-xs text-muted">
-                          <Mail className="w-3 h-3" />
-                          <span className="truncate max-w-[160px]">{client.email}</span>
-                        </div>
-                        {client.phone && (
-                          <div className="flex items-center gap-1 text-xs text-muted">
-                            <Phone className="w-3 h-3" />
-                            <span>{client.phone}</span>
+              {filteredClients.map((client, idx) => {
+                const summary = accountSummaryMap[client.id] || {
+                  channelIds: [],
+                  revenue: 0,
+                  netPayment: 0,
+                  paidAmount: 0,
+                };
+                return (
+                  <Fragment key={client.id}>
+                    <tr className="border-b border-border hover:bg-slate-50">
+                      <td className="px-4 py-3 text-muted">{idx + 1}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-sm">
+                            {client.name[0]}
                           </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1 font-semibold text-foreground">
-                        <Radio className="w-3.5 h-3.5 text-purple-500" />
-                        {client.channels.length}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        client.status === "active"
-                          ? "bg-green-100 text-green-700"
-                          : client.status === ("pending" as string)
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-red-100 text-red-700"
-                      }`}>
-                        {client.status === "active" ? "Active" : client.status === ("pending" as string) ? "Pending" : "Inactive"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {(() => {
-                        const cc = cachedClientData.find((cd) => cd.email === client.email);
-                        if (cc && cc.totalRevenue > 0) {
-                          return <span className="font-semibold text-green-600">${cc.totalRevenue.toFixed(2)}</span>;
-                        }
-                        return <span className="text-muted text-xs">—</span>;
-                      })()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 text-xs text-muted">
-                        <Calendar className="w-3 h-3" />
-                        <span>{client.joinedDate}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {client.channels.length > 0 && (
-                        <button
-                          onClick={() => setExpandedClient(expandedClient === client.id ? null : client.id)}
-                          className="flex items-center gap-1 text-xs text-primary hover:text-primary-dark font-medium"
-                        >
-                          {expandedClient === client.id ? "Hide" : "View"} Channels
-                          {expandedClient === client.id ? (
-                            <ChevronUp className="w-3 h-3" />
-                          ) : (
-                            <ChevronDown className="w-3 h-3" />
-                          )}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                  {expandedClient === client.id && client.channels.length > 0 && (
-                    <tr key={`${client.id}-channels`} className="bg-slate-50">
-                      <td colSpan={8} className="px-8 py-4">
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
-                            Channel IDs assigned to {client.name}
-                          </p>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                            {client.channels.map((chId) => {
-                              const ts = tokenStatuses[chId];
-                              const isValid = ts?.status === "valid";
-                              const cached = cachedChannelMap[chId];
-                              return (
-                                <div
-                                  key={chId}
-                                  className="flex flex-col gap-1 p-2 bg-white rounded-lg border border-border"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {cached?.thumbnail ? (
-                                      <img src={cached.thumbnail} alt="" className="w-6 h-6 rounded-full shrink-0" />
-                                    ) : (
-                                      <Radio className="w-4 h-4 text-purple-500 shrink-0" />
-                                    )}
-                                    <span className="text-sm font-medium text-foreground truncate flex-1">
-                                      {cached?.channelTitle || chId}
-                                    </span>
-                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${
-                                      isValid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                                    }`}>
-                                      {isValid ? "Token Valid" : "No Token"}
-                                    </span>
-                                  </div>
-                                  {cached && (
-                                    <div className="flex gap-3 text-[10px] text-muted pl-6">
-                                      <span>{cached.subscribers.toLocaleString()} subs</span>
-                                      <span>{cached.views.toLocaleString()} views</span>
-                                      {cached.estimatedRevenue > 0 && (
-                                        <span className="text-green-600">${cached.estimatedRevenue.toFixed(2)}</span>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+                          <div>
+                            <span className="font-medium text-foreground block">{client.name}</span>
+                            <span className="text-[10px] text-muted">{client.role === "company" ? "Company" : client.category}</span>
                           </div>
                         </div>
                       </td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1 text-xs text-muted">
+                            <Mail className="w-3 h-3" />
+                            <span className="truncate max-w-[160px]">{client.email}</span>
+                          </div>
+                          {client.phone && (
+                            <div className="flex items-center gap-1 text-xs text-muted">
+                              <Phone className="w-3 h-3" />
+                              <span>{client.phone}</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => setExpandedClient(expandedClient === client.id ? null : client.id)}
+                          disabled={summary.channelIds.length === 0}
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 font-semibold text-purple-600 hover:bg-purple-50 disabled:cursor-default disabled:opacity-60"
+                        >
+                          <Radio className="w-3.5 h-3.5" />
+                          {summary.channelIds.length}
+                          {summary.channelIds.length > 0 && (expandedClient === client.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          client.status === "active"
+                            ? "bg-green-100 text-green-700"
+                            : client.status === ("pending" as string)
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-red-100 text-red-700"
+                        }`}>
+                          {client.status === "active" ? "Active" : client.status === ("pending" as string) ? "Pending" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-green-600">{formatCurrency(summary.revenue)}</td>
+                      <td className="px-4 py-3 font-semibold text-blue-600">{formatCurrency(summary.netPayment)}</td>
+                      <td className="px-4 py-3 font-semibold text-emerald-600">{formatCurrency(summary.paidAmount)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1 text-xs text-muted">
+                          <Calendar className="w-3 h-3" />
+                          <span>{client.joinedDate}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {summary.channelIds.length > 0 && (
+                          <button
+                            onClick={() => setExpandedClient(expandedClient === client.id ? null : client.id)}
+                            className="flex items-center gap-1 text-xs text-primary hover:text-primary-dark font-medium"
+                          >
+                            {expandedClient === client.id ? "Hide" : "View"} Channels
+                            {expandedClient === client.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                        )}
+                      </td>
                     </tr>
-                  )}
-                </>
-              ))}
+                    {expandedClient === client.id && summary.channelIds.length > 0 && (
+                      <tr className="bg-slate-50">
+                        <td colSpan={10} className="px-8 py-4">
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
+                              Channels and revenue for {client.name}
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                              {summary.channelIds.map((chId) => {
+                                const ts = tokenStatuses[chId];
+                                const isValid = ts?.status === "valid";
+                                const cached = cachedChannelMap[chId];
+                                const metrics = channelMetricsMap[chId];
+                                const owner = channelOwnerMap[chId];
+                                return (
+                                  <div key={chId} className="flex flex-col gap-1 p-2 bg-white rounded-lg border border-border">
+                                    <div className="flex items-center gap-2">
+                                      {cached?.thumbnail ? (
+                                        <img src={cached.thumbnail} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                                      ) : (
+                                        <Radio className="w-4 h-4 text-purple-500 shrink-0" />
+                                      )}
+                                      <span className="text-sm font-medium text-foreground truncate flex-1">
+                                        {ts?.channelTitle || cached?.channelTitle || chId}
+                                      </span>
+                                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${
+                                        isValid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                                      }`}>
+                                        {isValid ? "Token Valid" : "No Token"}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-3 pl-6 text-[10px] text-muted">
+                                      <span>{formatNumber(metrics?.subscribers || 0)} subs</span>
+                                      <span>{formatNumber(metrics?.views || 0)} views</span>
+                                      <span className="font-semibold text-green-600">{formatCurrency(metrics?.revenue || 0)}</span>
+                                      <span className="font-semibold text-amber-600">₹{formatNumber(Math.round((metrics?.revenue || 0) * INR_RATE))}</span>
+                                    </div>
+                                    {client.role === "company" && owner && <p className="pl-6 text-[10px] text-blue-600">Client: {owner.name}</p>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
               {filteredClients.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={10} className="px-4 py-12 text-center text-muted">
                     <Users className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     <p>No clients found matching your filters.</p>
                   </td>
