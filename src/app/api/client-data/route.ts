@@ -60,6 +60,9 @@ const ADMIN_EMAILS = [
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.user?.userStatus === "inactive") {
+    return Response.json({ error: "Account is inactive" }, { status: 403 });
+  }
 
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
@@ -81,6 +84,19 @@ export async function GET(request: Request) {
     }
     case "getCachedData": {
       if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
+      const isOwnData = session.user?.email?.toLowerCase() === userId.toLowerCase();
+      const isCompanyUser = session.user?.role === "company";
+      let isCompanyClient = false;
+      if (isCompanyUser && !isOwnData) {
+        const [clientIds, clientEmails] = await Promise.all([
+          getCompanyClientIds(session.user?.email || ""),
+          getCompanyClientEmails(session.user?.email || ""),
+        ]);
+        isCompanyClient = clientIds.includes(userId) || clientEmails.includes(userId.toLowerCase());
+      }
+      if (!isAdmin && !isOwnData && !isCompanyClient) {
+        return Response.json({ error: "Unauthorized" }, { status: 403 });
+      }
       const data = await getCachedClientData(userId);
       return Response.json({ data });
     }
@@ -152,6 +168,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.user?.userStatus === "inactive") {
+    return Response.json({ error: "Account is inactive" }, { status: 403 });
+  }
 
   const body = await request.json();
   const { action } = body;
@@ -161,6 +180,10 @@ export async function POST(request: Request) {
     case "cacheData": {
       const { userId, data } = body as { userId: string; data: CachedClientData };
       if (!userId || !data) return Response.json({ error: "userId and data required" }, { status: 400 });
+      const isOwnData = session.user?.email?.toLowerCase() === userId.toLowerCase();
+      if (!isAdmin && !isOwnData) {
+        return Response.json({ error: "Unauthorized" }, { status: 403 });
+      }
       await cacheClientData(userId, { ...data, lastUpdated: new Date().toISOString() });
       return Response.json({ success: true });
     }

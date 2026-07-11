@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 
 const CACHE_PREFIX = "yt_cache_";
@@ -33,9 +33,11 @@ export function useYouTubeData<T>(
 ) {
   const { data: session, status } = useSession();
   const paramsKey = useMemo(() => JSON.stringify(params), [params]);
-  const cacheKey = `${action}_${paramsKey}`;
+  const viewerKey = session?.user?.email?.trim().toLowerCase() || "anonymous";
+  const cacheKey = `${viewerKey}_${action}_${paramsKey}`;
+  const fallbackRef = useRef(fallback);
 
-  // Load from localStorage cache immediately for instant display
+  // Load from account-scoped localStorage cache immediately for instant display
   const [data, setData] = useState<T>(() => getCachedData<T>(cacheKey) || fallback);
   const [loading, setLoading] = useState(() => !getCachedData<T>(cacheKey));
   const [error, setError] = useState<string | null>(null);
@@ -49,14 +51,17 @@ export function useYouTubeData<T>(
     // Allow both OAuth users (have accessToken) and credentials users (admin or client with email/password)
     const isCredentialsLogin = !session?.accessToken && !!session?.user?.email;
     if (!session?.accessToken && !isCredentialsLogin) {
-      setLoading(false);
+      queueMicrotask(() => setLoading(false));
       return;
     }
 
     const fetchData = async () => {
-      // Only show loading spinner if no cached data
-      const hasCached = getCachedData<T>(cacheKey);
-      if (!hasCached) setLoading(true);
+      const cachedData = getCachedData<T>(cacheKey);
+      setData(cachedData ?? fallbackRef.current);
+      setIsReal(!!cachedData);
+      setCached(!!cachedData);
+      setLastUpdated(null);
+      if (!cachedData) setLoading(true);
       setError(null);
       try {
         const parsedParams = JSON.parse(paramsKey) as Record<string, string>;
@@ -84,7 +89,7 @@ export function useYouTubeData<T>(
       }
     };
 
-    fetchData();
+    queueMicrotask(() => void fetchData());
   }, [session?.accessToken, session?.user?.role, session?.user?.email, status, action, paramsKey, cacheKey]);
 
   return { data, loading, error, isReal, cached, lastUpdated };

@@ -14,13 +14,6 @@ import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import { useExchangeRate } from "@/lib/hooks/useExchangeRate";
 import RevenueShareExport from "@/components/features/RevenueShareExport";
 
-const CHANNELS_STORAGE_KEY = "bainsla_channels";
-
-interface StoredChannel {
-  id: string;
-  status: "active" | "delinked" | "transferred";
-}
-
 interface ChannelRevenueInfo {
   revenue: number;
   views: number;
@@ -46,18 +39,6 @@ interface YouTubeChannel {
 interface DashboardData {
   channels?: YouTubeChannel[];
   channelRevenueMap?: Record<string, ChannelRevenueInfo>;
-}
-
-function getActiveChannelIds(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(CHANNELS_STORAGE_KEY);
-    if (!stored) return [];
-    const channels: StoredChannel[] = JSON.parse(stored);
-    return channels.filter((c) => c.status === "active").map((c) => c.id);
-  } catch {
-    return [];
-  }
 }
 
 function getMonthOptions() {
@@ -113,15 +94,19 @@ function getDateRange(range: string) {
 
 export default function ChannelRevenuePage() {
   const { data: session, status } = useSession();
-  const isAuthenticated = status === "authenticated" && (!!session?.accessToken || session?.user?.role === "admin");
+  const isAuthenticated = status === "authenticated" && !!session?.user?.email;
 
   const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState("28d");
   const { rate: INR_RATE } = useExchangeRate("USD");
 
   useEffect(() => {
-    setActiveChannelIds(getActiveChannelIds());
-  }, []);
+    if (!isAuthenticated) return;
+    fetch("/api/users?action=channelScope", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((json) => setActiveChannelIds(json.data?.channelIds || []))
+      .catch(() => setActiveChannelIds([]));
+  }, [isAuthenticated, session?.user?.email]);
 
   const dates = getDateRange(dateRange);
 

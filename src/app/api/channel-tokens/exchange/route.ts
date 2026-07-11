@@ -1,11 +1,37 @@
 import { setChannelToken, isKVConfigured, type ChannelToken, deleteChannelToken } from "@/lib/channel-tokens";
 import { google } from "googleapis";
 import { kv } from "@/lib/redis";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+const ADMIN_EMAILS = [
+  "ajeetgurjarofficial@gmail.com",
+  "bainslamusicofficial@gmail.com",
+  "shivlalbainslaofficial@gmail.com",
+];
+
+interface ChannelScopeUser {
+  id: string;
+  email: string;
+  role: "client" | "company";
+  parentId?: string;
+  channels?: string[];
+  pendingChannels?: string[];
+  status?: "active" | "inactive" | "pending";
+}
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (session.user.userStatus === "inactive") {
+      return Response.json({ error: "Account is inactive" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { code, state } = body;
 
@@ -23,6 +49,29 @@ export async function POST(request: Request) {
       expectedChannelId = state;
     } else {
       return Response.json({ error: "Invalid state parameter" }, { status: 400 });
+    }
+
+    const normalizedEmail = session.user.email.toLowerCase();
+    if (!ADMIN_EMAILS.includes(normalizedEmail)) {
+      const users = (await kv.get<ChannelScopeUser[]>("bainsla_users")) || [];
+      const currentUser = users.find((user) => user.email.toLowerCase() === normalizedEmail);
+      const scopedUsers = currentUser?.status === "inactive"
+        ? []
+        : currentUser?.role === "company"
+        ? [currentUser, ...users.filter((user) => user.parentId === currentUser.id && user.status !== "inactive")]
+        : currentUser
+          ? [currentUser]
+          : [];
+      const assignedChannels = new Set(
+        scopedUsers.flatMap((user) => [...(user.channels || []), ...(user.pendingChannels || [])])
+      );
+
+      if (!assignedChannels.has(expectedChannelId)) {
+        return Response.json(
+          { error: "You can only validate channels assigned to your account" },
+          { status: 403 }
+        );
+      }
     }
 
     // Use NEXT_PUBLIC_GOOGLE_CLIENT_ID (same as invite link) for token exchange
@@ -78,17 +127,6 @@ export async function POST(request: Request) {
       return Response.json({ error: "No access token received" }, { status: 400 });
     }
 
-    // Clear old token and cached data for fresh start on re-validation
-    try {
-      await deleteChannelToken(expectedChannelId);
-      // Clear cached videos and stats for this channel (fresh start)
-      await kv.del(`yt_cache:videos:${expectedChannelId}`);
-      await kv.del(`yt_cache:stats:${expectedChannelId}`);
-      console.log(`[Token Exchange] Cleared old token and cache for ${expectedChannelId}`);
-    } catch (e) {
-      console.warn("[Token Exchange] Cache clear error (non-fatal):", e);
-    }
-
     // Try to get channel info (may fail if quota exceeded — that's OK, token still gets saved)
     let googleChannelId = expectedChannelId;
     let channelTitle = expectedChannelId;
@@ -127,7 +165,22 @@ export async function POST(request: Request) {
 
     if (channelMismatch && !quotaWarning) {
       console.warn(`[Token Exchange] CHANNEL MISMATCH! Expected: ${expectedChannelId}, Got: ${googleChannelId} ("${channelTitle}")`);
-      // Still store the token (for read operations like analytics) but flag the mismatch
+      return Response.json(
+        {
+          error: `This Google account owns "${channelTitle}" (${googleChannelId}), not the assigned channel (${expectedChannelId}).`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Clear old token and cached data only after ownership validation succeeds.
+    try {
+      await deleteChannelToken(expectedChannelId);
+      await kv.del(`yt_cache:videos:${expectedChannelId}`);
+      await kv.del(`yt_cache:stats:${expectedChannelId}`);
+      console.log(`[Token Exchange] Cleared old token and cache for ${expectedChannelId}`);
+    } catch (error) {
+      console.warn("[Token Exchange] Cache clear error (non-fatal):", error);
     }
 
     const channelToken: ChannelToken = {

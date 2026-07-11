@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
+import { readStoredChannels, writeStoredChannels } from "@/lib/channel-storage";
 
 interface StoredChannel {
   id: string;
@@ -24,7 +25,7 @@ interface StoredChannel {
   cms?: string;
   addedDate: string;
   delinkedDate?: string;
-  status: "active" | "delinked" | "transferred";
+  status: "active" | "delinked" | "transferred" | "pending_approval";
 }
 
 interface YouTubeChannel {
@@ -44,24 +45,9 @@ interface YouTubeChannel {
   } | null;
 }
 
-const STORAGE_KEY = "bainsla_channels";
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 const CATEGORIES = ["Music", "Entertainment"];
 
-function getStoredChannels(): StoredChannel[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveStoredChannels(channels: StoredChannel[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
-}
 
 type ChannelRow = {
   id: string;
@@ -77,9 +63,10 @@ type ChannelRow = {
 
 export default function DelinkedChannelsPage() {
   const { data: session, status } = useSession();
-  const isAuthenticated = status === "authenticated" && !!session?.accessToken;
+  const storageIdentity = session?.user?.email;
+  const isAuthenticated = status === "authenticated";
 
-  const [storedChannels, setStoredChannels] = useState<StoredChannel[]>(getStoredChannels);
+  const [storedChannels, setStoredChannels] = useState<StoredChannel[]>([]);
   const [channelDataMap, setChannelDataMap] = useState<Record<string, YouTubeChannel>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [perPage, setPerPage] = useState(10);
@@ -88,6 +75,14 @@ export default function DelinkedChannelsPage() {
   const [sortField, setSortField] = useState<string>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [loadingData, setLoadingData] = useState(false);
+
+  useEffect(() => {
+    if (!storageIdentity) return;
+    queueMicrotask(() => {
+      setStoredChannels(readStoredChannels<StoredChannel>(storageIdentity));
+      setChannelDataMap({});
+    });
+  }, [storageIdentity]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -113,17 +108,35 @@ export default function DelinkedChannelsPage() {
     fetchChannels();
   }, [isAuthenticated, storedChannels, channelDataMap]);
 
-  const handleRelink = (channelId: string) => {
-    const updated = storedChannels.map((c) =>
-      c.id === channelId ? { ...c, status: "active" as const, delinkedDate: undefined } : c
+  const handleRelink = async (channelId: string) => {
+    const updated = storedChannels.map((channel) =>
+      channel.id === channelId
+        ? { ...channel, status: "pending_approval" as const, delinkedDate: undefined }
+        : channel
     );
-    saveStoredChannels(updated);
+    writeStoredChannels(storageIdentity, updated);
     setStoredChannels(updated);
+
+    const response = await fetch("/api/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channels: updated.filter((channel) => channel.status === "active").map((channel) => channel.id),
+        pendingChannels: updated.filter((channel) => channel.status === "pending_approval").map((channel) => channel.id),
+      }),
+    });
+    const json = await response.json();
+    if (!response.ok || json.data?.rejectedChannels?.includes(channelId)) {
+      const reverted = updated.filter((channel) => channel.id !== channelId);
+      writeStoredChannels(storageIdentity, reverted);
+      setStoredChannels(reverted);
+      window.alert(json.error || "This channel cannot be relinked to this account.");
+    }
   };
 
   const handleRemove = (channelId: string) => {
     const updated = storedChannels.filter((c) => c.id !== channelId);
-    saveStoredChannels(updated);
+    writeStoredChannels(storageIdentity, updated);
     setStoredChannels(updated);
   };
 

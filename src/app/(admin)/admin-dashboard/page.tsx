@@ -148,7 +148,9 @@ export default function AdminDashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, { status: string; channelTitle?: string; updatedAt?: string }>>({});
   const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all" | string>(7);
-  const [showInvalidTokens, setShowInvalidTokens] = useState(false);
+  const [tokenFilter, setTokenFilter] = useState<"all" | "valid" | "invalid" | null>(null);
+  const [companyActionId, setCompanyActionId] = useState<string | null>(null);
+  const [companyActionError, setCompanyActionError] = useState<string | null>(null);
   const { rate: INR_RATE } = useExchangeRate("USD");
 
   // Cached client data from KV (auto-saved when clients load their dashboards)
@@ -244,8 +246,10 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role === "admin") {
-      fetchClients();
-      fetchCachedData();
+      queueMicrotask(() => {
+        fetchClients();
+        fetchCachedData();
+      });
     }
   }, [status, session, fetchClients, fetchCachedData]);
 
@@ -290,14 +294,19 @@ export default function AdminDashboardPage() {
 
   // Fetch realtime 48h data for admin
   useEffect(() => {
-    if (!realtimeEnabled || allChannelIds.length === 0) { setRealtime48(null); return; }
-    const ids = realtimeChannel === "all" ? allChannelIds : [realtimeChannel];
-    setRealtime48Loading(true);
-    fetch(`/api/youtube?action=realtime48&channelIds=${ids.join(",")}`)
-      .then(res => res.json())
-      .then(data => { if (data.data && !data.data.disabled) setRealtime48(data.data); })
-      .catch(() => {})
-      .finally(() => setRealtime48Loading(false));
+    queueMicrotask(() => {
+      if (!realtimeEnabled || allChannelIds.length === 0) {
+        setRealtime48(null);
+        return;
+      }
+      const ids = realtimeChannel === "all" ? allChannelIds : [realtimeChannel];
+      setRealtime48Loading(true);
+      fetch(`/api/youtube?action=realtime48&channelIds=${ids.join(",")}`)
+        .then(res => res.json())
+        .then(data => { if (data.data && !data.data.disabled) setRealtime48(data.data); })
+        .catch(() => {})
+        .finally(() => setRealtime48Loading(false));
+    });
   }, [realtimeEnabled, realtimeChannel, allChannelIds]);
 
   // Fetch realtime user settings (admin control)
@@ -487,10 +496,22 @@ export default function AdminDashboardPage() {
     };
   }, [clients, allChannelIds, tokenStatuses]);
 
-  const filteredClients = useMemo(() => {
-    let result = clients;
+  const filteredTokenChannelIds = useMemo(() => {
+    if (!tokenFilter) return [];
+    if (tokenFilter === "all") return allChannelIds;
+    return allChannelIds.filter((channelId) =>
+      tokenFilter === "valid"
+        ? tokenStatuses[channelId]?.status === "valid"
+        : tokenStatuses[channelId]?.status !== "valid"
+    );
+  }, [allChannelIds, tokenFilter, tokenStatuses]);
 
-    if (clientFilter === "active") {
+  const filteredClients = useMemo(() => {
+    let result = [...clients];
+
+    if (clientFilter === "companies") {
+      result = result.filter((c) => c.role === "company");
+    } else if (clientFilter === "active") {
       result = result.filter((c) => c.status === "active");
     } else if (clientFilter === "inactive") {
       result = result.filter((c) => c.status === "inactive");
@@ -532,12 +553,71 @@ export default function AdminDashboardPage() {
       .sort(([, a], [, b]) => b - a);
   }, [stats.categories]);
 
+  const focusSection = (sectionId: string, filter?: string) => {
+    if (filter) setClientFilter(filter);
+    requestAnimationFrame(() => {
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const showTokenChannels = (filter: "all" | "valid" | "invalid") => {
+    setTokenFilter(filter);
+    requestAnimationFrame(() => {
+      document.getElementById("token-channels-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   const toggleSort = (field: typeof sortBy) => {
     if (sortBy === field) {
       setSortDir(sortDir === "desc" ? "asc" : "desc");
     } else {
       setSortBy(field);
       setSortDir("desc");
+    }
+  };
+
+  const updateCompanyStatus = async (company: ClientUser) => {
+    setCompanyActionId(company.id);
+    setCompanyActionError(null);
+    try {
+      const response = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: company.id,
+          status: company.status === "active" ? "inactive" : "active",
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to update company status");
+      setClients((current) =>
+        current.map((item) =>
+          item.id === company.id
+            ? { ...item, status: company.status === "active" ? "inactive" : "active" }
+            : item
+        )
+      );
+    } catch (error) {
+      setCompanyActionError(error instanceof Error ? error.message : "Failed to update company status");
+    } finally {
+      setCompanyActionId(null);
+    }
+  };
+
+  const deleteCompany = async (company: ClientUser) => {
+    if (!window.confirm(`Delete company account "${company.name}"?`)) return;
+    setCompanyActionId(company.id);
+    setCompanyActionError(null);
+    try {
+      const response = await fetch(`/api/users?id=${encodeURIComponent(company.id)}`, { method: "DELETE" });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to delete company");
+      setClients((current) => current.filter((item) => item.id !== company.id));
+      setExpandedClient(null);
+    } catch (error) {
+      setCompanyActionError(error instanceof Error ? error.message : "Failed to delete company");
+    } finally {
+      setCompanyActionId(null);
     }
   };
 
@@ -654,7 +734,7 @@ export default function AdminDashboardPage() {
 
       {/* Stats Cards Row 1 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-white rounded-xl border border-border p-5">
+        <button onClick={() => focusSection("users-section", "all")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
               <Users className="w-6 h-6 text-blue-600" />
@@ -664,9 +744,9 @@ export default function AdminDashboardPage() {
               <p className="text-2xl font-bold text-foreground">{stats.totalClients}</p>
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl border border-emerald-200 p-5">
+        <button onClick={() => focusSection("users-section", "companies")} className="bg-white rounded-xl border border-emerald-200 p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
               <Crown className="w-6 h-6 text-emerald-600" />
@@ -676,9 +756,9 @@ export default function AdminDashboardPage() {
               <p className="text-2xl font-bold text-emerald-600">{stats.totalCompanies}</p>
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl border border-border p-5">
+        <button onClick={() => focusSection("users-section", "active")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
               <Activity className="w-6 h-6 text-green-600" />
@@ -688,9 +768,9 @@ export default function AdminDashboardPage() {
               <p className="text-2xl font-bold text-foreground">{stats.activeClients}</p>
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl border border-border p-5">
+        <button onClick={() => showTokenChannels("all")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
               <Radio className="w-6 h-6 text-purple-600" />
@@ -700,7 +780,7 @@ export default function AdminDashboardPage() {
               <p className="text-2xl font-bold text-foreground">{stats.totalChannels}</p>
             </div>
           </div>
-        </div>
+        </button>
 
         <div className="bg-white rounded-xl border border-border p-5">
           <div className="flex items-center gap-3">
@@ -717,7 +797,7 @@ export default function AdminDashboardPage() {
 
       {/* Stats Cards Row 2 — Token Status & More */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-green-200 p-5">
+        <button onClick={() => showTokenChannels("valid")} className="bg-white rounded-xl border border-green-200 p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
               <CheckCircle2 className="w-6 h-6 text-green-600" />
@@ -725,12 +805,13 @@ export default function AdminDashboardPage() {
             <div>
               <p className="text-sm text-muted">Valid Token Channels</p>
               <p className="text-2xl font-bold text-green-700">{stats.validTokens}</p>
+              <p className="text-[10px] text-green-600 mt-0.5">Click to view →</p>
             </div>
           </div>
-        </div>
+        </button>
 
         <button
-          onClick={() => setShowInvalidTokens(!showInvalidTokens)}
+          onClick={() => showTokenChannels("invalid")}
           className="bg-white rounded-xl border border-red-200 p-5 hover:shadow-md transition-shadow text-left"
         >
           <div className="flex items-center gap-3">
@@ -745,7 +826,7 @@ export default function AdminDashboardPage() {
           </div>
         </button>
 
-        <div className="bg-white rounded-xl border border-border p-5">
+        <button onClick={() => focusSection("users-section", "with-channels")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-cyan-100 rounded-xl flex items-center justify-center">
               <Radio className="w-6 h-6 text-cyan-600" />
@@ -755,9 +836,9 @@ export default function AdminDashboardPage() {
               <p className="text-2xl font-bold text-foreground">{stats.clientsWithChannels}</p>
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl border border-border p-5">
+        <button onClick={() => focusSection("users-section", "inactive")} className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-shadow text-left">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
               <UserPlus className="w-6 h-6 text-orange-600" />
@@ -767,7 +848,7 @@ export default function AdminDashboardPage() {
               <p className="text-2xl font-bold text-foreground">{stats.inactiveClients}</p>
             </div>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* ===== REALTIME 48 HOURS (Admin) ===== */}
@@ -862,67 +943,53 @@ export default function AdminDashboardPage() {
         )}
       </div>
 
-      {/* Invalid Token Channels — Expandable */}
-      {showInvalidTokens && (
-        <div className="bg-white rounded-xl border border-red-200 overflow-hidden">
-          <div className="flex items-center justify-between p-4 border-b border-red-100 bg-red-50">
+      {tokenFilter && (
+        <div id="token-channels-section" className={`bg-white rounded-xl border overflow-hidden ${tokenFilter === "valid" ? "border-green-200" : tokenFilter === "invalid" ? "border-red-200" : "border-border"}`}>
+          <div className={`flex items-center justify-between p-4 border-b ${tokenFilter === "valid" ? "border-green-100 bg-green-50" : tokenFilter === "invalid" ? "border-red-100 bg-red-50" : "border-border bg-muted/20"}`}>
             <div className="flex items-center gap-2">
-              <XCircle className="w-5 h-5 text-red-500" />
-              <h2 className="text-base font-semibold text-red-900">
-                Invalid Token Channels ({stats.invalidTokens})
+              {tokenFilter === "valid" ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : tokenFilter === "invalid" ? <XCircle className="w-5 h-5 text-red-500" /> : <Radio className="w-5 h-5 text-purple-600" />}
+              <h2 className={`text-base font-semibold ${tokenFilter === "valid" ? "text-green-900" : tokenFilter === "invalid" ? "text-red-900" : "text-foreground"}`}>
+                {tokenFilter === "all" ? "All Channels" : `${tokenFilter === "valid" ? "Valid" : "Invalid"} Token Channels`} ({filteredTokenChannelIds.length})
               </h2>
             </div>
-            <button
-              onClick={() => setShowInvalidTokens(false)}
-              className="text-xs text-red-600 hover:text-red-800 font-medium"
-            >
-              Close ✕
+            <button onClick={() => setTokenFilter(null)} className="text-xs text-muted hover:text-foreground font-medium">
+              Close
             </button>
           </div>
           <div className="p-4">
-            {allChannelIds.filter((id) => !tokenStatuses[id] || tokenStatuses[id].status !== "valid").length === 0 ? (
-              <p className="text-center text-green-600 py-4 text-sm font-medium">All channels have valid tokens!</p>
+            {filteredTokenChannelIds.length === 0 ? (
+              <p className="text-center text-muted py-4 text-sm font-medium">No channels found.</p>
             ) : (
               <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {allChannelIds
-                  .filter((id) => !tokenStatuses[id] || tokenStatuses[id].status !== "valid")
-                  .map((chId) => {
-                    const client = clients.find((c) => c.channels.includes(chId));
-                    const cached = cachedChannelMap[chId];
-                    const ts = tokenStatuses[chId];
-                    return (
-                      <div key={chId} className="flex items-center gap-3 p-3 bg-red-50/50 rounded-lg border border-red-100">
-                        {cached?.thumbnail ? (
-                          <img src={cached.thumbnail} alt="" className="w-8 h-8 rounded-full shrink-0" />
-                        ) : (
-                          <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center shrink-0">
-                            <Radio className="w-4 h-4 text-red-400" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">
-                            {cached?.channelTitle || chId}
-                          </p>
-                          <p className="text-xs text-muted truncate">
-                            Client: {client?.name || "Unknown"} • {client?.email || "—"}
-                          </p>
+                {filteredTokenChannelIds.map((channelId) => {
+                  const client = clients.find((item) => item.channels.includes(channelId));
+                  const cached = cachedChannelMap[channelId];
+                  const tokenStatus = tokenStatuses[channelId];
+                  const isValid = tokenStatus?.status === "valid";
+                  return (
+                    <div key={channelId} className={`flex items-center gap-3 p-3 rounded-lg border ${isValid ? "bg-green-50/50 border-green-100" : "bg-red-50/50 border-red-100"}`}>
+                      {cached?.thumbnail ? (
+                        <img src={cached.thumbnail} alt="" className="w-8 h-8 rounded-full shrink-0" />
+                      ) : (
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isValid ? "bg-green-100" : "bg-red-100"}`}>
+                          <Radio className={`w-4 h-4 ${isValid ? "text-green-500" : "text-red-400"}`} />
                         </div>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-                          ts?.status === "expired" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
-                        }`}>
-                          {ts?.status === "expired" ? "Expired" : "Not Validated"}
-                        </span>
-                        <a
-                          href={`/channels?validate=${chId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors shrink-0"
-                        >
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{cached?.channelTitle || channelId}</p>
+                        <p className="text-xs text-muted truncate">User: {client?.name || "Unknown"} • {client?.email || "—"}</p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${isValid ? "bg-green-100 text-green-700" : tokenStatus?.status === "expired" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
+                        {isValid ? "Valid" : tokenStatus?.status === "expired" ? "Expired" : "Not Validated"}
+                      </span>
+                      {!isValid && (
+                        <a href={`/channels?validate=${channelId}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors shrink-0">
                           Validate
                         </a>
-                      </div>
-                    );
-                  })}
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1413,7 +1480,7 @@ export default function AdminDashboardPage() {
 
       {/* Company Overview — Drill-down */}
       {clients.filter((c) => c.role === "company").length > 0 && (
-        <div className="bg-white rounded-xl border border-border p-5">
+        <div id="company-overview" className="bg-white rounded-xl border border-border p-5 scroll-mt-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <Crown className="w-5 h-5 text-emerald-600" />
@@ -1421,24 +1488,20 @@ export default function AdminDashboardPage() {
             </h2>
             <span className="text-xs text-muted">{clients.filter((c) => c.role === "company").length} companies</span>
           </div>
+          {companyActionError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {companyActionError}
+            </div>
+          )}
           <div className="space-y-4">
             {clients.filter((c) => c.role === "company").map((company) => {
               const companyClients = clients.filter((c) => c.parentId === company.id && c.role !== "company");
-              const companyChannelCount = companyClients.reduce((sum, c) => sum + (c.channels?.length || 0), 0);
+              const companyUsers = [company, ...companyClients];
+              const companyChannelCount = companyUsers.reduce((sum, user) => sum + (user.channels?.length || 0), 0);
               let companyRevenue = 0;
-              let companyViews = 0;
-              let companySubs = 0;
-              const companyChannelsList: Array<{ channelId: string; channelTitle: string; thumbnail: string; subscribers: number; views: number; estimatedRevenue: number; rpm: number; clientName: string }> = [];
-              for (const cl of companyClients) {
-                const cd = cachedClientData.find((d) => d.email?.toLowerCase() === cl.email.toLowerCase());
-                if (cd) {
-                  companyRevenue += cd.totalRevenue || 0;
-                  companyViews += cd.totalViews || 0;
-                  companySubs += cd.totalSubscribers || 0;
-                  for (const ch of cd.channels) {
-                    companyChannelsList.push({ ...ch, clientName: cl.name });
-                  }
-                }
+              for (const companyUser of companyUsers) {
+                const cd = cachedClientData.find((d) => d.email?.toLowerCase() === companyUser.email.toLowerCase());
+                if (cd) companyRevenue += cd.totalRevenue || 0;
               }
               return (
                 <div key={company.id} className="border border-border/50 rounded-lg overflow-hidden">
@@ -1477,6 +1540,18 @@ export default function AdminDashboardPage() {
                   </button>
                   {expandedClient === `company-${company.id}` && (
                     <div className="border-t border-border/50 bg-slate-50/50 p-4 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-white p-3">
+                        <button onClick={() => router.push(`/admin-clients?edit=${encodeURIComponent(company.id)}`)} className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-white hover:bg-primary-dark">
+                          Edit Account / Password
+                        </button>
+                        <button onClick={() => updateCompanyStatus(company)} disabled={companyActionId === company.id} className={`rounded-lg px-3 py-2 text-xs font-medium text-white disabled:opacity-50 ${company.status === "active" ? "bg-amber-600 hover:bg-amber-700" : "bg-green-600 hover:bg-green-700"}`}>
+                          {companyActionId === company.id ? "Saving..." : company.status === "active" ? "Deactivate Company" : "Activate Company"}
+                        </button>
+                        <button onClick={() => deleteCompany(company)} disabled={companyActionId === company.id} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50">
+                          Delete Company
+                        </button>
+                        <span className="text-xs text-muted">Companies with child clients cannot be deleted until those clients are reassigned or removed.</span>
+                      </div>
                       {companyClients.length === 0 ? (
                         <p className="text-sm text-muted text-center py-4">No clients added yet</p>
                       ) : (
@@ -1548,9 +1623,9 @@ export default function AdminDashboardPage() {
       )}
 
       {/* All Clients with Channels — Filterable Table */}
-      <div className="bg-white rounded-xl border border-border overflow-hidden">
+      <div id="users-section" className="bg-white rounded-xl border border-border overflow-hidden scroll-mt-4">
         <div className="flex items-center justify-between p-5 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">All Clients & Channels</h2>
+          <h2 className="text-lg font-semibold text-foreground">Users & Channels</h2>
           <button
             onClick={() => router.push("/admin-clients")}
             className="text-sm text-primary hover:text-primary-dark font-medium"
@@ -1577,7 +1652,8 @@ export default function AdminDashboardPage() {
               onChange={(e) => setClientFilter(e.target.value)}
               className="border border-border rounded-lg px-3 py-2 text-sm bg-white"
             >
-              <option value="all">All Clients</option>
+              <option value="all">All Users</option>
+              <option value="companies">Companies Only</option>
               <option value="active">Active Only</option>
               <option value="inactive">Inactive Only</option>
               <option value="with-channels">With Channels</option>

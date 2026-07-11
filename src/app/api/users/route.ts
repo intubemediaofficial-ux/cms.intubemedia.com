@@ -54,6 +54,13 @@ function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password).digest("hex");
 }
 
+function normalizeChannelIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(value.filter((channelId): channelId is string => typeof channelId === "string" && channelId.length > 0))
+  );
+}
+
 // Deprecated network names to auto-remove from user assignments
 const DEPRECATED_NETWORK_NAMES = ["T-Series", "Sony Music", "InTubeMedia", "Other"];
 
@@ -78,6 +85,39 @@ async function getUsers(): Promise<StoredUser[]> {
         const before = u.customNetworks.length;
         u.customNetworks = u.customNetworks.filter((cn) => !DEPRECATED_NETWORK_NAMES.includes(cn));
         if (u.customNetworks.length !== before) cleaned = true;
+      }
+    }
+
+    const channelOwners = new Map<string, string>();
+    for (const user of users) {
+      const seenApproved = new Set<string>();
+      user.channels = user.channels.filter((channelId) => {
+        const ownerId = channelOwners.get(channelId);
+        if (seenApproved.has(channelId) || (ownerId && ownerId !== user.id)) {
+          cleaned = true;
+          return false;
+        }
+        seenApproved.add(channelId);
+        channelOwners.set(channelId, user.id);
+        return true;
+      });
+
+      if (user.pendingChannels?.length) {
+        const seenPending = new Set<string>();
+        user.pendingChannels = user.pendingChannels.filter((channelId) => {
+          const ownerId = channelOwners.get(channelId);
+          if (
+            seenApproved.has(channelId) ||
+            seenPending.has(channelId) ||
+            (ownerId && ownerId !== user.id)
+          ) {
+            cleaned = true;
+            return false;
+          }
+          seenPending.add(channelId);
+          channelOwners.set(channelId, user.id);
+          return true;
+        });
       }
     }
     if (cleaned) {
@@ -119,7 +159,7 @@ async function isCompany(): Promise<{ isCompany: boolean; companyUser?: StoredUs
   if (ADMIN_EMAILS.includes(email)) return { isCompany: false };
   try {
     const users = await getUsers();
-    const user = users.find((u) => u.email.toLowerCase() === email && u.role === "company");
+    const user = users.find((u) => u.email.toLowerCase() === email && u.role === "company" && u.status === "active");
     if (user) return { isCompany: true, companyUser: user };
   } catch { /* ignore */ }
   return { isCompany: false };
@@ -129,6 +169,9 @@ export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (session.user.userStatus === "inactive") {
+    return Response.json({ error: "Account is inactive" }, { status: 403 });
   }
 
   const url = new URL(request.url);
@@ -172,6 +215,30 @@ export async function GET(request: Request) {
     }
   }
 
+  if (action === "channelScope") {
+    try {
+      const users = await getUsers();
+      const email = session.user.email.toLowerCase();
+      const admin = ADMIN_EMAILS.includes(email);
+      const me = users.find((user) => user.email.toLowerCase() === email);
+
+      if (!admin && !me) return Response.json({ data: { channelIds: [] } });
+
+      const scopedUsers = admin
+        ? users
+        : me?.role === "company"
+          ? [me, ...users.filter((user) => user.parentId === me.id && user.status !== "inactive")]
+          : me
+            ? [me]
+            : [];
+      const channelIds = Array.from(new Set(scopedUsers.flatMap((user) => user.channels || [])));
+      return Response.json({ data: { channelIds } });
+    } catch (error) {
+      console.error("[Users GET channelScope] Error:", error);
+      return Response.json({ error: "Storage error", kvError: true }, { status: 500 });
+    }
+  }
+
   // Company: return only their own clients
   if (action === "myClients") {
     const { isCompany: isComp, companyUser } = await isCompany();
@@ -189,13 +256,8 @@ export async function GET(request: Request) {
     }
   }
 
-  // Admin-only: return all users
   if (!(await isAdmin())) {
-    // Companies can also access the full user list in read-only mode
-    const { isCompany: isComp } = await isCompany();
-    if (!isComp) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -238,6 +300,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const requestedChannels = normalizeChannelIds(channels);
+    const assignedChannels = new Set(
+      users.flatMap((user) => [...(user.channels || []), ...(user.pendingChannels || [])])
+    );
+    const conflictingChannel = requestedChannels.find((channelId) => assignedChannels.has(channelId));
+    if (conflictingChannel) {
+      return Response.json(
+        { error: `Channel ${conflictingChannel} is already assigned to another account` },
+        { status: 409 }
+      );
+    }
+
     // Determine role: admin can create companies, companies create clients
     let newRole: "client" | "company" = "client";
     let parentId: string | undefined;
@@ -254,7 +328,7 @@ export async function POST(request: Request) {
       email: email.toLowerCase().trim(),
       password: hashPassword(password),
       phone: phone?.trim() || "",
-      channels: channels || [],
+      channels: requestedChannels,
       status: "active",
       joinedDate: new Date().toLocaleDateString("en-GB", {
         day: "2-digit",
@@ -334,6 +408,9 @@ export async function PUT(request: Request) {
   const admin = await isAdmin();
   const { isCompany: isComp, companyUser } = admin ? { isCompany: false, companyUser: undefined } : await isCompany();
   const putSession = await getServerSession(authOptions);
+  if (!admin && putSession?.user?.userStatus === "inactive") {
+    return Response.json({ error: "Account is inactive" }, { status: 403 });
+  }
   const isSelfUpdate = !admin && !isComp && !!putSession?.user?.email;
   if (!admin && !isComp && !isSelfUpdate) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -353,6 +430,23 @@ export async function PUT(request: Request) {
       const userIdx = users.findIndex((u) => u.id === userId);
       if (userIdx === -1) {
         return Response.json({ error: "User not found" }, { status: 404 });
+      }
+      if (isComp && companyUser && users[userIdx].parentId !== companyUser.id) {
+        return Response.json({ error: "You can only manage channels for your own clients" }, { status: 403 });
+      }
+
+      if (body.type === "approve_channel") {
+        const channelOwner = users.find(
+          (user) =>
+            user.id !== users[userIdx].id &&
+            ([...(user.channels || []), ...(user.pendingChannels || [])]).includes(channelId)
+        );
+        if (channelOwner) {
+          return Response.json(
+            { error: `Channel ${channelId} is already assigned to another account` },
+            { status: 409 }
+          );
+        }
       }
 
       if (body.type === "unapprove_channel") {
@@ -397,6 +491,13 @@ export async function PUT(request: Request) {
       const toIdx = users.findIndex((u) => u.id === toUserId);
       if (fromIdx === -1 || toIdx === -1) {
         return Response.json({ error: "User not found" }, { status: 404 });
+      }
+      if (
+        isComp &&
+        companyUser &&
+        (users[fromIdx].parentId !== companyUser.id || users[toIdx].parentId !== companyUser.id)
+      ) {
+        return Response.json({ error: "You can only transfer channels between your own clients" }, { status: 403 });
       }
       users[fromIdx].channels = users[fromIdx].channels.filter((c) => c !== channelId);
       if (users[fromIdx].channelNetworks) {
@@ -457,12 +558,50 @@ export async function PUT(request: Request) {
       return Response.json({ data: safe });
     }
 
+    if (isComp && companyUser && users[idx].parentId !== companyUser.id) {
+      return Response.json({ error: "You can only update your own clients" }, { status: 403 });
+    }
+
+    const requestedChannels = Array.isArray(channels) ? normalizeChannelIds(channels) : null;
+    const requestedPendingChannels = Array.isArray(body.pendingChannels)
+      ? normalizeChannelIds(body.pendingChannels)
+      : null;
+    const channelsOwnedByOthers = new Set(
+      users
+        .filter((user) => user.id !== id)
+        .flatMap((user) => [...(user.channels || []), ...(user.pendingChannels || [])])
+    );
+    const conflictingChannel = [...(requestedChannels || []), ...(requestedPendingChannels || [])]
+      .find((channelId) => channelsOwnedByOthers.has(channelId));
+    if (conflictingChannel) {
+      return Response.json(
+        { error: `Channel ${conflictingChannel} is already assigned to another account` },
+        { status: 409 }
+      );
+    }
+
+    if (email) {
+      const normalizedEmail = email.toLowerCase().trim();
+      const emailInUse = users.some(
+        (user) => user.id !== id && user.email.toLowerCase() === normalizedEmail
+      );
+      if (emailInUse) {
+        return Response.json({ error: "User with this email already exists" }, { status: 409 });
+      }
+      users[idx].email = normalizedEmail;
+    }
     if (name) users[idx].name = name.trim();
-    if (email) users[idx].email = email.toLowerCase().trim();
     if (password) users[idx].password = hashPassword(password);
     if (phone !== undefined) users[idx].phone = (phone || "").trim();
-    if (channels) users[idx].channels = channels;
-    if (body.pendingChannels !== undefined) users[idx].pendingChannels = body.pendingChannels;
+    if (requestedChannels) {
+      users[idx].channels = requestedChannels;
+      const approved = new Set(requestedChannels);
+      users[idx].pendingChannels = (users[idx].pendingChannels || []).filter((channelId) => !approved.has(channelId));
+    }
+    if (requestedPendingChannels) {
+      const approved = new Set(users[idx].channels);
+      users[idx].pendingChannels = requestedPendingChannels.filter((channelId) => !approved.has(channelId));
+    }
     if (category) users[idx].category = category;
     if (status) users[idx].status = status;
     if (networks !== undefined) users[idx].networks = networks;
@@ -473,14 +612,19 @@ export async function PUT(request: Request) {
     if (Array.isArray(body.customNetworks)) {
       users[idx].customNetworks = body.customNetworks.filter((n: unknown) => typeof n === "string" && (n as string).trim().length > 0).map((n: unknown) => (n as string).trim());
     }
-    // Only admin can change role
+    // Only admin can change role. A company with child clients must keep its hierarchy.
     if (admin && body.role && (body.role === "client" || body.role === "company")) {
+      if (
+        users[idx].role === "company" &&
+        body.role === "client" &&
+        users.some((user) => user.parentId === users[idx].id)
+      ) {
+        return Response.json(
+          { error: "Reassign or delete this company's child clients before changing its role" },
+          { status: 409 }
+        );
+      }
       users[idx].role = body.role;
-    }
-
-    // Company can only update their own clients
-    if (isComp && companyUser && users[idx].parentId !== companyUser.id) {
-      return Response.json({ error: "You can only update your own clients" }, { status: 403 });
     }
 
     const saved = await saveUsers(users);
@@ -526,6 +670,9 @@ export async function PATCH(request: Request) {
   if (!session?.user?.email) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (session.user.userStatus === "inactive") {
+    return Response.json({ error: "Account is inactive" }, { status: 403 });
+  }
 
   try {
     const body = await request.json();
@@ -552,31 +699,41 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // If pendingChannels is provided, add new channels to pending list
-    if (Array.isArray(pendingChannels)) {
-      const validPending = pendingChannels.filter((c: unknown) => typeof c === "string" && (c as string).length > 0);
-      const existingPending = new Set(users[idx].pendingChannels || []);
-      const existingApproved = new Set(users[idx].channels);
-      for (const ch of validPending) {
-        if (!existingApproved.has(ch)) {
-          existingPending.add(ch);
-        }
-      }
-      users[idx].pendingChannels = Array.from(existingPending);
+    const channelsOwnedByOthers = new Set(
+      users
+        .filter((user) => user.id !== users[idx].id)
+        .flatMap((user) => [...(user.channels || []), ...(user.pendingChannels || [])])
+    );
+    const rejectedChannels = new Set<string>();
+
+    // Approved assignments are controlled by Admin/Company approval, never by browser state.
+    if (Array.isArray(channels)) {
+      const requestedApproved = new Set(
+        channels.filter(
+          (channelId: unknown): channelId is string =>
+            typeof channelId === "string" && channelId.length > 0
+        )
+      );
+      users[idx].channels = users[idx].channels.filter((channelId) => requestedApproved.has(channelId));
     }
 
-    // If channels is provided (for backward compat — admin-approved channels)
-    if (Array.isArray(channels)) {
-      const validChannels = channels.filter((c: unknown) => typeof c === "string" && (c as string).length > 0);
-      const existingChannels = new Set(users[idx].channels);
-      for (const ch of validChannels) {
-        existingChannels.add(ch);
-      }
-      const realChannels = Array.from(existingChannels).filter((ch) => {
-        if (ch.startsWith("UCtest") || ch === "test") return false;
-        return true;
-      });
-      users[idx].channels = realChannels.length > 0 ? realChannels : Array.from(existingChannels);
+    if (Array.isArray(pendingChannels)) {
+      const approved = new Set(users[idx].channels);
+      const validPending = pendingChannels.filter(
+        (channelId: unknown): channelId is string =>
+          typeof channelId === "string" && channelId.length > 0 && !approved.has(channelId)
+      );
+      users[idx].pendingChannels = Array.from(
+        new Set(
+          validPending.filter((channelId) => {
+            if (channelsOwnedByOthers.has(channelId)) {
+              rejectedChannels.add(channelId);
+              return false;
+            }
+            return true;
+          })
+        )
+      );
     }
 
     // Save custom network names
@@ -590,7 +747,15 @@ export async function PATCH(request: Request) {
       return Response.json({ error: "Failed to sync channels" }, { status: 500 });
     }
 
-    return Response.json({ data: { success: true, channels: users[idx].channels, pendingChannels: users[idx].pendingChannels || [], customNetworks: users[idx].customNetworks || [] } });
+    return Response.json({
+      data: {
+        success: true,
+        channels: users[idx].channels,
+        pendingChannels: users[idx].pendingChannels || [],
+        customNetworks: users[idx].customNetworks || [],
+        rejectedChannels: Array.from(rejectedChannels),
+      },
+    });
   } catch (error) {
     console.error("[Users] Error syncing channels:", error);
     return Response.json({ error: "Failed to sync channels" }, { status: 500 });
@@ -623,6 +788,17 @@ export async function DELETE(request: Request) {
     }
 
     const deletedUser = users.find((u) => u.id === id);
+    if (admin && deletedUser?.role === "company") {
+      const childCount = users.filter((user) => user.parentId === deletedUser.id).length;
+      if (childCount > 0) {
+        return Response.json(
+          {
+            error: `This company has ${childCount} client account${childCount === 1 ? "" : "s"}. Reassign or delete those clients before deleting the company.`,
+          },
+          { status: 409 }
+        );
+      }
+    }
     const filtered = users.filter((u) => u.id !== id);
 
     if (filtered.length === users.length) {

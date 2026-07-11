@@ -31,13 +31,6 @@ import {
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
 
-const CHANNELS_STORAGE_KEY = "bainsla_channels";
-
-interface StoredChannel {
-  id: string;
-  status: "active" | "delinked" | "transferred" | "pending_approval";
-}
-
 interface VideoItem {
   id?: string | null;
   snippet?: {
@@ -96,18 +89,6 @@ function parseDurationSeconds(isoDuration: string | null | undefined): number {
   const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
   return parseInt(match[1] || "0", 10) * 3600 + parseInt(match[2] || "0", 10) * 60 + parseInt(match[3] || "0", 10);
-}
-
-function getActiveChannelIds(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(CHANNELS_STORAGE_KEY);
-    if (!stored) return [];
-    const channels: StoredChannel[] = JSON.parse(stored);
-    return channels.filter((c) => c.status === "active" || c.status === "pending_approval").map((c) => c.id);
-  } catch {
-    return [];
-  }
 }
 
 type MonetizationFilter = "all" | "monetized" | "not_monetized" | "copyright_claim" | "content_id_claim" | "no_claim";
@@ -203,7 +184,6 @@ export default function VideosPage() {
   const { data: session, status: sessionStatus } = useSession();
   const isAuthenticated = sessionStatus === "authenticated";
 
-  const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [claims, setClaims] = useState<VideoClaim[]>([]);
   const [loading, setLoading] = useState(true);
@@ -238,10 +218,6 @@ export default function VideosPage() {
   const [dupChannelFilter, setDupChannelFilter] = useState<string>("all");
   const [dupDeleting, setDupDeleting] = useState(false);
 
-  useEffect(() => {
-    setActiveChannelIds(getActiveChannelIds());
-  }, []);
-
   const fetchClaims = useCallback(async () => {
     try {
       const res = await fetch("/api/video-claims");
@@ -257,50 +233,21 @@ export default function VideosPage() {
   const [serverChannelIds, setServerChannelIds] = useState<string[]>([]);
   useEffect(() => {
     if (!isAuthenticated) return;
-    const fetchServerIds = async () => {
-      const ids: string[] = [];
-      try {
-        const res = await fetch("/api/users?action=me");
-        if (res.ok) {
-          const json = await res.json();
-          const user = json.data;
-          if (user?.channels) {
-            for (const ch of user.channels) {
-              if (ch && !ch.startsWith("UCtest") && ch !== "test") ids.push(ch);
-            }
-          }
-          if (user?.pendingChannels) {
-            for (const ch of user.pendingChannels) {
-              if (ch && !ch.startsWith("UCtest") && ch !== "test") ids.push(ch);
-            }
-          }
-        }
-      } catch { /* silent */ }
-      try {
-        const email = session?.user?.email;
-        if (email) {
-          const res = await fetch(`/api/client-data?action=getCachedData&userId=${encodeURIComponent(email)}`);
-          if (res.ok) {
-            const j = await res.json();
-            if (j.data?.channels) {
-              for (const ch of j.data.channels) {
-                if (ch.channelId && !ch.channelId.startsWith("UCtest")) {
-                  ids.push(ch.channelId);
-                }
-              }
-            }
-          }
-        }
-      } catch { /* silent */ }
-      setServerChannelIds(ids);
-    };
-    fetchServerIds();
+    fetch("/api/users?action=channelScope", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((json) => {
+        const ids = (json.data?.channelIds || []).filter(
+          (channelId: string) => !channelId.startsWith("UCtest") && channelId !== "test"
+        );
+        setServerChannelIds(ids);
+      })
+      .catch(() => setServerChannelIds([]));
   }, [isAuthenticated, session?.user?.email]);
 
-  const allChannelIds = useMemo(() => {
-    const set = new Set([...activeChannelIds, ...serverChannelIds].filter((id) => !id.startsWith("UCtest") && id !== "test"));
-    return Array.from(set);
-  }, [activeChannelIds, serverChannelIds]);
+  const allChannelIds = useMemo(
+    () => Array.from(new Set(serverChannelIds)),
+    [serverChannelIds]
+  );
 
   const fetchVideos = useCallback(async () => {
     if (!isAuthenticated || allChannelIds.length === 0) {
@@ -350,8 +297,10 @@ export default function VideosPage() {
   }, [isAuthenticated, allChannelIds]);
 
   useEffect(() => {
-    fetchVideos();
-    if (isAuthenticated) fetchClaims();
+    queueMicrotask(() => {
+      fetchVideos();
+      if (isAuthenticated) fetchClaims();
+    });
   }, [fetchVideos, fetchClaims, isAuthenticated]);
 
   const hasNoChannelsAdded = allChannelIds.length === 0;
@@ -412,7 +361,9 @@ export default function VideosPage() {
     return result;
   }, [videos, isReal, searchQuery, statusFilter, monetizationFilter, channelFilter, claims]);
 
-  useEffect(() => { setCurrentPage(1); }, [searchQuery, statusFilter, monetizationFilter, channelFilter]);
+  useEffect(() => {
+    queueMicrotask(() => setCurrentPage(1));
+  }, [searchQuery, statusFilter, monetizationFilter, channelFilter]);
 
   const totalPages = Math.ceil(filteredVideos.length / VIDEOS_PER_PAGE);
   const paginatedVideos = useMemo(() => {

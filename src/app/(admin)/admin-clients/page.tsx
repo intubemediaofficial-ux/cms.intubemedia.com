@@ -111,6 +111,7 @@ export default function AdminClientsPage() {
   const [formRole, setFormRole] = useState<"client" | "company">("client");
   const [formChannels, setFormChannels] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [managementError, setManagementError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formNetworks, setFormNetworks] = useState<NetworkAssignment[]>([]);
   const [formChannelNetworks, setFormChannelNetworks] = useState<ChannelNetworkAssignment[]>([]);
@@ -202,8 +203,10 @@ export default function AdminClientsPage() {
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role === "admin") {
-      fetchClients();
-      fetchNetworks();
+      queueMicrotask(() => {
+        fetchClients();
+        fetchNetworks();
+      });
     }
   }, [status, session, fetchClients, fetchNetworks]);
 
@@ -228,7 +231,7 @@ export default function AdminClientsPage() {
     setShowModal(true);
   };
 
-  const openEditModal = (client: Client) => {
+  const openEditModal = useCallback((client: Client) => {
     setEditingClient(client);
     setFormName(client.name);
     setFormEmail(client.email);
@@ -243,7 +246,17 @@ export default function AdminClientsPage() {
     setFormRevenueShare(client.revenueSharePercent || 0);
     setFormError(null);
     setShowModal(true);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (clients.length === 0 || typeof window === "undefined") return;
+    const editId = new URLSearchParams(window.location.search).get("edit");
+    if (!editId) return;
+    const client = clients.find((item) => item.id === editId);
+    if (!client) return;
+    queueMicrotask(() => openEditModal(client));
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [clients, openEditModal]);
 
   const openPasswordModal = (client: Client) => {
     setPasswordClient(client);
@@ -283,6 +296,7 @@ export default function AdminClientsPage() {
           email: formEmail.trim(),
           phone: (formPhone || "").trim(),
           category: formCategory,
+          role: formRole,
           channels: channelIds,
           networks: formNetworks,
           channelNetworks: formChannelNetworks,
@@ -576,31 +590,37 @@ export default function AdminClientsPage() {
   // Re-fetch revenue when days filter changes
   useEffect(() => {
     if (viewingClient) {
-      fetchClientRevenue(viewingClient, revenueDays);
+      queueMicrotask(() => fetchClientRevenue(viewingClient, revenueDays));
     }
   }, [revenueDays, viewingClient, fetchClientRevenue]);
 
   const handleToggleStatus = async (client: Client) => {
-    const newStatus = client.status === "active" ? "inactive" : "active"; // pending → active, inactive → active, active → inactive
+    const newStatus = client.status === "active" ? "inactive" : "active";
+    setManagementError(null);
     try {
-      await fetch("/api/users", {
+      const response = await fetch("/api/users", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: client.id, status: newStatus }),
       });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to update user status");
       fetchClients();
-    } catch {
-      // silent
+    } catch (error) {
+      setManagementError(error instanceof Error ? error.message : "Failed to update user status");
     }
   };
 
   const handleDeleteClient = async (clientId: string) => {
-    if (!confirm("Are you sure you want to delete this client? This action cannot be undone.")) return;
+    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+    setManagementError(null);
     try {
-      await fetch(`/api/users?id=${clientId}`, { method: "DELETE" });
+      const response = await fetch(`/api/users?id=${encodeURIComponent(clientId)}`, { method: "DELETE" });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to delete user");
       fetchClients();
-    } catch {
-      // silent
+    } catch (error) {
+      setManagementError(error instanceof Error ? error.message : "Failed to delete user");
     }
   };
 
@@ -679,6 +699,12 @@ export default function AdminClientsPage() {
           </div>
         </div>
       </div>
+
+      {managementError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {managementError}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-xl border border-border p-4">

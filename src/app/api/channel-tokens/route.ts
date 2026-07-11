@@ -2,7 +2,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import {
   getChannelToken,
-  setChannelToken,
   deleteChannelToken,
   getTokenStatus,
   isKVConfigured,
@@ -22,13 +21,42 @@ function isAdmin(email: string | null | undefined): boolean {
   return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
 }
 
+interface ChannelScopeUser {
+  id: string;
+  email: string;
+  role: "client" | "company";
+  parentId?: string;
+  channels?: string[];
+  pendingChannels?: string[];
+  status?: "active" | "inactive" | "pending";
+}
+
+async function getAllowedChannelIds(email: string): Promise<Set<string>> {
+  const users = (await kv.get<ChannelScopeUser[]>("bainsla_users")) || [];
+  const normalizedEmail = email.toLowerCase();
+  const currentUser = users.find((user) => user.email.toLowerCase() === normalizedEmail);
+  if (!currentUser || currentUser.status === "inactive") return new Set();
+  const scopedUsers = currentUser.role === "company"
+    ? [currentUser, ...users.filter((user) => user.parentId === currentUser.id && user.status !== "inactive")]
+    : [currentUser];
+  return new Set(
+    scopedUsers.flatMap((user) => [...(user.channels || []), ...(user.pendingChannels || [])])
+  );
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (session.user.userStatus === "inactive") {
+    return Response.json({ error: "Account is inactive" }, { status: 403 });
+  }
 
   const isAdminUser = isAdmin(session.user.email);
+  const allowedChannelIds = isAdminUser
+    ? null
+    : await getAllowedChannelIds(session.user.email);
 
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
@@ -93,6 +121,9 @@ export async function GET(request: Request) {
       if (!channelId) {
         return Response.json({ error: "channelId required" }, { status: 400 });
       }
+      if (!isAdminUser && !allowedChannelIds?.has(channelId)) {
+        return Response.json({ error: "You can only access tokens for assigned channels" }, { status: 403 });
+      }
 
       const status = await getTokenStatus(channelId);
       const token = await getChannelToken(channelId);
@@ -113,6 +144,9 @@ export async function GET(request: Request) {
     case "bulkTokenStatus": {
       const channelIdsParam = url.searchParams.get("channelIds") || "";
       const channelIds = channelIdsParam.split(",").filter(Boolean);
+      if (!isAdminUser && channelIds.some((channelId) => !allowedChannelIds?.has(channelId))) {
+        return Response.json({ error: "You can only access tokens for assigned channels" }, { status: 403 });
+      }
 
       const statuses: Record<string, { status: string; channelTitle?: string; updatedAt?: string; channelMismatch?: boolean; googleChannelId?: string }> = {};
       for (const id of channelIds) {
@@ -136,6 +170,9 @@ export async function GET(request: Request) {
       const channelId = url.searchParams.get("channelId");
       if (!channelId) {
         return Response.json({ error: "channelId required" }, { status: 400 });
+      }
+      if (!isAdminUser && !allowedChannelIds?.has(channelId)) {
+        return Response.json({ error: "You can only remove tokens for assigned channels" }, { status: 403 });
       }
 
       await deleteChannelToken(channelId);
