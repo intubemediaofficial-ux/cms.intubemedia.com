@@ -250,10 +250,9 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
-  // Fetch cached data first, then trigger server-side sync in background
+  // Load the durable server snapshot immediately. Scheduled jobs refresh it separately.
   const fetchCachedData = useCallback(async () => {
     try {
-      // 1. Load existing cached data and recorded payments immediately
       const [res, paymentsRes] = await Promise.all([
         fetch("/api/client-data?action=getAllCachedData"),
         fetch("/api/payments"),
@@ -266,18 +265,6 @@ export default function AdminDashboardPage() {
         const json = await paymentsRes.json();
         setPayments(json.data || []);
       }
-      // 2. Trigger background sync — fetches fresh YouTube data for all clients
-      setSyncing(true);
-      try {
-        await fetch("/api/sync-client-data");
-        // 3. Reload cached data after sync completes
-        const res2 = await fetch("/api/client-data?action=getAllCachedData");
-        if (res2.ok) {
-          const json2 = await res2.json();
-          if (json2.data?.length) setCachedClientData(json2.data);
-        }
-      } catch { /* silent */ }
-      finally { setSyncing(false); }
     } catch { /* silent */ }
   }, []);
 
@@ -320,6 +307,7 @@ export default function AdminDashboardPage() {
     endDate: dateRange.endDate,
     prevStartDate: dateRange.prevStartDate,
     prevEndDate: dateRange.prevEndDate,
+    cacheOnly: "true",
     ...(allChannelIds.length > 0 ? { channelIds: allChannelIds.join(",") } : {}),
   }), [dateRange, allChannelIds]);
 
@@ -833,7 +821,7 @@ export default function AdminDashboardPage() {
             onClick={async () => {
               setSyncing(true);
               try {
-                await fetch("/api/sync-client-data");
+                await fetch("/api/sync-client-data?mode=stats");
                 const res = await fetch("/api/client-data?action=getAllCachedData");
                 if (res.ok) {
                   const json = await res.json();
@@ -846,7 +834,7 @@ export default function AdminDashboardPage() {
             className="flex items-center gap-2 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Syncing..." : "Sync YouTube Data"}
+            {syncing ? "Refreshing..." : "Refresh Cached Stats"}
           </button>
           <button
             onClick={fetchClients}

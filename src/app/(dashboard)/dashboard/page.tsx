@@ -144,7 +144,6 @@ function getDailyRevenueChartData(data: AnalyticsResponse | null | undefined) {
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const hasAccessToken = !!session?.accessToken;
-  const isAdminSession = session?.user?.role === "admin" || session?.user?.role === "company";
   const isAuthenticated = status === "authenticated";
 
   const [datePreset, setDatePreset] = useState("28d");
@@ -184,6 +183,7 @@ export default function DashboardPage() {
     endDate: dateRange.endDate,
     prevStartDate: dateRange.prevStartDate,
     prevEndDate: dateRange.prevEndDate,
+    cacheOnly: "true",
     ...(allChannelIds.length > 0 ? { channelIds: allChannelIds.join(",") } : {}),
   }), [dateRange, allChannelIds]);
 
@@ -454,51 +454,6 @@ export default function DashboardPage() {
     a.click();
     URL.revokeObjectURL(url);
   };
-
-  // Auto-cache client YouTube data to KV for admin access
-  useEffect(() => {
-    const email = session?.user?.email;
-    if (!email || isAdminSession || !isReal || channels.length === 0) return;
-
-    const cacheData = async () => {
-      try {
-        const cachedChannels = channels.map((channel) => {
-          const revenueInfo = channelRevenueMap[channel.id || ""];
-          return {
-            channelId: channel.id || "",
-            channelTitle: channel.snippet?.title || "",
-            thumbnail: channel.snippet?.thumbnails?.default?.url || "",
-            subscribers: Number(channel.statistics?.subscriberCount || 0),
-            views: Number(channel.statistics?.viewCount || 0),
-            videoCount: Number(channel.statistics?.videoCount || 0),
-            estimatedRevenue: revenueInfo?.revenue || 0,
-            rpm: revenueInfo?.rpm || 0,
-            cpm: 0,
-            lastUpdated: new Date().toISOString(),
-          };
-        });
-        await fetch("/api/client-data", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "cacheData",
-            userId: email,
-            data: {
-              userId: email,
-              email,
-              channels: cachedChannels,
-              totalRevenue: curEstRevenue,
-              totalViews,
-              totalSubscribers,
-              lastUpdated: new Date().toISOString(),
-            },
-          }),
-        });
-      } catch { /* silent */ }
-    };
-
-    void cacheData();
-  }, [session?.user?.email, isAdminSession, isReal, channels, channelRevenueMap, curEstRevenue, totalViews, totalSubscribers]);
 
   // Realtime 48-hour data
   const [realtime48, setRealtime48] = useState<{

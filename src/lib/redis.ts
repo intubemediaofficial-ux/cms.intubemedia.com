@@ -50,6 +50,13 @@ export const kv = {
     return "OK";
   },
 
+  async setIfNotExists(key: string, value: unknown, seconds: number): Promise<boolean> {
+    const redis = getRedis();
+    const serialized = typeof value === "string" ? value : JSON.stringify(value);
+    const result = await redis.set(key, serialized, "EX", seconds, "NX");
+    return result === "OK";
+  },
+
   async setex(key: string, seconds: number, value: unknown): Promise<"OK"> {
     const redis = getRedis();
     const serialized = typeof value === "string" ? value : JSON.stringify(value);

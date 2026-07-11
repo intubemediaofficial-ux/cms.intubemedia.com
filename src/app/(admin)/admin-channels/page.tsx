@@ -14,7 +14,6 @@ import {
   Eye,
   MoreVertical,
   Trash2,
-  Edit3,
   ArrowRightLeft,
   CheckCircle2,
   XCircle,
@@ -132,7 +131,7 @@ export default function AdminChannelsPage() {
     if (status === "authenticated" && session?.user?.role === "admin") {
       fetchClients();
     } else {
-      setClients(getClients());
+      queueMicrotask(() => setClients(getClients()));
     }
   }, [status, session]);
 
@@ -160,99 +159,82 @@ export default function AdminChannelsPage() {
     fetchStatuses();
   }, [clients, channelDataMap, isAuthenticated]);
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
+  const loadCachedChannels = useCallback(async () => {
+    const newMap: Record<string, YouTubeChannel> = {};
+    const revMap: Record<string, number> = {};
+    const clientMap: Record<string, string> = {};
 
-    setLoadingChannels(true);
-    const fetchAll = async () => {
-      const newMap: Record<string, YouTubeChannel> = {};
-      const revMap: Record<string, number> = {};
-      const clientMap: Record<string, string> = {};
-
-      // First try to get cached data for all channels (includes channels synced from client)
-      try {
-        const cachedRes = await fetch("/api/client-data?action=getAllCachedData");
-        if (cachedRes.ok) {
-          const cachedJson = await cachedRes.json();
-          const cachedData = cachedJson.data || [];
-          for (const cd of cachedData) {
-            // Map channels to client name using cached data email → client name
-            const clientEmail = (cd.email || "").toLowerCase();
-            const matchedClient = clients.find((c) => c.email.toLowerCase() === clientEmail);
-            const clientName = matchedClient?.name || cd.email || "Unknown";
-            
-            for (const ch of (cd.channels || [])) {
-              newMap[ch.channelId] = {
-                id: ch.channelId,
-                snippet: {
-                  title: ch.channelTitle,
-                  thumbnails: { default: { url: ch.thumbnail }, medium: { url: ch.thumbnail } },
-                },
-                statistics: {
-                  subscriberCount: String(ch.subscribers || 0),
-                  videoCount: String(ch.videoCount || 0),
-                  viewCount: String(ch.views || 0),
-                },
-              };
-              revMap[ch.channelId] = ch.estimatedRevenue || 0;
-              clientMap[ch.channelId] = clientName;
-            }
-          }
-        }
-      } catch { /* silent */ }
-      
-      const allIds = clients.flatMap((c) => c.channels);
-
-      // Then try YouTube API for channels not in cache — parallel
-      const remainingIds = allIds.filter((id) => !newMap[id]);
-      const results = await Promise.allSettled(
-        remainingIds.map((id) =>
-          fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}&allChannelIds=${allIds.join(",")}`)
-            .then((r) => r.json())
-            .then((json) => ({ id, data: json.data?.[0] as YouTubeChannel | undefined }))
-        )
-      );
-      for (const r of results) {
-        if (r.status === "fulfilled" && r.value.data) {
-          newMap[r.value.id] = r.value.data;
-        }
-      }
-
-      setChannelDataMap((prev) => ({ ...prev, ...newMap }));
-      setChannelRevenueMap((prev) => ({ ...prev, ...revMap }));
-      setChannelClientMap((prev) => ({ ...prev, ...clientMap }));
-      setLoadingChannels(false);
-    };
-    fetchAll();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, clients]);
-
-  // Auto-refresh channel stats every 60s
-  const refreshChannelStats = useCallback(async () => {
-    const allIds = clients.flatMap((c) => c.channels).filter((id) => !id.startsWith("UCtest") && id !== "test");
-    if (allIds.length === 0) return;
-    const results = await Promise.allSettled(
-      allIds.map((id) =>
-        fetch(`/api/youtube?action=lookupChannel&query=${encodeURIComponent(id)}`)
-          .then((r) => r.json())
-          .then((j) => ({ id, data: j.data?.[0] as YouTubeChannel | undefined }))
-      )
-    );
-    const newMap: Record<string, YouTubeChannel> = { ...channelDataMap };
-    for (const r of results) {
-      if (r.status === "fulfilled" && r.value.data) {
-        newMap[r.value.id] = r.value.data;
+    for (const client of clients) {
+      for (const channelId of client.channels) {
+        newMap[channelId] = {
+          id: channelId,
+          snippet: { title: channelId, thumbnails: { default: { url: "" }, medium: { url: "" } } },
+          statistics: { subscriberCount: "0", videoCount: "0", viewCount: "0" },
+        };
+        revMap[channelId] = 0;
+        clientMap[channelId] = client.name;
       }
     }
-    setChannelDataMap(newMap);
-    setLastRefresh(new Date());
-  }, [clients, channelDataMap]);
+
+    try {
+      const cachedRes = await fetch("/api/client-data?action=getAllCachedData");
+      if (cachedRes.ok) {
+        const cachedJson = await cachedRes.json();
+        for (const cachedClient of cachedJson.data || []) {
+          const clientEmail = (cachedClient.email || "").toLowerCase();
+          const matchedClient = clients.find(
+            (client) => client.email.toLowerCase() === clientEmail
+          );
+          const clientName = matchedClient?.name || cachedClient.email || "Unknown";
+
+          for (const channel of cachedClient.channels || []) {
+            newMap[channel.channelId] = {
+              id: channel.channelId,
+              snippet: {
+                title: channel.channelTitle || channel.channelId,
+                thumbnails: {
+                  default: { url: channel.thumbnail || "" },
+                  medium: { url: channel.thumbnail || "" },
+                },
+              },
+              statistics: {
+                subscriberCount: String(channel.subscribers || 0),
+                videoCount: String(channel.videoCount || 0),
+                viewCount: String(channel.views || 0),
+              },
+            };
+            revMap[channel.channelId] = channel.estimatedRevenue || 0;
+            clientMap[channel.channelId] = clientName;
+          }
+        }
+      }
+    } catch {
+      // Assigned channel IDs still render from the server-authoritative user list.
+    } finally {
+      setChannelDataMap(newMap);
+      setChannelRevenueMap(revMap);
+      setChannelClientMap(clientMap);
+      setLoadingChannels(false);
+    }
+  }, [clients]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const interval = setInterval(refreshChannelStats, 60000);
-    return () => clearInterval(interval);
-  }, [isAuthenticated, refreshChannelStats]);
+    queueMicrotask(() => {
+      setLoadingChannels(true);
+      void loadCachedChannels();
+    });
+  }, [isAuthenticated, loadCachedChannels]);
+
+  const refreshChannelStats = useCallback(async () => {
+    setLoadingChannels(true);
+    try {
+      await fetch("/api/sync-client-data?mode=stats");
+    } finally {
+      await loadCachedChannels();
+      setLastRefresh(new Date());
+    }
+  }, [loadCachedChannels]);
 
   // Fetch revenue for specific month/period when selected
   useEffect(() => {
@@ -281,22 +263,24 @@ export default function AdminChannelsPage() {
       startDate = `${startD.getFullYear()}-${String(startD.getMonth()+1).padStart(2,"0")}-${String(startD.getDate()).padStart(2,"0")}`;
     }
 
-    setPeriodRevenueLoading(true);
-    (async () => {
-      try {
-        const res = await fetch(`/api/youtube?action=dashboardFull&channelIds=${encodeURIComponent(allIds.join(","))}&startDate=${startDate}&endDate=${endDate}`);
-        if (res.ok) {
-          const json = await res.json();
-          const crMap = json.data?.channelRevenueMap || {};
-          const newRevMap: Record<string, number> = {};
-          for (const [cid, val] of Object.entries(crMap)) {
-            newRevMap[cid] = (val as { revenue: number }).revenue || 0;
+    queueMicrotask(() => {
+      setPeriodRevenueLoading(true);
+      void (async () => {
+        try {
+          const res = await fetch(`/api/youtube?action=dashboardFull&channelIds=${encodeURIComponent(allIds.join(","))}&startDate=${startDate}&endDate=${endDate}`);
+          if (res.ok) {
+            const json = await res.json();
+            const crMap = json.data?.channelRevenueMap || {};
+            const newRevMap: Record<string, number> = {};
+            for (const [cid, val] of Object.entries(crMap)) {
+              newRevMap[cid] = (val as { revenue: number }).revenue || 0;
+            }
+            setPeriodRevenueMap(newRevMap);
           }
-          setPeriodRevenueMap(newRevMap);
-        }
-      } catch { /* silent */ }
-      setPeriodRevenueLoading(false);
-    })();
+        } catch { /* silent */ }
+        setPeriodRevenueLoading(false);
+      })();
+    });
   }, [revenuePeriod, isAuthenticated, clients]);
 
   const allChannelRows: ChannelRow[] = useMemo(() => {
@@ -676,17 +660,17 @@ export default function AdminChannelsPage() {
         </div>
       </div>
 
-      {/* Live Stats Indicator */}
+      {/* Cached Stats Indicator */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 text-xs text-green-600">
-          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          <span>Live Stats</span>
-          <span className="text-muted">· Updated {lastRefresh.toLocaleTimeString()}</span>
+          <span className="w-2 h-2 bg-green-500 rounded-full" />
+          <span>Cached Stats</span>
+          <span className="text-muted">· Loaded {lastRefresh.toLocaleTimeString()}</span>
         </div>
         <button
           onClick={refreshChannelStats}
           className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
-          title="Refresh channel stats now"
+          title="Refresh the server channel snapshot"
         >
           <RefreshCw className="w-3 h-3" />
           Refresh

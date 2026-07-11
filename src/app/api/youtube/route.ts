@@ -18,7 +18,7 @@ import {
 } from "@/lib/youtube";
 import { getValidAccessToken, getTokenStatus, getAnyValidAccessToken } from "@/lib/channel-tokens";
 import { getAllCachedClientData } from "@/lib/client-data-cache";
-import { cacheChannelVideos, getCachedChannelVideos, cacheDashboardData, getCachedDashboardData, cacheChannelStats, getCachedChannelStats } from "@/lib/youtube-cache";
+import { cacheChannelVideos, getCachedChannelVideos, cacheDashboardData, cacheChannelStats, getCachedChannelStats } from "@/lib/youtube-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -75,12 +75,6 @@ export async function GET(request: Request) {
   if (session.user?.userStatus === "inactive") {
     return Response.json({ error: "Account is inactive" }, { status: 403 });
   }
-
-  // Since PR #68 removed YouTube scopes from Google login, login tokens only have
-  // "openid email profile" — they cannot call YouTube Data/Analytics APIs.
-  // All YouTube API calls must use per-channel tokens from KV.
-  // Treat ALL users as "credentials login" for YouTube API purposes.
-  const isCredentialsLogin = true; // Login tokens lack YouTube scopes; always use per-channel tokens
 
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
@@ -355,6 +349,88 @@ export async function GET(request: Request) {
           : [];
         if (!hasChannelAccess(channelIds, channelScope.approved)) {
           return Response.json({ error: "You can only access channels assigned to your account" }, { status: 403 });
+        }
+
+        if (url.searchParams.get("cacheOnly") === "true") {
+          const requestedChannels = new Set(channelIds);
+          const allCached = await getAllCachedClientData();
+          const cachedChannelMap = new Map<
+            string,
+            (typeof allCached)[number]["channels"][number]
+          >();
+          for (const client of allCached) {
+            for (const channel of client.channels || []) {
+              if (!requestedChannels.has(channel.channelId)) continue;
+              const existing = cachedChannelMap.get(channel.channelId);
+              if (!existing || channel.lastUpdated >= existing.lastUpdated) {
+                cachedChannelMap.set(channel.channelId, channel);
+              }
+            }
+          }
+          const cachedChannels = Array.from(cachedChannelMap.values());
+          const channels = cachedChannels.map((channel) => ({
+            id: channel.channelId,
+            snippet: {
+              title: channel.channelTitle || channel.channelId,
+              thumbnails: {
+                default: { url: channel.thumbnail || "" },
+                medium: { url: channel.thumbnail || "" },
+              },
+            },
+            statistics: {
+              subscriberCount: String(channel.subscribers || 0),
+              videoCount: String(channel.videoCount || 0),
+              viewCount: String(channel.views || 0),
+            },
+          }));
+          const channelRevenueMap = Object.fromEntries(
+            cachedChannels.map((channel) => [
+              channel.channelId,
+              {
+                revenue: channel.estimatedRevenue || 0,
+                views: channel.views || 0,
+                rpm: channel.rpm || 0,
+              },
+            ])
+          );
+          const totalRevenue = cachedChannels.reduce(
+            (total, channel) => total + (channel.estimatedRevenue || 0),
+            0
+          );
+          const currentRevenue = {
+            columnHeaders: [
+              {
+                name: "estimatedRevenue",
+                columnType: "METRIC",
+                dataType: "CURRENCY",
+              },
+            ],
+            rows: [[totalRevenue]],
+          };
+          const lastUpdated = allCached.reduce<string | null>((latest, client) => {
+            if (!latest || client.lastUpdated > latest) return client.lastUpdated;
+            return latest;
+          }, null);
+
+          return Response.json({
+            data: {
+              channels,
+              currentPerformance: null,
+              prevPerformance: null,
+              currentRevenue,
+              prevRevenue: null,
+              dailyRevenue: null,
+              topVideos: { analytics: null, videos: [] },
+              hasOwnChannel: channels.length > 0,
+              channelRevenueMap,
+              lastDayRevenue: 0,
+              lastDayDate: "",
+              perChannelAnalytics: {},
+              tokenizedChannels: [],
+            },
+            _cached: true,
+            _lastUpdated: lastUpdated,
+          });
         }
 
         const performanceMetrics = "views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes";
