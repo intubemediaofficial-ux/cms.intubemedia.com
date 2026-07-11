@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Eye,
   Users,
@@ -37,27 +37,6 @@ import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import { useExchangeRate, toINR } from "@/lib/hooks/useExchangeRate";
 import { ChannelHealthSummary } from "@/components/features/ChannelHealthCard";
 import RevenueComparisonChart from "@/components/features/RevenueComparisonChart";
-
-const CHANNELS_STORAGE_KEY = "bainsla_channels";
-
-interface StoredChannel {
-  id: string;
-  status: "active" | "delinked" | "transferred";
-}
-
-function getActiveChannelIds(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(CHANNELS_STORAGE_KEY);
-    if (!stored) return [];
-    const channels: StoredChannel[] = JSON.parse(stored);
-    return channels
-      .filter((c) => c.status === "active")
-      .map((c) => c.id);
-  } catch {
-    return [];
-  }
-}
 
 interface ChannelItem {
   id?: string | null;
@@ -170,7 +149,6 @@ export default function DashboardPage() {
 
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
-  const [activeChannelIds, setActiveChannelIds] = useState<string[]>([]);
   const [dailyRevDays, setDailyRevDays] = useState<1 | 3 | 7 | 30 | "all">(7);
 
   const { rate: INR_RATE, lastFetched: rateLastFetched } = useExchangeRate("USD");
@@ -184,66 +162,22 @@ export default function DashboardPage() {
   const [selectedChannel, setSelectedChannel] = useState<ChannelItem | null>(null);
 
   useEffect(() => {
-    setActiveChannelIds(getActiveChannelIds());
-  }, []);
-
-  useEffect(() => {
     if (!isAuthenticated) return;
-    const fetchIds = async () => {
-      const ids: string[] = [];
-      try {
-        const res = await fetch("/api/users?action=me");
-        if (res.ok) {
-          const json = await res.json();
-          const user = json.data;
-          if (user?.channels) {
-            for (const ch of user.channels) {
-              if (ch && !ch.startsWith("UCtest") && ch !== "test") ids.push(ch);
-            }
-          }
-          if (user?.pendingChannels) {
-            for (const ch of user.pendingChannels) {
-              if (ch && !ch.startsWith("UCtest") && ch !== "test") ids.push(ch);
-            }
-          }
-        }
-      } catch { /* silent */ }
-      try {
-        const email = session?.user?.email;
-        if (email) {
-          const res = await fetch(`/api/client-data?action=getCachedData&userId=${encodeURIComponent(email)}`);
-          if (res.ok) {
-            const j = await res.json();
-            if (j.data?.channels) {
-              for (const ch of j.data.channels) {
-                if (ch.channelId && !ch.channelId.startsWith("UCtest")) {
-                  ids.push(ch.channelId);
-                }
-              }
-            }
-          }
-        }
-      } catch { /* silent */ }
-      setServerChannelIds(ids);
-    };
-    fetchIds();
+    fetch("/api/users?action=channelScope", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((json) => {
+        const ids = (json.data?.channelIds || []).filter(
+          (channelId: string) => !channelId.startsWith("UCtest") && channelId !== "test"
+        );
+        setServerChannelIds(ids);
+      })
+      .catch(() => setServerChannelIds([]));
   }, [isAuthenticated, session?.user?.email]);
 
-  const allChannelIds = useMemo(() => {
-    const set = new Set([...activeChannelIds, ...serverChannelIds].filter((id) => !id.startsWith("UCtest") && id !== "test"));
-    return Array.from(set);
-  }, [activeChannelIds, serverChannelIds]);
-
-  useEffect(() => {
-    if (!isAuthenticated || isAdminSession) return;
-    const ids = getActiveChannelIds();
-    if (ids.length === 0) return;
-    fetch("/api/users", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channels: ids }),
-    }).catch(() => {});
-  }, [isAuthenticated, isAdminSession]);
+  const allChannelIds = useMemo(
+    () => Array.from(new Set(serverChannelIds)),
+    [serverChannelIds]
+  );
 
   const apiParams = useMemo(() => ({
     startDate: dateRange.startDate,
@@ -259,7 +193,7 @@ export default function DashboardPage() {
     {}
   );
 
-  const channels = dashData?.channels || [];
+  const channels = useMemo(() => dashData?.channels || [], [dashData?.channels]);
   const hasNoChannelsAdded = allChannelIds.length === 0;
 
   const totalViews = channels.reduce((sum, ch) => sum + Number(ch?.statistics?.viewCount || 0), 0);
@@ -441,7 +375,7 @@ export default function DashboardPage() {
     .sort((a, b) => b.analyticsSubs - a.analyticsSubs)
     .slice(0, 5);
 
-  const channelRevenueMap = dashData?.channelRevenueMap || {};
+  const channelRevenueMap = useMemo(() => dashData?.channelRevenueMap || {}, [dashData?.channelRevenueMap]);
   const lastDayRevenue = dashData?.lastDayRevenue || 0;
   const lastDayDate = dashData?.lastDayDate || "";
 
@@ -522,47 +456,49 @@ export default function DashboardPage() {
   };
 
   // Auto-cache client YouTube data to KV for admin access
-  const cacheData = useCallback(async () => {
-    if (!session?.user?.email || isAdminSession || !isReal || channels.length === 0) return;
-    try {
-      const cachedChannels = channels.map((ch) => {
-        const revInfo = channelRevenueMap[ch.id || ""];
-        return {
-          channelId: ch.id || "",
-          channelTitle: ch.snippet?.title || "",
-          thumbnail: ch.snippet?.thumbnails?.default?.url || "",
-          subscribers: Number(ch.statistics?.subscriberCount || 0),
-          views: Number(ch.statistics?.viewCount || 0),
-          videoCount: Number(ch.statistics?.videoCount || 0),
-          estimatedRevenue: revInfo?.revenue || 0,
-          rpm: revInfo?.rpm || 0,
-          cpm: 0,
-          lastUpdated: new Date().toISOString(),
-        };
-      });
-      await fetch("/api/client-data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "cacheData",
-          userId: session.user.email,
-          data: {
-            userId: session.user.email,
-            email: session.user.email,
-            channels: cachedChannels,
-            totalRevenue: curEstRevenue,
-            totalViews,
-            totalSubscribers,
-            lastUpdated: new Date().toISOString(),
-          },
-        }),
-      });
-    } catch { /* silent */ }
-  }, [session?.user?.email, isAdminSession, isReal, channels, channelRevenueMap, curEstRevenue, totalViews, totalSubscribers]);
-
   useEffect(() => {
-    cacheData();
-  }, [cacheData]);
+    const email = session?.user?.email;
+    if (!email || isAdminSession || !isReal || channels.length === 0) return;
+
+    const cacheData = async () => {
+      try {
+        const cachedChannels = channels.map((channel) => {
+          const revenueInfo = channelRevenueMap[channel.id || ""];
+          return {
+            channelId: channel.id || "",
+            channelTitle: channel.snippet?.title || "",
+            thumbnail: channel.snippet?.thumbnails?.default?.url || "",
+            subscribers: Number(channel.statistics?.subscriberCount || 0),
+            views: Number(channel.statistics?.viewCount || 0),
+            videoCount: Number(channel.statistics?.videoCount || 0),
+            estimatedRevenue: revenueInfo?.revenue || 0,
+            rpm: revenueInfo?.rpm || 0,
+            cpm: 0,
+            lastUpdated: new Date().toISOString(),
+          };
+        });
+        await fetch("/api/client-data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "cacheData",
+            userId: email,
+            data: {
+              userId: email,
+              email,
+              channels: cachedChannels,
+              totalRevenue: curEstRevenue,
+              totalViews,
+              totalSubscribers,
+              lastUpdated: new Date().toISOString(),
+            },
+          }),
+        });
+      } catch { /* silent */ }
+    };
+
+    void cacheData();
+  }, [session?.user?.email, isAdminSession, isReal, channels, channelRevenueMap, curEstRevenue, totalViews, totalSubscribers]);
 
   // Realtime 48-hour data
   const [realtime48, setRealtime48] = useState<{
@@ -574,12 +510,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!isAuthenticated || allChannelIds.length === 0) return;
-    setRealtime48Loading(true);
-    fetch(`/api/youtube?action=realtime48&channelIds=${allChannelIds.join(",")}`)
-      .then(res => res.json())
-      .then(data => { if (data.data) setRealtime48(data.data); })
-      .catch(() => {})
-      .finally(() => setRealtime48Loading(false));
+    queueMicrotask(() => {
+      setRealtime48Loading(true);
+      fetch(`/api/youtube?action=realtime48&channelIds=${allChannelIds.join(",")}`)
+        .then(res => res.json())
+        .then(data => { if (data.data) setRealtime48(data.data); })
+        .catch(() => {})
+        .finally(() => setRealtime48Loading(false));
+    });
   }, [isAuthenticated, allChannelIds]);
 
   return (
@@ -588,9 +526,9 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          {isAuthenticated && activeChannelIds.length > 0 && (
+          {isAuthenticated && allChannelIds.length > 0 && (
             <p className="text-xs text-muted mt-0.5">
-              Showing data for {activeChannelIds.length} added channel{activeChannelIds.length !== 1 ? "s" : ""}
+              Showing data for {allChannelIds.length} assigned channel{allChannelIds.length !== 1 ? "s" : ""}
             </p>
           )}
         </div>

@@ -32,6 +32,12 @@ import { formatNumber } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 import { downloadCSV } from "@/lib/csv-export";
 import { usePendingGuard } from "@/components/ReadOnlyBanner";
+import {
+  readChannelRequests,
+  readStoredChannels,
+  writeChannelRequests,
+  writeStoredChannels,
+} from "@/lib/channel-storage";
 
 interface YouTubeChannel {
   id?: string | null;
@@ -70,8 +76,6 @@ interface ChannelRequest {
   status: "pending" | "approved" | "rejected";
 }
 
-const STORAGE_KEY = "bainsla_channels";
-const REQUESTS_KEY = "bainsla_channel_requests";
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 const CATEGORIES = ["Music", "Entertainment", "Education", "Comedy", "Gaming", "News", "Sports"];
 const CHANNEL_TYPES = ["Original", "Refurbished", "Licensed"];
@@ -82,55 +86,49 @@ const DEPRECATED_NETWORKS = ["T-Series", "Sony Music", "InTubeMedia", "Other"];
 
 type TabType = "channels" | "requests" | "bulk" | "transferred";
 
-function getStoredChannels(): StoredChannel[] {
-  if (typeof window === "undefined") return [];
+function getStoredChannels(email: string | null | undefined): StoredChannel[] {
+  const channels = readStoredChannels<StoredChannel>(email);
+  let cleaned = false;
+
+  for (const channel of channels) {
+    if (channel.cms && DEPRECATED_NETWORKS.includes(channel.cms)) {
+      channel.cms = "";
+      cleaned = true;
+    }
+  }
+
+  if (cleaned) writeStoredChannels(email, channels);
+  return channels;
+}
+
+async function saveStoredChannels(
+  email: string | null | undefined,
+  channels: StoredChannel[]
+): Promise<string[]> {
+  writeStoredChannels(email, channels);
+  const activeIds = channels.filter((channel) => channel.status === "active").map((channel) => channel.id);
+  const pendingIds = channels.filter((channel) => channel.status === "pending_approval").map((channel) => channel.id);
+
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return [];
-    const channels = JSON.parse(stored) as StoredChannel[];
-    // Clean up deprecated network names from stored channels
-    let cleaned = false;
-    for (const ch of channels) {
-      if (ch.cms && DEPRECATED_NETWORKS.includes(ch.cms)) {
-        ch.cms = "";
-        cleaned = true;
-      }
-    }
-    if (cleaned) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
-    }
-    return channels;
+    const response = await fetch("/api/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channels: activeIds, pendingChannels: pendingIds }),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error || "Failed to sync channels");
+    return json.data?.rejectedChannels || [];
   } catch {
     return [];
   }
 }
 
-function saveStoredChannels(channels: StoredChannel[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
-  // Sync channel IDs to KV — active go to channels, pending go to pendingChannels
-  const activeIds = channels.filter((c) => c.status === "active").map((c) => c.id);
-  const pendingIds = channels.filter((c) => c.status === "pending_approval").map((c) => c.id);
-  fetch("/api/users", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ channels: activeIds, pendingChannels: pendingIds }),
-  }).catch(() => { /* silent - best effort sync */ });
+function getChannelRequests(email: string | null | undefined): ChannelRequest[] {
+  return readChannelRequests<ChannelRequest>(email);
 }
 
-function getChannelRequests(): ChannelRequest[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(REQUESTS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveChannelRequests(requests: ChannelRequest[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(REQUESTS_KEY, JSON.stringify(requests));
+function saveChannelRequests(email: string | null | undefined, requests: ChannelRequest[]) {
+  writeChannelRequests(email, requests);
 }
 
 export default function ChannelsPage() {
@@ -138,6 +136,7 @@ export default function ChannelsPage() {
   const hasAccessToken = !!session?.accessToken;
   const isAdmin = session?.user?.role === "admin";
   const isAuthenticated = status === "authenticated";
+  const storageIdentity = session?.user?.email;
   const guardPending = usePendingGuard();
 
   const { data: myChannels, isReal, loading } = useYouTubeData<YouTubeChannel[]>(
@@ -148,8 +147,8 @@ export default function ChannelsPage() {
 
   const [activeTab, setActiveTab] = useState<TabType>("channels");
   const [channelDataMap, setChannelDataMap] = useState<Record<string, YouTubeChannel>>({});
-  const [storedChannels, setStoredChannels] = useState<StoredChannel[]>(getStoredChannels);
-  const [channelRequests, setChannelRequests] = useState<ChannelRequest[]>(getChannelRequests);
+  const [storedChannels, setStoredChannels] = useState<StoredChannel[]>([]);
+  const [channelRequests, setChannelRequests] = useState<ChannelRequest[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [channelIdInput, setChannelIdInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("");
@@ -199,6 +198,14 @@ export default function ChannelsPage() {
     tokenUpdatedAt?: string;
   } | null>(null);
   const [channelDetailLoading, setChannelDetailLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || !storageIdentity) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStoredChannels(getStoredChannels(storageIdentity));
+    setChannelRequests(getChannelRequests(storageIdentity));
+    setChannelDataMap({});
+  }, [isAuthenticated, storageIdentity]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -302,90 +309,57 @@ export default function ChannelsPage() {
     return () => clearInterval(interval);
   }, [isAuthenticated, fetchTokenStatuses]);
 
-  // Restore channels from KV if localStorage is empty (e.g. after logout/login)
-  // Then sync localStorage to KV, and sync approval statuses
+  // Server assignments are authoritative; local storage only keeps account-scoped metadata.
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !storageIdentity) return;
 
-    fetch("/api/users?action=me")
-      .then((r) => r.json())
-      .then((j) => {
-        if (!j.data) return;
-        const kvApproved: string[] = j.data.channels || [];
-        const kvPending: string[] = j.data.pendingChannels || [];
-        const currentStored = getStoredChannels();
+    fetch("/api/users?action=me", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((json) => {
+        if (!json.data) return;
+        const approvedIds: string[] = json.data.channels || [];
+        const pendingIds: string[] = json.data.pendingChannels || [];
+        const currentStored = getStoredChannels(storageIdentity);
+        const currentById = new Map(currentStored.map((channel) => [channel.id, channel]));
+        const today = new Date().toISOString().split("T")[0];
 
-        // If localStorage is empty but KV has channels, restore from KV
-        if (currentStored.length === 0 && (kvApproved.length > 0 || kvPending.length > 0)) {
-          const restored: StoredChannel[] = [];
-          for (const id of kvApproved) {
-            restored.push({
+        const assignedChannels: StoredChannel[] = [
+          ...approvedIds.map((id) => ({
+            ...(currentById.get(id) || {
               id,
               category: "",
               channelType: "",
               tokenStatus: "N/A",
               cms: "",
-              addedDate: new Date().toISOString().split("T")[0],
-              status: "active",
-            });
-          }
-          for (const id of kvPending) {
-            restored.push({
+              addedDate: today,
+            }),
+            status: "active" as const,
+          })),
+          ...pendingIds.map((id) => ({
+            ...(currentById.get(id) || {
               id,
               category: "",
               channelType: "",
               tokenStatus: "N/A",
               cms: "",
-              addedDate: new Date().toISOString().split("T")[0],
-              status: "pending_approval",
-            });
-          }
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
-          setStoredChannels(restored);
-          return; // Skip other syncs — restored data is already in sync with KV
-        }
+              addedDate: today,
+            }),
+            status: "pending_approval" as const,
+          })),
+        ];
+        const assignedIds = new Set([...approvedIds, ...pendingIds]);
+        const history = currentStored.filter(
+          (channel) =>
+            !assignedIds.has(channel.id) &&
+            (channel.status === "delinked" || channel.status === "transferred")
+        );
+        const reconciled = [...assignedChannels, ...history];
 
-        // Sync approval status from KV — if admin approved a pending channel, update localStorage
-        // Also remove channels that admin has deleted (no longer in KV at all)
-        const kvApprovedSet = new Set(kvApproved);
-        const kvPendingSet = new Set(kvPending);
-        const kvAllSet = new Set([...kvApproved, ...kvPending]);
-        let changed = false;
-        const updated = currentStored.map((ch) => {
-          if (ch.status === "pending_approval" && kvApprovedSet.has(ch.id)) {
-            changed = true;
-            return { ...ch, status: "active" as const };
-          }
-          if (ch.status === "pending_approval" && !kvPendingSet.has(ch.id) && !kvApprovedSet.has(ch.id)) {
-            changed = true;
-            return null; // rejected by admin — remove
-          }
-          // If admin removed an active channel from KV, remove from localStorage too
-          if (ch.status === "active" && !kvAllSet.has(ch.id) && kvAllSet.size > 0) {
-            changed = true;
-            return null; // removed by admin
-          }
-          return ch;
-        }).filter(Boolean) as StoredChannel[];
-        if (changed) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-          setStoredChannels(updated);
-        }
-
-        // Sync localStorage channels to KV (only if localStorage has data)
-        const activeChannelIds = (changed ? updated : currentStored).filter((c) => c.status === "active").map((c) => c.id);
-        if (activeChannelIds.length > 0) {
-          const pendingIds = (changed ? updated : currentStored).filter((c) => c.status === "pending_approval").map((c) => c.id);
-          fetch("/api/users", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ channels: activeChannelIds, pendingChannels: pendingIds }),
-          }).catch(() => {});
-        }
+        writeStoredChannels(storageIdentity, reconciled);
+        setStoredChannels(reconciled);
       })
       .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
+  }, [isAuthenticated, storageIdentity]);
 
   // Fetch user's assigned networks from admin + custom networks + admin-created networks
   useEffect(() => {
@@ -418,7 +392,6 @@ export default function ChannelsPage() {
   const networkOptions = userNetworks;
 
   // Save custom network to user's profile
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const saveCustomNetwork = useCallback(async (networkName: string) => {
     if (!networkName.trim()) return;
     // Update display list instantly
@@ -468,7 +441,7 @@ export default function ChannelsPage() {
     setInviteOAuthUrl(oauthUrl);
     setShowInviteModal(true);
     setGeneratingLink(false);
-  }, []);
+  }, [guardPending]);
 
   const handleCopyInviteUrl = useCallback(async () => {
     try {
@@ -553,7 +526,15 @@ export default function ChannelsPage() {
       };
 
       const updatedChannels = [...storedChannels, newStored];
-      saveStoredChannels(updatedChannels);
+      const rejectedChannels = await saveStoredChannels(storageIdentity, updatedChannels);
+      if (rejectedChannels.includes(actualId)) {
+        const allowedChannels = updatedChannels.filter((channel) => channel.id !== actualId);
+        writeStoredChannels(storageIdentity, allowedChannels);
+        setStoredChannels(allowedChannels);
+        setAddError("This channel is already assigned to another account.");
+        setAddingChannel(false);
+        return;
+      }
       setStoredChannels(updatedChannels);
       if (channelData) {
         setChannelDataMap((prev) => ({ ...prev, [actualId]: channelData! }));
@@ -572,14 +553,14 @@ export default function ChannelsPage() {
     } finally {
       setAddingChannel(false);
     }
-  }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, storedChannels, networkOptions, saveCustomNetwork]);
+  }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, storedChannels, networkOptions, saveCustomNetwork, storageIdentity, guardPending]);
 
   const handleDelink = (channelId: string) => {
     const now = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
     const updated = storedChannels.map((c) =>
       c.id === channelId ? { ...c, status: "delinked" as const, delinkedDate: now } : c
     );
-    saveStoredChannels(updated);
+    saveStoredChannels(storageIdentity, updated);
     setStoredChannels(updated);
     // Delete channel token from KV when delinked
     fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`)
@@ -591,7 +572,7 @@ export default function ChannelsPage() {
     const updated = storedChannels.map((c) =>
       c.id === channelId ? { ...c, status: "transferred" as const, delinkedDate: now } : c
     );
-    saveStoredChannels(updated);
+    saveStoredChannels(storageIdentity, updated);
     setStoredChannels(updated);
     // Delete channel token from KV when transferred
     fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`)
@@ -600,16 +581,16 @@ export default function ChannelsPage() {
 
   const handleRelink = (channelId: string) => {
     const updated = storedChannels.map((c) =>
-      c.id === channelId ? { ...c, status: "active" as const, delinkedDate: undefined } : c
+      c.id === channelId ? { ...c, status: "pending_approval" as const, delinkedDate: undefined } : c
     );
-    saveStoredChannels(updated);
+    saveStoredChannels(storageIdentity, updated);
     setStoredChannels(updated);
   };
 
   const handleDeleteChannel = (channelId: string) => {
     if (guardPending()) return;
     const updated = storedChannels.filter((c) => c.id !== channelId);
-    saveStoredChannels(updated);
+    saveStoredChannels(storageIdentity, updated);
     setStoredChannels(updated);
     setChannelDataMap((prev) => {
       const copy = { ...prev };
@@ -669,9 +650,11 @@ export default function ChannelsPage() {
     setBulkResult(null);
     let added = 0;
     let skipped = 0;
+    let nextChannels = [...storedChannels];
+    const newlyAddedIds = new Set<string>();
 
     for (const id of ids) {
-      if (storedChannels.some((c) => c.id === id)) {
+      if (nextChannels.some((c) => c.id === id)) {
         skipped++;
         continue;
       }
@@ -691,14 +674,15 @@ export default function ChannelsPage() {
             tokenStatus: "Invalid",
             cms: bulkCms.trim() || "",
             addedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
-            status: "active",
+            status: "pending_approval",
           };
 
-          setStoredChannels((prev) => {
-            const updated = [...prev, newStored];
-            saveStoredChannels(updated);
-            return updated;
-          });
+          if (nextChannels.some((channel) => channel.id === actualId)) {
+            skipped++;
+            continue;
+          }
+          nextChannels = [...nextChannels, newStored];
+          newlyAddedIds.add(actualId);
           setChannelDataMap((prev) => ({ ...prev, [actualId]: channelData }));
           added++;
         } else {
@@ -709,6 +693,22 @@ export default function ChannelsPage() {
       }
     }
 
+    if (newlyAddedIds.size > 0) {
+      const rejectedChannels = await saveStoredChannels(storageIdentity, nextChannels);
+      if (rejectedChannels.length > 0) {
+        nextChannels = nextChannels.filter((channel) => !rejectedChannels.includes(channel.id));
+        writeStoredChannels(storageIdentity, nextChannels);
+        for (const channelId of rejectedChannels) {
+          if (newlyAddedIds.has(channelId)) {
+            newlyAddedIds.delete(channelId);
+            added--;
+            skipped++;
+          }
+        }
+      }
+      setStoredChannels(nextChannels);
+    }
+
     // Save custom network name if it's new
     if (bulkCms.trim() && !networkOptions.includes(bulkCms.trim())) {
       saveCustomNetwork(bulkCms.trim());
@@ -716,7 +716,7 @@ export default function ChannelsPage() {
     setBulkAdding(false);
     setBulkResult(`Added ${added} channel(s). ${skipped > 0 ? `Skipped ${skipped} (already exist or not found).` : ""}`);
     if (added > 0) setBulkInput("");
-  }, [bulkInput, bulkCategory, bulkChannelType, bulkCms, storedChannels, networkOptions, saveCustomNetwork]);
+  }, [bulkInput, bulkCategory, bulkChannelType, bulkCms, storedChannels, networkOptions, saveCustomNetwork, storageIdentity, guardPending]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -754,7 +754,7 @@ export default function ChannelsPage() {
     status: "active" | "delinked" | "transferred" | "pending_approval";
   };
 
-  const allChannelRows: ChannelRow[] = useMemo(() => {
+  const allChannelRows: ChannelRow[] = (() => {
     const rows: ChannelRow[] = [];
 
     if (isReal) {
@@ -803,16 +803,16 @@ export default function ChannelsPage() {
     }
 
     return rows;
-  }, [isReal, myChannels, storedChannels, channelDataMap, tokenStatuses]);
+  })();
 
   const activeChannels = allChannelRows.filter((c) => c.status === "active" || c.status === "pending_approval");
   const transferredChannels = allChannelRows.filter((c) => c.status === "transferred");
   const channelsWithToken = activeChannels.filter((c) => c.tokenStatus === "Valid");
   const transferredWithToken = transferredChannels.filter((c) => c.tokenStatus === "Valid");
 
-  const filteredChannels = useMemo(() => {
+  const filteredChannels = (() => {
     const source = activeTab === "transferred" ? transferredChannels : activeChannels;
-    let result = source;
+    let result = [...source];
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -843,7 +843,7 @@ export default function ChannelsPage() {
     });
 
     return result;
-  }, [activeTab, activeChannels, transferredChannels, searchQuery, categoryFilter, channelTypeFilter, tokenStatusFilter, cmsFilter, sortField, sortDir]);
+  })();
 
   const totalPages = Math.ceil(filteredChannels.length / perPage);
   const pageChannels = filteredChannels.slice((currentPage - 1) * perPage, currentPage * perPage);
@@ -1211,7 +1211,7 @@ export default function ChannelsPage() {
                             const val = e.target.value.trim();
                             if (val !== channel.cms) {
                               const updated = storedChannels.map((c) => c.id === channel.id ? { ...c, cms: val } : c);
-                              saveStoredChannels(updated);
+                              saveStoredChannels(storageIdentity, updated);
                               setStoredChannels(updated);
                               if (val && !networkOptions.includes(val)) {
                                 saveCustomNetwork(val);
@@ -1367,7 +1367,7 @@ export default function ChannelsPage() {
                                 const updated = channelRequests.map((r) =>
                                   r.id === req.id ? { ...r, status: "approved" as const } : r
                                 );
-                                saveChannelRequests(updated);
+                                saveChannelRequests(storageIdentity, updated);
                                 setChannelRequests(updated);
                               }}
                               className="text-xs text-green-600 hover:text-green-700 font-medium px-2 py-1 rounded hover:bg-green-50"
@@ -1379,7 +1379,7 @@ export default function ChannelsPage() {
                                 const updated = channelRequests.map((r) =>
                                   r.id === req.id ? { ...r, status: "rejected" as const } : r
                                 );
-                                saveChannelRequests(updated);
+                                saveChannelRequests(storageIdentity, updated);
                                 setChannelRequests(updated);
                               }}
                               className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50"

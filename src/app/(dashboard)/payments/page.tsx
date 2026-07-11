@@ -19,13 +19,6 @@ import { usePendingGuard } from "@/components/ReadOnlyBanner";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { useYouTubeData } from "@/lib/hooks/useYouTubeData";
 
-const CHANNELS_STORAGE_KEY = "bainsla_channels";
-
-interface StoredChannel {
-  id: string;
-  status: "active" | "delinked" | "transferred";
-}
-
 interface NetworkAssignment {
   networkId: string;
   networkName: string;
@@ -92,18 +85,6 @@ interface DashboardData {
   channelRevenueMap?: Record<string, ChannelRevenueInfo>;
 }
 
-function getActiveChannelIds(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(CHANNELS_STORAGE_KEY);
-    if (!stored) return [];
-    const channels: StoredChannel[] = JSON.parse(stored);
-    return channels.filter((c) => c.status === "active").map((c) => c.id);
-  } catch {
-    return [];
-  }
-}
-
 function getMonthOptions() {
   const options = [];
   const now = new Date();
@@ -141,18 +122,20 @@ export default function PaymentsPage() {
   const toDate = currentMonth?.endDate || "";
 
   useEffect(() => {
-    setActiveChannelIds(getActiveChannelIds());
-  }, []);
+    if (sessionStatus !== "authenticated") return;
+    fetch("/api/users?action=channelScope", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((json) => setActiveChannelIds(json.data?.channelIds || []))
+      .catch(() => setActiveChannelIds([]));
+  }, [sessionStatus, session?.user?.email]);
 
   const fetchUserInfo = useCallback(async () => {
     if (!session?.user?.email) return;
     try {
-      const res = await fetch("/api/users");
+      const res = await fetch("/api/users?action=me", { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
-        const users: UserInfo[] = json.data || [];
-        const me = users.find((u) => u.email.toLowerCase() === session.user!.email!.toLowerCase());
-        if (me) setUserInfo(me);
+        if (json.data) setUserInfo(json.data as UserInfo);
       }
     } catch { /* silent */ }
   }, [session?.user?.email]);
@@ -177,8 +160,10 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     if (sessionStatus === "authenticated") {
-      fetchUserInfo();
-      fetchPayments();
+      queueMicrotask(() => {
+        fetchUserInfo();
+        fetchPayments();
+      });
     }
   }, [sessionStatus, fetchUserInfo, fetchPayments]);
 

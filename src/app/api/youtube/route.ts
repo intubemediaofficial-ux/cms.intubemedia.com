@@ -28,6 +28,41 @@ const ADMIN_EMAILS = [
   "shivlalbainslaofficial@gmail.com",
 ];
 
+interface ChannelScopeUser {
+  id: string;
+  email: string;
+  role: "client" | "company";
+  parentId?: string;
+  channels?: string[];
+  pendingChannels?: string[];
+  status?: "active" | "inactive" | "pending";
+}
+
+async function getChannelScope(email: string): Promise<{ approved: Set<string>; manageable: Set<string> }> {
+  const users = (await kv.get<ChannelScopeUser[]>("bainsla_users")) || [];
+  const normalizedEmail = email.toLowerCase();
+  const scopedUsers = ADMIN_EMAILS.includes(normalizedEmail)
+    ? users
+    : (() => {
+        const currentUser = users.find((user) => user.email.toLowerCase() === normalizedEmail);
+        if (!currentUser || currentUser.status === "inactive") return [];
+        if (currentUser.role === "company") {
+          return [currentUser, ...users.filter((user) => user.parentId === currentUser.id && user.status !== "inactive")];
+        }
+        return [currentUser];
+      })();
+
+  const approved = new Set(scopedUsers.flatMap((user) => user.channels || []));
+  const manageable = new Set(
+    scopedUsers.flatMap((user) => [...(user.channels || []), ...(user.pendingChannels || [])])
+  );
+  return { approved, manageable };
+}
+
+function hasChannelAccess(channelIds: string[], allowedChannelIds: Set<string>): boolean {
+  return channelIds.every((channelId) => allowedChannelIds.has(channelId));
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
 
@@ -36,6 +71,9 @@ export async function GET(request: Request) {
       { error: "No session found. Please log in again." },
       { status: 401 }
     );
+  }
+  if (session.user?.userStatus === "inactive") {
+    return Response.json({ error: "Account is inactive" }, { status: 403 });
   }
 
   // Since PR #68 removed YouTube scopes from Google login, login tokens only have
@@ -52,6 +90,12 @@ export async function GET(request: Request) {
   // All users can access YouTube data via per-channel tokens
 
   try {
+    const sessionEmail = session.user?.email;
+    if (!sessionEmail) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const channelScope = await getChannelScope(sessionEmail);
+
     // All YouTube API actions now use per-channel tokens (login tokens lack YouTube scopes)
     if (!["dashboardFull", "lookupChannel", "bulkCachedChannels", "dashboard", "videos", "realtime48"].includes(action || "")) {
       return Response.json(
@@ -65,6 +109,9 @@ export async function GET(request: Request) {
         // Return cached channel stats for all requested channel IDs — instant, no YouTube API calls
         const ids = url.searchParams.get("channelIds")?.split(",").filter(Boolean) || [];
         if (ids.length === 0) return Response.json({ data: {} });
+        if (!hasChannelAccess(ids, channelScope.manageable)) {
+          return Response.json({ error: "You can only access channels assigned to your account" }, { status: 403 });
+        }
         const results: Record<string, unknown> = {};
         await Promise.all(ids.map(async (id) => {
           const cached = await getCachedChannelStats(id);
@@ -99,6 +146,9 @@ export async function GET(request: Request) {
         const channelId = url.searchParams.get("channelId");
         if (!channelId)
           return Response.json({ error: "channelId required" }, { status: 400 });
+        if (!channelScope.approved.has(channelId)) {
+          return Response.json({ error: "You can only access channels assigned to your account" }, { status: 403 });
+        }
         // 0 = fetch ALL videos (no limit)
         const maxResultsParam = url.searchParams.get("maxResults");
         const maxResults = maxResultsParam ? Number(maxResultsParam) : 0;
@@ -303,6 +353,9 @@ export async function GET(request: Request) {
         const channelIds = channelIdsParam
           ? channelIdsParam.split(",").filter(Boolean)
           : [];
+        if (!hasChannelAccess(channelIds, channelScope.approved)) {
+          return Response.json({ error: "You can only access channels assigned to your account" }, { status: 403 });
+        }
 
         const performanceMetrics = "views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes";
 
@@ -577,6 +630,9 @@ export async function GET(request: Request) {
 
         if (channelIds48.length === 0) {
           return Response.json({ data: { views: 0, subscribers: 0, watchTime: 0, revenue: 0, dailyBreakdown: [] } });
+        }
+        if (!hasChannelAccess(channelIds48, channelScope.approved)) {
+          return Response.json({ error: "You can only access channels assigned to your account" }, { status: 403 });
         }
 
         // Check if user has realtime access (admin setting)
