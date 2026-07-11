@@ -140,18 +140,29 @@ export default function Sidebar() {
   const [branding, setBranding] = useState<{ brandName?: string; brandColor?: string; brandLogo?: string } | null>(null);
   useEffect(() => {
     if (!session?.user?.email || isAdmin) return;
-    fetch("/api/users?action=me").then((r) => r.json()).then((json) => {
-      const user = json.data;
-      if (user?.whiteLabelEnabled && user?.branding?.brandName) {
-        setBranding(user.branding);
-      } else if (user?.parentId) {
-        fetch("/api/users").then((r2) => r2.json()).then((json2) => {
-          const parent = (json2.data || []).find((u: { id: string }) => u.id === user.parentId);
-          if (parent?.whiteLabelEnabled && parent?.branding?.brandName) setBranding(parent.branding);
-        }).catch(() => {});
+
+    let active = true;
+    const loadBranding = async () => {
+      try {
+        const response = await fetch("/api/users?action=branding", { cache: "no-store" });
+        const json = await response.json();
+        if (active && response.ok) setBranding(json.data || null);
+      } catch {
+        if (active) setBranding(null);
       }
-    }).catch(() => {});
-  }, [session, isAdmin]);
+    };
+    const handleBrandingUpdate = (event: Event) => {
+      const updated = (event as CustomEvent<{ brandName?: string; brandColor?: string; brandLogo?: string }>).detail;
+      if (active) setBranding(updated || null);
+    };
+
+    loadBranding();
+    window.addEventListener("branding-updated", handleBrandingUpdate);
+    return () => {
+      active = false;
+      window.removeEventListener("branding-updated", handleBrandingUpdate);
+    };
+  }, [session?.user?.email, isAdmin]);
 
   const toggleMenu = (href: string) => {
     setOpenMenus((prev) => ({ ...prev, [href]: !prev[href] }));
@@ -163,6 +174,7 @@ export default function Sidebar() {
         "fixed left-0 top-0 h-screen bg-sidebar text-white flex flex-col transition-all duration-300 z-40",
         collapsed ? "w-[72px]" : "w-[250px]"
       )}
+      style={branding?.brandColor ? { backgroundColor: branding.brandColor } : undefined}
     >
       <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
         {branding?.brandLogo ? (
