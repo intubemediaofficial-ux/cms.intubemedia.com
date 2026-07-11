@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Save, Key, Bell, Globe, Shield, Landmark, FileText, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Save, Bell, Globe, Shield, Landmark, FileText, Loader2, CheckCircle, AlertCircle, Building2, Palette } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { usePendingGuard } from "@/components/ReadOnlyBanner";
+import BrandingSettings from "@/components/features/BrandingSettings";
+import NetworkSettings from "@/components/features/NetworkSettings";
 
 interface BankDetails {
   accountHolderName: string;
@@ -22,6 +24,18 @@ interface Agreement {
   uploadedAt: string;
   uploadedBy: string;
   notes: string;
+}
+
+interface CompanyProfile {
+  id: string;
+  branding?: {
+    brandName?: string;
+    brandColor?: string;
+    brandLogo?: string;
+  };
+  whiteLabelEnabled?: boolean;
+  revenueSharePercent?: number;
+  customNetworks?: string[];
 }
 
 const emptyBankDetails: BankDetails = {
@@ -44,8 +58,11 @@ export default function SettingsPage() {
   const [bankSaving, setBankSaving] = useState(false);
   const [bankSaved, setBankSaved] = useState(false);
   const [bankError, setBankError] = useState("");
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
+  const [companyProfileLoading, setCompanyProfileLoading] = useState(false);
 
   const userId = session?.user?.email || "";
+  const isCompany = session?.user?.role === "company";
 
   const fetchBankDetails = useCallback(async () => {
     if (!userId) return;
@@ -71,10 +88,23 @@ export default function SettingsPage() {
     } catch { /* silent */ }
   }, [userId]);
 
+  const fetchCompanyProfile = useCallback(async () => {
+    if (!isCompany) return;
+    setCompanyProfileLoading(true);
+    try {
+      const res = await fetch("/api/users?action=me", { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok && json.data) setCompanyProfile(json.data);
+    } catch { /* silent */ }
+    finally { setCompanyProfileLoading(false); }
+  }, [isCompany]);
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBankDetails();
     fetchAgreements();
-  }, [fetchBankDetails, fetchAgreements]);
+    fetchCompanyProfile();
+  }, [fetchBankDetails, fetchAgreements, fetchCompanyProfile]);
 
   const saveBankDetails = async () => {
     if (guardPending()) return;
@@ -103,6 +133,10 @@ export default function SettingsPage() {
   const sections = [
     { id: "bank", label: "Bank Details", icon: Landmark },
     { id: "agreements", label: "Agreements", icon: FileText },
+    ...(isCompany ? [
+      { id: "network", label: "Network Settings", icon: Building2 },
+      { id: "branding", label: "White-Label Branding", icon: Palette },
+    ] : []),
     { id: "general", label: "General", icon: Globe },
     { id: "security", label: "Security", icon: Shield },
     { id: "notifications", label: "Notifications", icon: Bell },
@@ -292,6 +326,43 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
+          )}
+
+          {activeSection === "network" && isCompany && (
+            companyProfileLoading ? (
+              <div className="bg-white rounded-xl border border-border py-12 flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            ) : companyProfile ? (
+              <NetworkSettings
+                userId={companyProfile.id}
+                currentNetworkName={companyProfile.customNetworks?.[0] || ""}
+                currentRevenueShare={companyProfile.revenueSharePercent || 0}
+                role="company"
+                onSave={fetchCompanyProfile}
+              />
+            ) : (
+              <div className="bg-white rounded-xl border border-border p-6 text-sm text-muted">Company settings could not be loaded.</div>
+            )
+          )}
+
+          {activeSection === "branding" && isCompany && (
+            companyProfileLoading ? (
+              <div className="bg-white rounded-xl border border-border py-12 flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            ) : companyProfile?.whiteLabelEnabled ? (
+              <BrandingSettings
+                userId={companyProfile.id}
+                currentBranding={companyProfile.branding}
+                onSave={fetchCompanyProfile}
+              />
+            ) : (
+              <div className="bg-white rounded-xl border border-border p-6">
+                <h3 className="font-semibold text-foreground flex items-center gap-2"><Palette className="w-5 h-5 text-purple-500" />White-Label Branding</h3>
+                <p className="text-sm text-muted mt-3">White-label access is controlled by the main administrator. Once enabled, you can set your brand name, brand color, and upload your logo here.</p>
+              </div>
+            )
           )}
 
           {activeSection === "general" && (
