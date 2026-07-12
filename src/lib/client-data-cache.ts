@@ -13,6 +13,7 @@ export interface CachedChannelData {
   lastUpdated: string;
   statsUpdatedAt?: string;
   revenueUpdatedAt?: string;
+  revenueSyncedThrough?: string;
 }
 
 export interface CachedClientData {
@@ -63,6 +64,7 @@ function mergeCachedClientData(
       rpm: previousChannel.rpm,
       cpm: previousChannel.cpm,
       revenueUpdatedAt: previousChannel.revenueUpdatedAt,
+      revenueSyncedThrough: previousChannel.revenueSyncedThrough,
     };
   });
 
