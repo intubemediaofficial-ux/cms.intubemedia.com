@@ -47,7 +47,11 @@ function CallbackContent() {
     }
 
     // State is the channel ID directly (e.g. UCJL86UBFftNd1BoHAvxgT7Q)
-    if (!state.startsWith("UC") && !state.startsWith("youtube-auth-")) {
+    if (
+      !state.startsWith("UC") &&
+      !state.startsWith("youtube-auth-") &&
+      !state.startsWith("cms-oauth-")
+    ) {
       setStatus("error");
       setErrorMessage("Invalid state parameter.");
       return;

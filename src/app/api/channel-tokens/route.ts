@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import {
@@ -35,6 +36,13 @@ interface ChannelScopeUser {
   channels?: string[];
   pendingChannels?: string[];
   status?: "active" | "inactive" | "pending";
+}
+
+interface ChannelOAuthState {
+  channelId: string;
+  channelTitle: string;
+  createdBy: string;
+  createdAt: string;
 }
 
 async function getAllowedChannelIds(email: string): Promise<Set<string>> {
@@ -89,7 +97,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Account is inactive" }, { status: 403 });
   }
 
-  const isAdminUser = isAdmin(session.user.email);
+  const isAdminUser = session.user.role === "admin" || isAdmin(session.user.email);
   const allowedChannelIds = isAdminUser
     ? null
     : await getAllowedChannelIds(session.user.email);
@@ -99,13 +107,13 @@ export async function GET(request: Request) {
 
   switch (action) {
     case "generateInviteLink": {
-      if (!isAdminUser) {
-        return Response.json({ error: "Admin access required" }, { status: 403 });
-      }
       const channelId = url.searchParams.get("channelId");
       const channelTitle = url.searchParams.get("channelTitle") || "";
       if (!channelId) {
         return Response.json({ error: "channelId required" }, { status: 400 });
+      }
+      if (!isAdminUser && !allowedChannelIds?.has(channelId)) {
+        return Response.json({ error: "You can only validate assigned channels" }, { status: 403 });
       }
 
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
@@ -120,7 +128,15 @@ export async function GET(request: Request) {
       const host = forwardedHost || requestUrl.host;
       const protocol = forwardedHost ? forwardedProto : requestUrl.protocol.replace(":", "");
       const redirectUri = `${protocol}://${host}/callback`;
-      const state = channelId;
+      const nonce = randomBytes(32).toString("base64url");
+      const state = `cms-oauth-${nonce}`;
+      const oauthState: ChannelOAuthState = {
+        channelId,
+        channelTitle,
+        createdBy: session.user.email,
+        createdAt: new Date().toISOString(),
+      };
+      await kv.setex(`channel_oauth_state:${nonce}`, 15 * 60, oauthState);
 
       const scopes = [
         "https://www.googleapis.com/auth/youtube",
@@ -139,7 +155,7 @@ export async function GET(request: Request) {
         `&redirect_uri=${encodeURIComponent(redirectUri)}` +
         `&response_type=code` +
         `&scope=${scopeString}` +
-        `&state=${state}`;
+        `&state=${encodeURIComponent(state)}`;
 
       return Response.json({
         data: {
