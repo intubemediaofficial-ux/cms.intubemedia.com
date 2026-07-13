@@ -185,7 +185,7 @@ export default function DashboardPage() {
     endDate: dateRange.endDate,
     prevStartDate: dateRange.prevStartDate,
     prevEndDate: dateRange.prevEndDate,
-    ...(isMonthPreset ? { monthly: datePreset } : { cacheOnly: "true" }),
+    ...(isMonthPreset ? { monthly: datePreset } : { rangeCache: "true" }),
     ...(allChannelIds.length > 0 ? { channelIds: allChannelIds.join(",") } : {}),
   }), [dateRange, allChannelIds, isMonthPreset, datePreset]);
 

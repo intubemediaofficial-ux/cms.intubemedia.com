@@ -42,7 +42,7 @@ export async function getCachedChannelVideos(channelId: string): Promise<{ video
 export async function cacheDashboardData(channelIds: string[], data: unknown): Promise<void> {
   if (!isKVAvailable()) return;
   try {
-    const key = channelIds.sort().join(",");
+    const key = [...channelIds].sort().join(",");
     await kv.set(`${YT_CACHE_PREFIX}dashboard:${key}`, {
       data,
       lastUpdated: new Date().toISOString(),
@@ -56,10 +56,53 @@ export async function cacheDashboardData(channelIds: string[], data: unknown): P
 export async function getCachedDashboardData(channelIds: string[]): Promise<{ data: unknown; lastUpdated: string } | null> {
   if (!isKVAvailable()) return null;
   try {
-    const key = channelIds.sort().join(",");
+    const key = [...channelIds].sort().join(",");
     return await kv.get<{ data: unknown; lastUpdated: string }>(`${YT_CACHE_PREFIX}dashboard:${key}`);
   } catch (error) {
     console.error(`[YTCache] Failed to get cached dashboard data:`, error);
+    return null;
+  }
+}
+
+interface DashboardRange {
+  startDate: string;
+  endDate: string;
+  prevStartDate: string;
+  prevEndDate: string;
+}
+
+function dashboardRangeKey(channelIds: string[], range: DashboardRange): string {
+  return `${YT_CACHE_PREFIX}dashboard-range:${range.startDate}:${range.endDate}:${range.prevStartDate}:${range.prevEndDate}:${[...channelIds].sort().join(",")}`;
+}
+
+export async function cacheDashboardRangeData(
+  channelIds: string[],
+  range: DashboardRange,
+  data: unknown
+): Promise<void> {
+  if (!isKVAvailable()) return;
+  try {
+    await kv.set(
+      dashboardRangeKey(channelIds, range),
+      { data, lastUpdated: new Date().toISOString() },
+      { ex: 6 * 60 * 60 }
+    );
+  } catch (error) {
+    console.error("[YTCache] Failed to cache dashboard range data:", error);
+  }
+}
+
+export async function getCachedDashboardRangeData(
+  channelIds: string[],
+  range: DashboardRange
+): Promise<{ data: unknown; lastUpdated: string } | null> {
+  if (!isKVAvailable()) return null;
+  try {
+    return await kv.get<{ data: unknown; lastUpdated: string }>(
+      dashboardRangeKey(channelIds, range)
+    );
+  } catch (error) {
+    console.error("[YTCache] Failed to get dashboard range data:", error);
     return null;
   }
 }

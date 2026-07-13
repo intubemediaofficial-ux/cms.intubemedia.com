@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getValidAccessToken, getChannelToken } from "@/lib/channel-tokens";
 import { getCachedChannelVideos, cacheChannelVideos } from "@/lib/youtube-cache";
+import { kv } from "@/lib/redis";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,62 @@ const ADMIN_EMAILS = [
   "bainslamusicofficial@gmail.com",
   "shivlalbainslaofficial@gmail.com",
 ];
+
+interface StoredUser {
+  id: string;
+  email: string;
+  role: "client" | "company";
+  parentId?: string;
+  channels?: string[];
+  status?: "active" | "inactive" | "pending";
+}
+
+interface CachedVideo {
+  id?: string;
+  snippet?: Record<string, unknown>;
+  status?: Record<string, unknown>;
+}
+
+async function getApprovedChannels(email: string): Promise<Set<string>> {
+  const users = (await kv.get<StoredUser[]>("bainsla_users")) || [];
+  const normalizedEmail = email.toLowerCase();
+  const scopedUsers = ADMIN_EMAILS.includes(normalizedEmail)
+    ? users.filter((user) => user.status !== "inactive")
+    : (() => {
+        const current = users.find((user) => user.email.toLowerCase() === normalizedEmail);
+        if (!current || current.status !== "active") return [];
+        if (current.role === "company") {
+          return [
+            current,
+            ...users.filter(
+              (user) => user.parentId === current.id && user.status === "active"
+            ),
+          ];
+        }
+        return [current];
+      })();
+  return new Set(scopedUsers.flatMap((user) => user.channels || []));
+}
+
+async function updateCachedVideo(channelId: string, update: CachedVideo): Promise<void> {
+  try {
+    const cached = await getCachedChannelVideos(channelId);
+    if (!cached?.videos) return;
+    const videos = cached.videos.map((item) => {
+      const video = item as CachedVideo;
+      if (video.id !== update.id) return item;
+      return {
+        ...video,
+        ...update,
+        snippet: { ...video.snippet, ...update.snippet },
+        status: { ...video.status, ...update.status },
+      };
+    });
+    await cacheChannelVideos(channelId, videos);
+  } catch {
+    return;
+  }
+}
 
 async function getAccessTokenForChannel(channelId: string): Promise<string | null> {
   // Always use per-channel OAuth token (has YouTube API scope)
@@ -33,6 +90,11 @@ export async function PUT(request: Request) {
       return Response.json({ error: "videoId and channelId required" }, { status: 400 });
     }
 
+    const approvedChannels = await getApprovedChannels(session.user.email);
+    if (!approvedChannels.has(channelId)) {
+      return Response.json({ error: "You can only edit assigned channels" }, { status: 403 });
+    }
+
     const accessToken = await getAccessTokenForChannel(channelId);
     if (!accessToken) {
       return Response.json({ error: "No valid token for this channel. Please validate the channel token first." }, { status: 401 });
@@ -41,7 +103,7 @@ export async function PUT(request: Request) {
     // Get current video details first
     const detailRes = await fetch(
       `https://www.googleapis.com/youtube/v3/videos?part=snippet,status&id=${videoId}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" }
     );
     const detailData = await detailRes.json();
     if (!detailData.items?.length) {
@@ -91,6 +153,7 @@ export async function PUT(request: Request) {
       // For now, thumbnail change via URL is not supported by YouTube API without file upload
     }
 
+    await updateCachedVideo(channelId, updateData as CachedVideo);
     return Response.json({ data: updateData });
   } catch (error) {
     console.error("[YouTube Video] Update error:", error);
@@ -110,6 +173,11 @@ export async function POST(request: Request) {
 
     if (!action || !videos || !Array.isArray(videos) || videos.length === 0) {
       return Response.json({ error: "action and videos array required" }, { status: 400 });
+    }
+
+    const approvedChannels = await getApprovedChannels(session.user.email);
+    if (videos.some(({ channelId }) => !approvedChannels.has(channelId))) {
+      return Response.json({ error: "You can only update assigned channels" }, { status: 403 });
     }
 
     const results: { videoId: string; success: boolean; error?: string }[] = [];
@@ -181,7 +249,7 @@ export async function POST(request: Request) {
         try {
           const detailRes = await fetch(
             `https://www.googleapis.com/youtube/v3/videos?part=snippet,status&id=${videoId}`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
+            { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" }
           );
           const detailData = await detailRes.json();
           if (!detailData.items?.length) {
@@ -203,6 +271,11 @@ export async function POST(request: Request) {
             }
           );
           if (updateRes.ok) {
+            await updateCachedVideo(channelId, {
+              id: videoId,
+              snippet: video.snippet as Record<string, unknown>,
+              status: updateBody.status as Record<string, unknown>,
+            });
             results.push({ videoId, success: true });
           } else {
             const data = await updateRes.json().catch(() => ({}));
@@ -237,6 +310,11 @@ export async function DELETE(request: Request) {
 
     if (!videoId || !channelId) {
       return Response.json({ error: "videoId and channelId required" }, { status: 400 });
+    }
+
+    const approvedChannels = await getApprovedChannels(session.user.email);
+    if (!approvedChannels.has(channelId)) {
+      return Response.json({ error: "You can only delete videos from assigned channels" }, { status: 403 });
     }
 
     const accessToken = await getAccessTokenForChannel(channelId);

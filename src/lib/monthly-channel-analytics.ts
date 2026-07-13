@@ -330,7 +330,6 @@ export async function warmRecentMonths(monthsBack = 2): Promise<void> {
     months.push(`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`);
   }
   for (const month of months) {
-    if (isMonthFrozen(month)) continue;
     try {
       await getMonthlyChannelAnalytics(month, { allowFetch: true });
     } catch (error) {

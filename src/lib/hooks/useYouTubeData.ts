@@ -55,6 +55,8 @@ export function useYouTubeData<T>(
       return;
     }
 
+    const controller = new AbortController();
+
     const fetchData = async () => {
       const cachedData = getCachedData<T>(cacheKey);
       setData(cachedData ?? fallbackRef.current);
@@ -66,7 +68,10 @@ export function useYouTubeData<T>(
       try {
         const parsedParams = JSON.parse(paramsKey) as Record<string, string>;
         const queryParams = new URLSearchParams({ action, ...parsedParams });
-        const res = await fetch(`/api/youtube?${queryParams}`);
+        const res = await fetch(`/api/youtube?${queryParams}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
         const json = await res.json();
 
         if (res.ok && json.data) {
@@ -81,15 +86,17 @@ export function useYouTubeData<T>(
           setError(json.error || "Failed to fetch data");
         }
       } catch (err) {
+        if (controller.signal.aborted) return;
         const msg = err instanceof Error ? err.message : "Network error";
         console.error(`YouTube fetch error [${action}]:`, msg);
         setError(msg);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
 
     queueMicrotask(() => void fetchData());
+    return () => controller.abort();
   }, [session?.accessToken, session?.user?.role, session?.user?.email, status, action, paramsKey, cacheKey]);
 
   return { data, loading, error, isReal, cached, lastUpdated };

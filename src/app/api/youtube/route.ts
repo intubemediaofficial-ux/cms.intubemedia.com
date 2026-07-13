@@ -19,7 +19,15 @@ import {
 import { getValidAccessToken, getTokenStatus, getAnyValidAccessToken } from "@/lib/channel-tokens";
 import { getAllCachedClientData } from "@/lib/client-data-cache";
 import { getMonthlyChannelAnalytics, isValidMonth } from "@/lib/monthly-channel-analytics";
-import { cacheChannelVideos, getCachedChannelVideos, cacheDashboardData, cacheChannelStats, getCachedChannelStats } from "@/lib/youtube-cache";
+import {
+  cacheChannelVideos,
+  getCachedChannelVideos,
+  cacheDashboardData,
+  cacheDashboardRangeData,
+  getCachedDashboardRangeData,
+  cacheChannelStats,
+  getCachedChannelStats,
+} from "@/lib/youtube-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -353,7 +361,10 @@ export async function GET(request: Request) {
         }
 
         const monthlyParam = url.searchParams.get("monthly");
-        if (monthlyParam && isValidMonth(monthlyParam)) {
+        if (monthlyParam && !isValidMonth(monthlyParam)) {
+          return Response.json({ error: "month must be YYYY-MM and not in the future" }, { status: 400 });
+        }
+        if (monthlyParam) {
           const analytics = await getMonthlyChannelAnalytics(monthlyParam);
           const authorized = new Set(channelIds);
           const monthMap = new Map(
@@ -440,6 +451,20 @@ export async function GET(request: Request) {
             _cacheStatus: channelIds.every((id) => monthMap.has(id)) ? analytics.cacheStatus : "partial",
             _missingChannels: channelIds.filter((id) => !monthMap.has(id)).length,
           });
+        }
+
+        const rangeCacheRequested = url.searchParams.get("rangeCache") === "true";
+        const dashboardRange = { startDate, endDate, prevStartDate, prevEndDate };
+        if (rangeCacheRequested) {
+          const cachedRange = await getCachedDashboardRangeData(channelIds, dashboardRange);
+          if (cachedRange) {
+            return Response.json({
+              data: cachedRange.data,
+              _cached: true,
+              _lastUpdated: cachedRange.lastUpdated,
+              _range: { startDate, endDate },
+            });
+          }
         }
 
         if (url.searchParams.get("cacheOnly") === "true") {
@@ -786,9 +811,12 @@ export async function GET(request: Request) {
         // Cache dashboard data on success (only if we got real analytics data)
         if (Object.keys(perChannelAnalytics).length > 0) {
           cacheDashboardData(channelIds, responseData).catch(() => {});
+          if (rangeCacheRequested) {
+            cacheDashboardRangeData(channelIds, dashboardRange, responseData).catch(() => {});
+          }
         }
 
-        return Response.json({ data: responseData });
+        return Response.json({ data: responseData, _range: { startDate, endDate } });
       }
       case "realtime48": {
         // Fetch last 48 hours of data (actually last 3 days to account for YouTube's 2-day delay)
