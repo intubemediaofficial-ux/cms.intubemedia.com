@@ -195,6 +195,7 @@ export default function ChannelsPage() {
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [tokenStatuses, setTokenStatuses] = useState<Record<string, string>>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null);
   const [userNetworks, setUserNetworks] = useState<string[]>([]);
   const [myCustomNetworks, setMyCustomNetworks] = useState<string[]>([]);
   const [showChannelDetail, setShowChannelDetail] = useState<string | null>(null);
@@ -648,26 +649,35 @@ export default function ChannelsPage() {
     setStoredChannels(updated);
   };
 
-  const handleDeleteChannel = (channelId: string) => {
+  const handleDeleteChannel = async (channelId: string) => {
     if (guardPending()) return;
-    const updated = storedChannels.filter((c) => c.id !== channelId);
-    saveStoredChannels(storageIdentity, updated);
-    setStoredChannels(updated);
-    setChannelDataMap((prev) => {
-      const copy = { ...prev };
-      delete copy[channelId];
-      return copy;
-    });
-    // Remove channel from user's KV record so it doesn't reappear on refresh
-    fetch("/api/users", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ removeChannels: [channelId] }),
-    }).catch(() => {});
-    // Delete channel token from KV so it doesn't persist as stale/valid
-    fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`)
-      .catch(() => {});
-    setShowDeleteConfirm(null);
+    setDeletingChannelId(channelId);
+    try {
+      const response = await fetch(
+        `/api/channel-tokens?action=removeChannel&channelId=${encodeURIComponent(channelId)}`,
+        { cache: "no-store" }
+      );
+      if (!response.ok) throw new Error("Channel removal failed");
+
+      const updated = storedChannels.filter((channel) => channel.id !== channelId);
+      saveStoredChannels(storageIdentity, updated);
+      setStoredChannels(updated);
+      setChannelDataMap((previous) => {
+        const next = { ...previous };
+        delete next[channelId];
+        return next;
+      });
+      setTokenStatuses((previous) => {
+        const next = { ...previous };
+        delete next[channelId];
+        return next;
+      });
+      setShowDeleteConfirm(null);
+    } catch {
+      alert("Channel delete नहीं हुआ। दोबारा कोशिश करें।");
+    } finally {
+      setDeletingChannelId(null);
+    }
   };
 
   const handleViewChannelDetail = async (channelId: string) => {
@@ -1805,8 +1815,12 @@ export default function ChannelsPage() {
               </button>
               <button
                 onClick={() => handleDeleteChannel(showDeleteConfirm)}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                disabled={deletingChannelId === showDeleteConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 rounded-lg transition-colors flex items-center gap-2"
               >
+                {deletingChannelId === showDeleteConfirm && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
                 Delete
               </button>
             </div>

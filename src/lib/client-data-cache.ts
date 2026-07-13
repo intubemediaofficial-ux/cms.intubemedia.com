@@ -174,6 +174,50 @@ export async function getCachedClientData(userId: string): Promise<CachedClientD
   }
 }
 
+interface ChannelListCache {
+  channels?: Array<{ channel_id?: string; channelId?: string }>;
+}
+
+function cacheKeyContainsChannel(key: string, channelId: string): boolean {
+  const channelList = key.slice(key.lastIndexOf(":") + 1);
+  return channelList.split(",").includes(channelId);
+}
+
+async function removeChannelFromMonthlyCaches(channelId: string): Promise<void> {
+  const monthlyKeys = [
+    ...(await kv.keys("monthly_channel_analytics:*")),
+    ...(await kv.keys("monthly_revenue_export:*")),
+  ];
+
+  for (const key of monthlyKeys) {
+    const data = await kv.get<ChannelListCache>(key);
+    if (!data?.channels?.length) continue;
+    const channels = data.channels.filter(
+      (channel) => (channel.channel_id || channel.channelId) !== channelId
+    );
+    if (channels.length !== data.channels.length) {
+      await kv.set(key, { ...data, channels });
+    }
+  }
+}
+
+async function removeChannelFromYouTubeCaches(channelId: string): Promise<void> {
+  const directKeys = [
+    `yt_cache:videos:${channelId}`,
+    `yt_cache:stats:${channelId}`,
+    `yt_videos:${channelId}`,
+    `yt_channel_stats:${channelId}`,
+    `yt_dashboard:${channelId}`,
+  ];
+  await kv.del(...directKeys);
+
+  const dashboardKeys = [
+    ...(await kv.keys("yt_cache:dashboard:*")),
+    ...(await kv.keys("yt_cache:dashboard-range:*")),
+  ].filter((key) => cacheKeyContainsChannel(key, channelId));
+  if (dashboardKeys.length > 0) await kv.del(...dashboardKeys);
+}
+
 export async function removeChannelFromAllCaches(channelId: string): Promise<void> {
   if (!isKVAvailable()) return;
   try {
@@ -208,8 +252,14 @@ export async function removeChannelFromAllCaches(channelId: string): Promise<voi
         await kv.del(key);
       }
     }
+
+    await Promise.all([
+      removeChannelFromMonthlyCaches(channelId),
+      removeChannelFromYouTubeCaches(channelId),
+    ]);
   } catch (error) {
     console.error(`[Cache] Failed to remove channel ${channelId} from caches:`, error);
+    throw error;
   }
 }
 

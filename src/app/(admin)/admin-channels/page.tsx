@@ -19,6 +19,7 @@ import {
   XCircle,
   Clock,
   RefreshCw,
+  Key,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -102,6 +103,7 @@ export default function AdminChannelsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [pendingActionLoading, setPendingActionLoading] = useState<string | null>(null);
+  const [validatingChannelId, setValidatingChannelId] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [revenuePeriod, setRevenuePeriod] = useState<string>("cached");
   const [periodRevenueMap, setPeriodRevenueMap] = useState<Record<string, number>>({});
@@ -377,44 +379,58 @@ export default function AdminChannelsPage() {
   const totalPages = Math.ceil(filteredChannels.length / perPage);
   const pageChannels = filteredChannels.slice((currentPage - 1) * perPage, currentPage * perPage);
 
+  const handleValidateToken = async (channelId: string, channelName: string) => {
+    const authorizationWindow = window.open("about:blank", "_blank");
+    setValidatingChannelId(channelId);
+    try {
+      const response = await fetch(
+        `/api/channel-tokens?action=generateInviteLink&channelId=${encodeURIComponent(channelId)}&channelTitle=${encodeURIComponent(channelName)}`,
+        { cache: "no-store" }
+      );
+      const json = await response.json();
+      if (!response.ok || !json.data?.oauthUrl) throw new Error("Authorization link failed");
+
+      if (authorizationWindow) {
+        authorizationWindow.opener = null;
+        authorizationWindow.location.href = json.data.oauthUrl;
+      } else {
+        window.location.assign(json.data.oauthUrl);
+      }
+      setActiveActionMenu(null);
+      setMenuPosition(null);
+    } catch {
+      authorizationWindow?.close();
+      alert("Token validation link नहीं बना। दोबारा कोशिश करें।");
+    } finally {
+      setValidatingChannelId(null);
+    }
+  };
+
   const handleDeleteChannel = async (channelId: string, clientName: string) => {
     setActionLoading(true);
     try {
-      // Always remove from cached data in KV so it doesn't reappear on refresh
-      await fetch("/api/client-data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "removeChannelFromCache", channelId }),
-      });
+      const response = await fetch(
+        `/api/channel-tokens?action=removeChannel&channelId=${encodeURIComponent(channelId)}`,
+        { cache: "no-store" }
+      );
+      if (!response.ok) throw new Error("Channel removal failed");
 
-      let owner = clients.find((c) => c.channels.includes(channelId) || (c.pendingChannels || []).includes(channelId));
-      if (!owner) {
-        owner = clients.find((c) => c.name === clientName || c.email === clientName);
-      }
-      if (owner) {
-        const updatedChannels = owner.channels.filter((ch) => ch !== channelId);
-        const updatedPending = (owner.pendingChannels || []).filter((ch) => ch !== channelId);
-        const res = await fetch("/api/users", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: owner.id, channels: updatedChannels, pendingChannels: updatedPending }),
-        });
-        if (!res.ok) {
-          alert("Failed to delete channel. Please try again.");
-          setActionLoading(false);
-          return;
-        }
-        setClients((prev) =>
-          prev.map((c) =>
-            c.id === owner.id ? { ...c, channels: updatedChannels, pendingChannels: updatedPending } : c
-          )
-        );
-      }
-      // Delete channel token from KV so stale tokens don't persist
-      await fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`);
-
-      setChannelDataMap((prev) => {
-        const next = { ...prev };
+      setClients((previous) =>
+        previous.map((client) =>
+          client.name === clientName ||
+          client.email === clientName ||
+          client.channels.includes(channelId) ||
+          (client.pendingChannels || []).includes(channelId)
+            ? {
+                ...client,
+                channels: client.channels.filter((id) => id !== channelId),
+                pendingChannels: (client.pendingChannels || []).filter((id) => id !== channelId),
+              }
+            : client
+        )
+      );
+      setChannelDataMap((previous) => {
+        const next = { ...previous };
         delete next[channelId];
         return next;
       });
@@ -422,9 +438,10 @@ export default function AdminChannelsPage() {
       setActiveActionMenu(null);
       setMenuPosition(null);
     } catch {
-      alert("Error deleting channel.");
+      alert("Error deleting channel. Please try again.");
+    } finally {
+      setActionLoading(false);
     }
-    setActionLoading(false);
   };
 
   const handleTransferChannel = async (channelId: string, fromClientName: string) => {
@@ -1057,6 +1074,20 @@ export default function AdminChannelsPage() {
                 <ExternalLink className="w-4 h-4 text-red-500" />
                 View on YouTube
               </a>
+              {tokenStatuses[channel.channelId] !== "valid" && (
+                <button
+                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-green-50 flex items-center gap-2 text-green-700 disabled:opacity-60"
+                  disabled={validatingChannelId === channel.channelId}
+                  onClick={() => handleValidateToken(channel.channelId, channel.name)}
+                >
+                  {validatingChannelId === channel.channelId ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Key className="w-4 h-4" />
+                  )}
+                  Validate Token
+                </button>
+              )}
               <button
                 className="w-full px-4 py-2.5 text-left text-sm hover:bg-amber-50 flex items-center gap-2"
                 onClick={() => {
