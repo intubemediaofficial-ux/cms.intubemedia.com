@@ -10,6 +10,12 @@ const ADMIN_EMAILS = [
   "shivlalbainslaofficial@gmail.com",
 ];
 
+function maskApiKey(apiKey: string): string {
+  if (!apiKey) return "";
+  if (apiKey.length <= 12) return "•".repeat(apiKey.length);
+  return `${apiKey.slice(0, 9)}${"•".repeat(24)}${apiKey.slice(-4)}`;
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email || !ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
@@ -22,6 +28,22 @@ export async function GET(request: Request) {
   if (setting === "realtime") {
     const realtimeSettings = await kv.get<Record<string, boolean>>("realtime_settings") || {};
     return Response.json({ data: realtimeSettings });
+  }
+
+  if (setting === "revenue-api") {
+    const apiKey = process.env.REVENUE_EXPORT_API_KEY || "";
+    const reveal = url.searchParams.get("reveal") === "true";
+    return Response.json(
+      {
+        data: {
+          baseUrl: `${url.origin}/api/revenue`,
+          configured: Boolean(apiKey),
+          maskedApiKey: maskApiKey(apiKey),
+          apiKey: reveal ? apiKey : undefined,
+        },
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   return Response.json({ error: "Invalid setting" }, { status: 400 });

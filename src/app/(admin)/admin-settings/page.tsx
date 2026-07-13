@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Shield, Settings, Save, Users, Key, AlertTriangle, Wrench, Info, Trash2, Loader2, MessageSquare, Image as ImageIcon, X, ToggleLeft, ToggleRight } from "lucide-react";
+import { Shield, Settings, Save, Users, Key, AlertTriangle, Wrench, Info, Trash2, Loader2, MessageSquare, Image as ImageIcon, X, ToggleLeft, ToggleRight, Eye, EyeOff, Copy, Check } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -52,7 +52,7 @@ export default function AdminSettingsPage() {
 
   // Support requests
   const [supportRequests, setSupportRequests] = useState<SupportRequest[]>([]);
-  const [supportLoading, setSupportLoading] = useState(false);
+  const [supportLoading, setSupportLoading] = useState(true);
   const [responseText, setResponseText] = useState("");
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [viewScreenshot, setViewScreenshot] = useState<string | null>(null);
@@ -60,6 +60,13 @@ export default function AdminSettingsPage() {
   // Admin Settings
   const [requireUserApproval, setRequireUserApproval] = useState(true);
   const [settingsLoading, setSettingsLoading] = useState(false);
+  const [revenueApiBaseUrl, setRevenueApiBaseUrl] = useState("");
+  const [revenueApiMaskedKey, setRevenueApiMaskedKey] = useState("");
+  const [revenueApiSecret, setRevenueApiSecret] = useState<string | null>(null);
+  const [revenueApiConfigured, setRevenueApiConfigured] = useState(false);
+  const [revenueApiKeyVisible, setRevenueApiKeyVisible] = useState(false);
+  const [revenueApiLoading, setRevenueApiLoading] = useState(false);
+  const [revenueApiCopied, setRevenueApiCopied] = useState<"url" | "key" | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -94,7 +101,6 @@ export default function AdminSettingsPage() {
       .catch(() => {});
 
     // Fetch support requests
-    setSupportLoading(true);
     fetch("/api/client-data?action=getSupportRequests")
       .then((r) => r.json())
       .then((j) => {
@@ -109,6 +115,17 @@ export default function AdminSettingsPage() {
       .then((j) => {
         if (j.data) {
           setRequireUserApproval(j.data.requireUserApproval ?? true);
+        }
+      })
+      .catch(() => {});
+
+    fetch("/api/admin-settings?setting=revenue-api", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data) {
+          setRevenueApiBaseUrl(j.data.baseUrl || "");
+          setRevenueApiMaskedKey(j.data.maskedApiKey || "");
+          setRevenueApiConfigured(Boolean(j.data.configured));
         }
       })
       .catch(() => {});
@@ -194,6 +211,48 @@ export default function AdminSettingsPage() {
     );
     setResponseText("");
     setRespondingTo(null);
+  };
+
+  const fetchRevenueApiSecret = async (): Promise<string> => {
+    setRevenueApiLoading(true);
+    try {
+      const response = await fetch(
+        "/api/admin-settings?setting=revenue-api&reveal=true",
+        { cache: "no-store" }
+      );
+      if (!response.ok) return "";
+      const result = await response.json();
+      return result.data?.apiKey || "";
+    } finally {
+      setRevenueApiLoading(false);
+    }
+  };
+
+  const handleToggleRevenueApiKey = async () => {
+    if (revenueApiKeyVisible) {
+      setRevenueApiKeyVisible(false);
+      setRevenueApiSecret(null);
+      return;
+    }
+    const apiKey = await fetchRevenueApiSecret();
+    if (!apiKey) return;
+    setRevenueApiSecret(apiKey);
+    setRevenueApiKeyVisible(true);
+  };
+
+  const handleCopyRevenueApiKey = async () => {
+    const apiKey = await fetchRevenueApiSecret();
+    if (!apiKey) return;
+    await navigator.clipboard.writeText(apiKey);
+    setRevenueApiCopied("key");
+    setTimeout(() => setRevenueApiCopied(null), 2000);
+  };
+
+  const handleCopyRevenueApiUrl = async () => {
+    if (!revenueApiBaseUrl) return;
+    await navigator.clipboard.writeText(revenueApiBaseUrl);
+    setRevenueApiCopied("url");
+    setTimeout(() => setRevenueApiCopied(null), 2000);
   };
 
   const typeIcons = {
@@ -555,6 +614,87 @@ export default function AdminSettingsPage() {
           <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
             <span className="text-sm text-green-700">YouTube Reporting API</span>
             <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Enabled</span>
+          </div>
+
+          <div className="border-t border-border pt-5 mt-5 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Monthly Revenue Export API</h3>
+                <p className="text-xs text-muted mt-1">
+                  Read-only channel-wise monthly revenue access for trusted external systems.
+                </p>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                revenueApiConfigured
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
+              }`}>
+                {revenueApiConfigured ? "Configured" : "Not configured"}
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1.5">Base URL</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={revenueApiBaseUrl}
+                  className="flex-1 min-w-0 px-3 py-2.5 bg-slate-50 border border-border rounded-lg text-sm font-mono text-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyRevenueApiUrl}
+                  disabled={!revenueApiBaseUrl}
+                  className="flex items-center gap-2 px-3 py-2.5 border border-border rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                  aria-label="Copy revenue API base URL"
+                >
+                  {revenueApiCopied === "url" ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                  {revenueApiCopied === "url" ? "Copied" : "Copy"}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1.5">Secret API Key</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={revenueApiKeyVisible ? revenueApiSecret || "" : revenueApiMaskedKey}
+                  placeholder={revenueApiConfigured ? "Loading key..." : "API key is not configured"}
+                  className="flex-1 min-w-0 px-3 py-2.5 bg-slate-50 border border-border rounded-lg text-sm font-mono text-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={handleToggleRevenueApiKey}
+                  disabled={!revenueApiConfigured || revenueApiLoading}
+                  className="p-2.5 border border-border rounded-lg hover:bg-slate-50 disabled:opacity-50"
+                  aria-label={revenueApiKeyVisible ? "Hide revenue API key" : "Show revenue API key"}
+                >
+                  {revenueApiLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : revenueApiKeyVisible ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyRevenueApiKey}
+                  disabled={!revenueApiConfigured || revenueApiLoading}
+                  className="flex items-center gap-2 px-3 py-2.5 border border-border rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                  aria-label="Copy revenue API key"
+                >
+                  {revenueApiCopied === "key" ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                  {revenueApiCopied === "key" ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <p className="text-xs text-amber-700 mt-2">
+                Anyone with this key can read all assigned channels&apos; monthly revenue. Share it only with trusted systems.
+              </p>
+            </div>
           </div>
         </div>
       </div>
