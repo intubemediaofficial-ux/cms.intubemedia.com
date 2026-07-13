@@ -19,6 +19,7 @@ import {
   XCircle,
   Clock,
   RefreshCw,
+  Key,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -102,6 +103,7 @@ export default function AdminChannelsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [pendingActionLoading, setPendingActionLoading] = useState<string | null>(null);
+  const [validatingChannelId, setValidatingChannelId] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [revenuePeriod, setRevenuePeriod] = useState<string>("cached");
   const [periodRevenueMap, setPeriodRevenueMap] = useState<Record<string, number>>({});
@@ -376,6 +378,33 @@ export default function AdminChannelsPage() {
 
   const totalPages = Math.ceil(filteredChannels.length / perPage);
   const pageChannels = filteredChannels.slice((currentPage - 1) * perPage, currentPage * perPage);
+
+  const handleValidateToken = async (channelId: string, channelName: string) => {
+    const authorizationWindow = window.open("about:blank", "_blank");
+    setValidatingChannelId(channelId);
+    try {
+      const response = await fetch(
+        `/api/channel-tokens?action=generateInviteLink&channelId=${encodeURIComponent(channelId)}&channelTitle=${encodeURIComponent(channelName)}`,
+        { cache: "no-store" }
+      );
+      const json = await response.json();
+      if (!response.ok || !json.data?.oauthUrl) throw new Error("Authorization link failed");
+
+      if (authorizationWindow) {
+        authorizationWindow.opener = null;
+        authorizationWindow.location.href = json.data.oauthUrl;
+      } else {
+        window.location.assign(json.data.oauthUrl);
+      }
+      setActiveActionMenu(null);
+      setMenuPosition(null);
+    } catch {
+      authorizationWindow?.close();
+      alert("Token validation link नहीं बना। दोबारा कोशिश करें।");
+    } finally {
+      setValidatingChannelId(null);
+    }
+  };
 
   const handleDeleteChannel = async (channelId: string, clientName: string) => {
     setActionLoading(true);
@@ -1045,6 +1074,20 @@ export default function AdminChannelsPage() {
                 <ExternalLink className="w-4 h-4 text-red-500" />
                 View on YouTube
               </a>
+              {tokenStatuses[channel.channelId] !== "valid" && (
+                <button
+                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-green-50 flex items-center gap-2 text-green-700 disabled:opacity-60"
+                  disabled={validatingChannelId === channel.channelId}
+                  onClick={() => handleValidateToken(channel.channelId, channel.name)}
+                >
+                  {validatingChannelId === channel.channelId ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Key className="w-4 h-4" />
+                  )}
+                  Validate Token
+                </button>
+              )}
               <button
                 className="w-full px-4 py-2.5 text-left text-sm hover:bg-amber-50 flex items-center gap-2"
                 onClick={() => {
