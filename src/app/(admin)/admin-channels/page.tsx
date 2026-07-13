@@ -380,41 +380,28 @@ export default function AdminChannelsPage() {
   const handleDeleteChannel = async (channelId: string, clientName: string) => {
     setActionLoading(true);
     try {
-      // Always remove from cached data in KV so it doesn't reappear on refresh
-      await fetch("/api/client-data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "removeChannelFromCache", channelId }),
-      });
+      const response = await fetch(
+        `/api/channel-tokens?action=removeChannel&channelId=${encodeURIComponent(channelId)}`,
+        { cache: "no-store" }
+      );
+      if (!response.ok) throw new Error("Channel removal failed");
 
-      let owner = clients.find((c) => c.channels.includes(channelId) || (c.pendingChannels || []).includes(channelId));
-      if (!owner) {
-        owner = clients.find((c) => c.name === clientName || c.email === clientName);
-      }
-      if (owner) {
-        const updatedChannels = owner.channels.filter((ch) => ch !== channelId);
-        const updatedPending = (owner.pendingChannels || []).filter((ch) => ch !== channelId);
-        const res = await fetch("/api/users", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: owner.id, channels: updatedChannels, pendingChannels: updatedPending }),
-        });
-        if (!res.ok) {
-          alert("Failed to delete channel. Please try again.");
-          setActionLoading(false);
-          return;
-        }
-        setClients((prev) =>
-          prev.map((c) =>
-            c.id === owner.id ? { ...c, channels: updatedChannels, pendingChannels: updatedPending } : c
-          )
-        );
-      }
-      // Delete channel token from KV so stale tokens don't persist
-      await fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`);
-
-      setChannelDataMap((prev) => {
-        const next = { ...prev };
+      setClients((previous) =>
+        previous.map((client) =>
+          client.name === clientName ||
+          client.email === clientName ||
+          client.channels.includes(channelId) ||
+          (client.pendingChannels || []).includes(channelId)
+            ? {
+                ...client,
+                channels: client.channels.filter((id) => id !== channelId),
+                pendingChannels: (client.pendingChannels || []).filter((id) => id !== channelId),
+              }
+            : client
+        )
+      );
+      setChannelDataMap((previous) => {
+        const next = { ...previous };
         delete next[channelId];
         return next;
       });
@@ -422,9 +409,10 @@ export default function AdminChannelsPage() {
       setActiveActionMenu(null);
       setMenuPosition(null);
     } catch {
-      alert("Error deleting channel.");
+      alert("Error deleting channel. Please try again.");
+    } finally {
+      setActionLoading(false);
     }
-    setActionLoading(false);
   };
 
   const handleTransferChannel = async (channelId: string, fromClientName: string) => {

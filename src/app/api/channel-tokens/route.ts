@@ -7,7 +7,13 @@ import {
   isKVConfigured,
 } from "@/lib/channel-tokens";
 import { kv } from "@/lib/redis";
-import { permanentRemoveFromBackend, expireAllTokensOnBackend } from "@/lib/backend-sync";
+import {
+  permanentRemoveFromBackend,
+  expireAllTokensOnBackend,
+  removeChannelFromBackend,
+} from "@/lib/backend-sync";
+import { removeChannelFromAllCaches } from "@/lib/client-data-cache";
+import { clearChannelVendorAssignments } from "@/lib/vendors";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +48,36 @@ async function getAllowedChannelIds(email: string): Promise<Set<string>> {
   return new Set(
     scopedUsers.flatMap((user) => [...(user.channels || []), ...(user.pendingChannels || [])])
   );
+}
+
+async function removeChannelAssignments(channelId: string): Promise<void> {
+  const users = (await kv.get<ChannelScopeUser[]>("bainsla_users")) || [];
+  let changed = false;
+  for (const user of users) {
+    const channels = (user.channels || []).filter((id) => id !== channelId);
+    const pendingChannels = (user.pendingChannels || []).filter((id) => id !== channelId);
+    if (
+      channels.length !== (user.channels || []).length ||
+      pendingChannels.length !== (user.pendingChannels || []).length
+    ) {
+      user.channels = channels;
+      user.pendingChannels = pendingChannels;
+      changed = true;
+    }
+  }
+  if (changed) await kv.set("bainsla_users", users);
+}
+
+async function removeChannelFromCms(channelId: string): Promise<void> {
+  const backendResult = await removeChannelFromBackend(channelId);
+  if (!backendResult) throw new Error("Backend channel removal failed");
+
+  await Promise.all([
+    deleteChannelToken(channelId),
+    removeChannelFromAllCaches(channelId),
+    clearChannelVendorAssignments([channelId]),
+  ]);
+  await removeChannelAssignments(channelId);
 }
 
 export async function GET(request: Request) {
@@ -164,6 +200,24 @@ export async function GET(request: Request) {
       return Response.json({ data: { statuses, kvConfigured: isKVConfigured() } });
     }
 
+    case "removeChannel": {
+      const channelId = url.searchParams.get("channelId");
+      if (!channelId) {
+        return Response.json({ error: "channelId required" }, { status: 400 });
+      }
+      if (!isAdminUser && !allowedChannelIds?.has(channelId)) {
+        return Response.json({ error: "You can only remove assigned channels" }, { status: 403 });
+      }
+
+      try {
+        await removeChannelFromCms(channelId);
+        return Response.json({ data: { success: true, channelId } });
+      } catch (error) {
+        console.error(`[removeChannel] Failed for ${channelId}:`, error);
+        return Response.json({ error: "Failed to remove channel completely" }, { status: 502 });
+      }
+    }
+
     case "deleteToken": {
       // Allow any authenticated user to delete channel tokens
       // (clients delete their own channel tokens on channel remove/delink)
@@ -230,50 +284,20 @@ export async function GET(request: Request) {
         return Response.json({ error: "channelId required" }, { status: 400 });
       }
 
-      // Delete token
-      await deleteChannelToken(channelId);
-
-      // Remove from all client data in KV
-      try {
-        const { removeChannelFromAllCaches } = await import("@/lib/client-data-cache");
-        await removeChannelFromAllCaches(channelId);
-      } catch (err) {
-        console.warn("[permanentRemoveChannel] Cache cleanup error:", err);
+      const backendResult = await permanentRemoveFromBackend(
+        channelId,
+        session.user.email || "admin"
+      );
+      if (!backendResult) {
+        return Response.json({ error: "Backend channel removal failed" }, { status: 502 });
       }
 
-      // Remove from user's channel list in KV (shared bainsla_users array)
-      try {
-        const USERS_KEY = "bainsla_users";
-        const users = await kv.get<Array<{ id: string; channels: string[]; pendingChannels?: string[] }>>(USERS_KEY) || [];
-        let changed = false;
-        for (const user of users) {
-          if (user.channels?.includes(channelId)) {
-            user.channels = user.channels.filter((c: string) => c !== channelId);
-            changed = true;
-          }
-          if (user.pendingChannels?.includes(channelId)) {
-            user.pendingChannels = user.pendingChannels.filter((c: string) => c !== channelId);
-            changed = true;
-          }
-        }
-        if (changed) {
-          await kv.set(USERS_KEY, users);
-        }
-      } catch (err) {
-        console.warn("[permanentRemoveChannel] User cleanup error:", err);
-      }
-
-      // Clear cached videos and stats for this channel
-      try {
-        await kv.del(`yt_videos:${channelId}`);
-        await kv.del(`yt_channel_stats:${channelId}`);
-        await kv.del(`yt_dashboard:${channelId}`);
-      } catch { /* ignore */ }
-
-      // Sync permanent removal to backend database
-      permanentRemoveFromBackend(channelId, session.user.email || "admin").catch((err) => {
-        console.warn("[permanentRemoveChannel] Backend sync error:", err);
-      });
+      await Promise.all([
+        deleteChannelToken(channelId),
+        removeChannelFromAllCaches(channelId),
+        clearChannelVendorAssignments([channelId]),
+      ]);
+      await removeChannelAssignments(channelId);
 
       console.log(`[permanentRemoveChannel] Admin ${session.user.email} permanently removed channel ${channelId}`);
 
