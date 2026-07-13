@@ -76,6 +76,11 @@ interface ChannelRequest {
   status: "pending" | "approved" | "rejected";
 }
 
+interface VendorOption {
+  id: string;
+  name: string;
+}
+
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 const CATEGORIES = ["Music", "Entertainment", "Education", "Comedy", "Gaming", "News", "Sports"];
 const CHANNEL_TYPES = ["Original", "Refurbished", "Licensed"];
@@ -154,6 +159,10 @@ export default function ChannelsPage() {
   const [categoryInput, setCategoryInput] = useState("");
   const [channelTypeInput, setChannelTypeInput] = useState("");
   const [cmsInput, setCmsInput] = useState("");
+  const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
+  const [vendorInput, setVendorInput] = useState("");
+  const [newVendorName, setNewVendorName] = useState("");
+  const [vendorCreating, setVendorCreating] = useState(false);
   const [addingChannel, setAddingChannel] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -357,6 +366,49 @@ export default function ChannelsPage() {
       });
   }, [isAuthenticated, storageIdentity]);
 
+  const fetchVendors = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const response = await fetch("/api/vendors?action=list", { cache: "no-store" });
+      const json = await response.json();
+      if (response.ok) setVendorOptions(json.data?.vendors || []);
+    } catch {
+      setVendorOptions([]);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    queueMicrotask(() => void fetchVendors());
+  }, [fetchVendors]);
+
+  const handleCreateVendor = useCallback(async () => {
+    const name = newVendorName.trim();
+    if (!name) return;
+    setVendorCreating(true);
+    setAddError(null);
+    try {
+      const response = await fetch("/api/vendors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const json = await response.json();
+      if (!response.ok) {
+        setAddError(json.error || "Failed to create vendor");
+        return;
+      }
+      setVendorOptions((current) =>
+        [...current, json.data].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setVendorInput(json.data.id);
+      setNewVendorName("");
+    } catch {
+      setAddError("Failed to create vendor");
+    } finally {
+      setVendorCreating(false);
+    }
+  }, [newVendorName]);
+
   // Fetch user's assigned networks from admin + custom networks + admin-created networks
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -531,6 +583,17 @@ export default function ChannelsPage() {
         setAddingChannel(false);
         return;
       }
+      if (vendorInput) {
+        const vendorResponse = await fetch("/api/vendors", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "assign", channelId: actualId, vendorId: vendorInput }),
+        });
+        if (!vendorResponse.ok) {
+          const vendorJson = await vendorResponse.json();
+          console.error("Failed to assign vendor:", vendorJson.error);
+        }
+      }
       setStoredChannels(updatedChannels);
       if (channelData) {
         setChannelDataMap((prev) => ({ ...prev, [actualId]: channelData! }));
@@ -544,12 +607,14 @@ export default function ChannelsPage() {
       setCategoryInput("");
       setChannelTypeInput("");
       setCmsInput("");
+      setVendorInput("");
+      setNewVendorName("");
     } catch {
       setAddError("Network error. Please try again.");
     } finally {
       setAddingChannel(false);
     }
-  }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, storedChannels, networkOptions, saveCustomNetwork, storageIdentity, guardPending]);
+  }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, vendorInput, storedChannels, networkOptions, saveCustomNetwork, storageIdentity, guardPending]);
 
   const handleDelink = (channelId: string) => {
     const now = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -1475,6 +1540,8 @@ export default function ChannelsPage() {
                   setCategoryInput("");
                   setChannelTypeInput("");
                   setCmsInput("");
+                  setVendorInput("");
+                  setNewVendorName("");
                   setAddError(null);
                 }}
                 className="p-1 hover:bg-slate-100 rounded-lg"
@@ -1545,6 +1612,38 @@ export default function ChannelsPage() {
                   <p className="text-xs text-muted mt-1">Type a custom name or select from list. New names are saved automatically.</p>
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Vendor <span className="text-xs font-normal text-muted">(optional)</span>
+                </label>
+                <select
+                  value={vendorInput}
+                  onChange={(e) => setVendorInput(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                >
+                  <option value="">No vendor</option>
+                  {vendorOptions.map((vendor) => (
+                    <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                  ))}
+                </select>
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    value={newVendorName}
+                    onChange={(e) => setNewVendorName(e.target.value)}
+                    placeholder="Or create a new vendor"
+                    className="flex-1 px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateVendor}
+                    disabled={vendorCreating || !newVendorName.trim()}
+                    className="px-3 py-2 border border-border rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {vendorCreating ? "Adding..." : "Add Vendor"}
+                  </button>
+                </div>
+              </div>
               {addError && (
                 <p className="text-sm text-red-500">{addError}</p>
               )}
@@ -1557,6 +1656,8 @@ export default function ChannelsPage() {
                   setCategoryInput("");
                   setChannelTypeInput("");
                   setCmsInput("");
+                  setVendorInput("");
+                  setNewVendorName("");
                   setAddError(null);
                 }}
                 className="px-4 py-2 text-sm font-medium text-muted hover:text-foreground border border-border rounded-lg transition-colors"

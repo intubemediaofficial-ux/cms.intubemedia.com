@@ -18,6 +18,7 @@ import {
 } from "@/lib/youtube";
 import { getValidAccessToken, getTokenStatus, getAnyValidAccessToken } from "@/lib/channel-tokens";
 import { getAllCachedClientData } from "@/lib/client-data-cache";
+import { getMonthlyChannelAnalytics, isValidMonth } from "@/lib/monthly-channel-analytics";
 import { cacheChannelVideos, getCachedChannelVideos, cacheDashboardData, cacheChannelStats, getCachedChannelStats } from "@/lib/youtube-cache";
 
 export const dynamic = "force-dynamic";
@@ -349,6 +350,96 @@ export async function GET(request: Request) {
           : [];
         if (!hasChannelAccess(channelIds, channelScope.approved)) {
           return Response.json({ error: "You can only access channels assigned to your account" }, { status: 403 });
+        }
+
+        const monthlyParam = url.searchParams.get("monthly");
+        if (monthlyParam && isValidMonth(monthlyParam)) {
+          const analytics = await getMonthlyChannelAnalytics(monthlyParam);
+          const authorized = new Set(channelIds);
+          const monthMap = new Map(
+            analytics.channels
+              .filter((c) => authorized.has(c.channel_id))
+              .map((c) => [c.channel_id, c])
+          );
+
+          const allCached = await getAllCachedClientData();
+          const cachedChannelMap = new Map<
+            string,
+            (typeof allCached)[number]["channels"][number]
+          >();
+          for (const client of allCached) {
+            for (const channel of client.channels || []) {
+              if (!authorized.has(channel.channelId)) continue;
+              const existing = cachedChannelMap.get(channel.channelId);
+              if (!existing || channel.lastUpdated >= existing.lastUpdated) {
+                cachedChannelMap.set(channel.channelId, channel);
+              }
+            }
+          }
+
+          const channels = channelIds.map((id) => {
+            const c = cachedChannelMap.get(id);
+            const m = monthMap.get(id);
+            return {
+              id,
+              snippet: {
+                title: c?.channelTitle || m?.channel_name || id,
+                thumbnails: {
+                  default: { url: c?.thumbnail || "" },
+                  medium: { url: c?.thumbnail || "" },
+                },
+              },
+              statistics: {
+                subscriberCount: String(c?.subscribers || 0),
+                videoCount: String(c?.videoCount || 0),
+                viewCount: String(m?.views || 0),
+              },
+            };
+          });
+
+          const channelRevenueMap: Record<string, { revenue: number; views: number; rpm: number }> = {};
+          let totalRevenue = 0;
+          let totalMonthViews = 0;
+          for (const id of channelIds) {
+            const m = monthMap.get(id);
+            const revenue = m?.revenue_usd || 0;
+            const views = m?.views || 0;
+            channelRevenueMap[id] = {
+              revenue,
+              views,
+              rpm: views > 0 ? (revenue / views) * 1000 : 0,
+            };
+            totalRevenue += revenue;
+            totalMonthViews += views;
+          }
+
+          return Response.json({
+            data: {
+              channels,
+              currentPerformance: {
+                columnHeaders: [{ name: "views", columnType: "METRIC", dataType: "INTEGER" }],
+                rows: [[totalMonthViews]],
+              },
+              prevPerformance: null,
+              currentRevenue: {
+                columnHeaders: [{ name: "estimatedRevenue", columnType: "METRIC", dataType: "CURRENCY" }],
+                rows: [[totalRevenue]],
+              },
+              prevRevenue: null,
+              dailyRevenue: null,
+              topVideos: { analytics: null, videos: [] },
+              hasOwnChannel: channels.length > 0,
+              channelRevenueMap,
+              lastDayRevenue: 0,
+              lastDayDate: "",
+              perChannelAnalytics: {},
+              tokenizedChannels: [],
+            },
+            _cached: true,
+            _monthly: monthlyParam,
+            _cacheStatus: channelIds.every((id) => monthMap.has(id)) ? analytics.cacheStatus : "partial",
+            _missingChannels: channelIds.filter((id) => !monthMap.has(id)).length,
+          });
         }
 
         if (url.searchParams.get("cacheOnly") === "true") {

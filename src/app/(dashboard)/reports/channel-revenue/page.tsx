@@ -110,13 +110,16 @@ export default function ChannelRevenuePage() {
 
   const dates = getDateRange(dateRange);
 
+  const isMonthRange = /^\d{4}-\d{2}$/.test(dateRange);
+
   const apiParams = useMemo(() => ({
     startDate: dates.startDate,
     endDate: dates.endDate,
     prevStartDate: dates.startDate,
     prevEndDate: dates.endDate,
+    ...(isMonthRange ? { monthly: dateRange } : {}),
     ...(activeChannelIds.length > 0 ? { channelIds: activeChannelIds.join(",") } : {}),
-  }), [dates.startDate, dates.endDate, activeChannelIds]);
+  }), [dates.startDate, dates.endDate, activeChannelIds, isMonthRange, dateRange]);
 
   const { data: dashData, isReal, loading } = useYouTubeData<DashboardData>("dashboardFull", apiParams, {});
 

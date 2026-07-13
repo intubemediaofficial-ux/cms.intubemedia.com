@@ -99,6 +99,7 @@ const adminNavItems: NavItem[] = [
   { href: "/admin-dashboard", label: "Admin Dashboard", icon: Shield },
   { href: "/admin-clients", label: "User Management", icon: Users },
   { href: "/admin-networks", label: "Network Management", icon: Globe },
+  { href: "/admin-vendors", label: "Vendor Management", icon: Users },
   { href: "/dashboard", label: "Network Dashboard", icon: LayoutDashboard },
   {
     href: "/admin-channels",
