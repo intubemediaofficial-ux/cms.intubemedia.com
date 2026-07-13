@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { sendEmail, getWelcomeEmailHtml } from "@/lib/email";
 import { addAuditLog } from "@/lib/audit-log";
 import { createSystemNotification } from "@/lib/notifications";
+import { clearChannelVendorAssignments } from "@/lib/vendors";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -468,6 +469,9 @@ export async function PUT(request: Request) {
       }
       const saved = await saveUsers(users);
       if (!saved) return Response.json({ error: "Failed to update" }, { status: 500 });
+      if (body.type === "reject_channel") {
+        await clearChannelVendorAssignments([channelId]);
+      }
       const session = await getServerSession(authOptions);
       addAuditLog({
         action: `channel_${body.type}`,
@@ -508,6 +512,7 @@ export async function PUT(request: Request) {
       }
       const saved = await saveUsers(users);
       if (!saved) return Response.json({ error: "Failed to transfer" }, { status: 500 });
+      await clearChannelVendorAssignments([channelId]);
       const session = await getServerSession(authOptions);
       addAuditLog({
         action: "channel_transfer",
@@ -563,6 +568,7 @@ export async function PUT(request: Request) {
     }
 
     const requestedChannels = Array.isArray(channels) ? normalizeChannelIds(channels) : null;
+    const previousApprovedChannels = new Set(users[idx].channels || []);
     const requestedPendingChannels = Array.isArray(body.pendingChannels)
       ? normalizeChannelIds(body.pendingChannels)
       : null;
@@ -634,6 +640,12 @@ export async function PUT(request: Request) {
         { status: 500 }
       );
     }
+    if (requestedChannels) {
+      const currentChannels = new Set(users[idx].channels);
+      await clearChannelVendorAssignments(
+        Array.from(previousApprovedChannels).filter((channelId) => !currentChannels.has(channelId))
+      );
+    }
 
     const changes: string[] = [];
     if (name) changes.push(`name→"${name.trim()}"`);
@@ -689,10 +701,17 @@ export async function PATCH(request: Request) {
     if (idx === -1) {
       return Response.json({ error: "User not found" }, { status: 404 });
     }
+    const previousManagedChannels = new Set([
+      ...(users[idx].channels || []),
+      ...(users[idx].pendingChannels || []),
+    ]);
 
     // Remove channels from both approved and pending lists
-    if (Array.isArray(removeChannels)) {
-      const removeSet = new Set(removeChannels.filter((c: unknown) => typeof c === "string" && (c as string).length > 0));
+    const removedChannelIds = Array.isArray(removeChannels)
+      ? removeChannels.filter((c: unknown): c is string => typeof c === "string" && c.length > 0)
+      : [];
+    if (removedChannelIds.length > 0) {
+      const removeSet = new Set(removedChannelIds);
       users[idx].channels = users[idx].channels.filter((ch) => !removeSet.has(ch));
       if (users[idx].pendingChannels) {
         users[idx].pendingChannels = users[idx].pendingChannels!.filter((ch) => !removeSet.has(ch));
@@ -746,6 +765,16 @@ export async function PATCH(request: Request) {
     if (!saved) {
       return Response.json({ error: "Failed to sync channels" }, { status: 500 });
     }
+    const currentManagedChannels = new Set([
+      ...(users[idx].channels || []),
+      ...(users[idx].pendingChannels || []),
+    ]);
+    await clearChannelVendorAssignments([
+      ...removedChannelIds,
+      ...Array.from(previousManagedChannels).filter(
+        (channelId) => !currentManagedChannels.has(channelId)
+      ),
+    ]);
 
     return Response.json({
       data: {
@@ -812,6 +841,10 @@ export async function DELETE(request: Request) {
         { status: 500 }
       );
     }
+    await clearChannelVendorAssignments([
+      ...(deletedUser?.channels || []),
+      ...(deletedUser?.pendingChannels || []),
+    ]);
 
     const session = await getServerSession(authOptions);
     addAuditLog({

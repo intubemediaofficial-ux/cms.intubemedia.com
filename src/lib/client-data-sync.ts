@@ -9,6 +9,7 @@ import {
 import { kv } from "@/lib/redis";
 import { cacheChannelStats } from "@/lib/youtube-cache";
 import { getChannelStatsById, getRevenueData } from "@/lib/youtube";
+import { warmRecentMonths } from "@/lib/monthly-channel-analytics";
 
 const USERS_KEY = "bainsla_users";
 const SYNC_LOCK_KEY = "client_data_sync_lock";
@@ -440,6 +441,14 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
         failed,
         status: hadFreshData ? "updated" : hasToken ? "preserved" : "no_token",
       });
+    }
+
+    if (mode === "revenue") {
+      try {
+        await warmRecentMonths(2);
+      } catch (error) {
+        console.error("[ClientDataSync] warmRecentMonths failed:", error);
+      }
     }
 
     summary.completedAt = new Date().toISOString();

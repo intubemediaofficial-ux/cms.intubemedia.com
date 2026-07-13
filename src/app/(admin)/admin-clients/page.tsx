@@ -69,6 +69,16 @@ interface NetworkOption {
   revenueSharePercent: number;
 }
 
+interface VendorOption {
+  id: string;
+  name: string;
+}
+
+interface VendorAssignment {
+  channelId: string;
+  vendorId: string;
+}
+
 interface Client {
   id: string;
   name: string;
@@ -116,6 +126,9 @@ export default function AdminClientsPage() {
   const [formNetworks, setFormNetworks] = useState<NetworkAssignment[]>([]);
   const [formChannelNetworks, setFormChannelNetworks] = useState<ChannelNetworkAssignment[]>([]);
   const [availableNetworks, setAvailableNetworks] = useState<NetworkOption[]>([]);
+  const [availableVendors, setAvailableVendors] = useState<VendorOption[]>([]);
+  const [vendorAssignments, setVendorAssignments] = useState<VendorAssignment[]>([]);
+  const [formChannelVendors, setFormChannelVendors] = useState<Record<string, string>>({});
   const [formWhiteLabel, setFormWhiteLabel] = useState(false);
   const [formRevenueShare, setFormRevenueShare] = useState<number>(0);
 
@@ -201,14 +214,29 @@ export default function AdminClientsPage() {
     }
   }, []);
 
+  const fetchVendors = useCallback(async () => {
+    try {
+      const response = await fetch("/api/vendors?action=list", { cache: "no-store" });
+      if (response.ok) {
+        const json = await response.json();
+        setAvailableVendors(json.data?.vendors || []);
+        setVendorAssignments(json.data?.assignments || []);
+      }
+    } catch {
+      setAvailableVendors([]);
+      setVendorAssignments([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role === "admin") {
       queueMicrotask(() => {
         fetchClients();
         fetchNetworks();
+        fetchVendors();
       });
     }
-  }, [status, session, fetchClients, fetchNetworks]);
+  }, [status, session, fetchClients, fetchNetworks, fetchVendors]);
 
   const resetForm = () => {
     setFormName("");
@@ -220,6 +248,7 @@ export default function AdminClientsPage() {
     setFormChannels("");
     setFormNetworks([]);
     setFormChannelNetworks([]);
+    setFormChannelVendors({});
     setFormWhiteLabel(false);
     setFormRevenueShare(0);
     setFormError(null);
@@ -242,11 +271,18 @@ export default function AdminClientsPage() {
     setFormChannels(client.channels.join(", "));
     setFormNetworks(client.networks || []);
     setFormChannelNetworks(client.channelNetworks || []);
+    setFormChannelVendors(
+      Object.fromEntries(
+        vendorAssignments
+          .filter((assignment) => client.channels.includes(assignment.channelId))
+          .map((assignment) => [assignment.channelId, assignment.vendorId])
+      )
+    );
     setFormWhiteLabel(client.whiteLabelEnabled || false);
     setFormRevenueShare(client.revenueSharePercent || 0);
     setFormError(null);
     setShowModal(true);
-  }, []);
+  }, [vendorAssignments]);
 
   useEffect(() => {
     if (clients.length === 0 || typeof window === "undefined") return;
@@ -342,9 +378,27 @@ export default function AdminClientsPage() {
         }
       }
 
+      const vendorResponse = await fetch("/api/vendors", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "assignMany",
+          assignments: channelIds.map((channelId) => ({
+            channelId,
+            vendorId: formChannelVendors[channelId] || "",
+          })),
+        }),
+      });
+      if (!vendorResponse.ok) {
+        const vendorJson = await vendorResponse.json();
+        setFormError(vendorJson.error || "User saved, but vendor assignment failed");
+        return;
+      }
+
       setShowModal(false);
       resetForm();
       fetchClients();
+      fetchVendors();
     } catch (err) {
       setFormError(`Failed to save client: ${err instanceof Error ? err.message : "Network error. Please try again."}`);
     } finally {
@@ -1131,6 +1185,34 @@ export default function AdminClientsPage() {
                   Enter YouTube channel IDs separated by commas
                 </p>
               </div>
+              {formChannels.trim() && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Per-Channel Vendor
+                  </label>
+                  <p className="text-xs text-muted mb-2">Optional. Select who manages or pays for each channel.</p>
+                  <div className="space-y-2">
+                    {formChannels.split(",").map((channel) => channel.trim()).filter(Boolean).map((channelId) => (
+                      <div key={channelId} className="flex items-center gap-2 p-2 border border-border rounded-lg bg-slate-50">
+                        <span className="text-xs font-mono text-foreground flex-shrink-0 truncate max-w-[150px]" title={channelId}>{channelId}</span>
+                        <select
+                          value={formChannelVendors[channelId] || ""}
+                          onChange={(e) => setFormChannelVendors((current) => ({
+                            ...current,
+                            [channelId]: e.target.value,
+                          }))}
+                          className="flex-1 px-2 py-1.5 border border-border rounded text-xs bg-white"
+                        >
+                          <option value="">No vendor</option>
+                          {availableVendors.map((vendor) => (
+                            <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {/* Network Assignment */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">

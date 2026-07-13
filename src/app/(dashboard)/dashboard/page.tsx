@@ -178,14 +178,16 @@ export default function DashboardPage() {
     [serverChannelIds]
   );
 
+  const isMonthPreset = /^\d{4}-\d{2}$/.test(datePreset);
+
   const apiParams = useMemo(() => ({
     startDate: dateRange.startDate,
     endDate: dateRange.endDate,
     prevStartDate: dateRange.prevStartDate,
     prevEndDate: dateRange.prevEndDate,
-    cacheOnly: "true",
+    ...(isMonthPreset ? { monthly: datePreset } : { cacheOnly: "true" }),
     ...(allChannelIds.length > 0 ? { channelIds: allChannelIds.join(",") } : {}),
-  }), [dateRange, allChannelIds]);
+  }), [dateRange, allChannelIds, isMonthPreset, datePreset]);
 
   const { data: dashData, isReal, error, loading, cached: dashCached, lastUpdated: dashLastUpdated } = useYouTubeData<DashboardFullData>(
     "dashboardFull",
