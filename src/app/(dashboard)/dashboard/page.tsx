@@ -28,7 +28,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import MetricCard from "@/components/dashboard/MetricCard";
 import DateRangeFilter, { computeRange } from "@/components/dashboard/DateRangeFilter";
 import type { DateRange } from "@/components/dashboard/DateRangeFilter";
@@ -143,8 +143,7 @@ function getDailyRevenueChartData(data: AnalyticsResponse | null | undefined) {
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
-  const hasAccessToken = !!session?.accessToken;
-  const isAuthenticated = status === "authenticated";
+  const isAuthenticated = status === "authenticated" && !!session?.user?.email;
 
   const [datePreset, setDatePreset] = useState("28d");
   const [dateRange, setDateRange] = useState<DateRange>(() => computeRange("28d"));
@@ -580,14 +579,12 @@ export default function DashboardPage() {
               >
                 Retry
               </button>
-              {hasAccessToken && (
-                <button
-                  onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-300 transition-colors"
-                >
-                  Re-authenticate with Google
-                </button>
-              )}
+              <a
+                href="/channels"
+                className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-300 transition-colors"
+              >
+                Review Channel Authorization
+              </a>
             </div>
           </div>
         </div>

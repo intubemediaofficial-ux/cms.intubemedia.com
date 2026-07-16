@@ -3,9 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import {
   getChannelToken,
-  deleteChannelToken,
   getTokenStatus,
   isKVConfigured,
+  revokeChannelAuthorization,
 } from "@/lib/channel-tokens";
 import { kv } from "@/lib/redis";
 import {
@@ -13,8 +13,11 @@ import {
   expireAllTokensOnBackend,
   removeChannelFromBackend,
 } from "@/lib/backend-sync";
-import { removeChannelFromAllCaches } from "@/lib/client-data-cache";
 import { clearChannelVendorAssignments } from "@/lib/vendors";
+import {
+  getPublicOrigin,
+  type ChannelOAuthState,
+} from "@/lib/youtube-oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -36,13 +39,6 @@ interface ChannelScopeUser {
   channels?: string[];
   pendingChannels?: string[];
   status?: "active" | "inactive" | "pending";
-}
-
-interface ChannelOAuthState {
-  channelId: string;
-  channelTitle: string;
-  createdBy: string;
-  createdAt: string;
 }
 
 async function getAllowedChannelIds(email: string): Promise<Set<string>> {
@@ -76,15 +72,16 @@ async function removeChannelAssignments(channelId: string): Promise<void> {
   if (changed) await kv.set("bainsla_users", users);
 }
 
+async function revokeChannelAccess(channelId: string): Promise<void> {
+  await revokeChannelAuthorization(channelId);
+}
+
 async function removeChannelFromCms(channelId: string): Promise<void> {
+  await revokeChannelAuthorization(channelId);
   const backendResult = await removeChannelFromBackend(channelId);
   if (!backendResult) throw new Error("Backend channel removal failed");
 
-  await Promise.all([
-    deleteChannelToken(channelId),
-    removeChannelFromAllCaches(channelId),
-    clearChannelVendorAssignments([channelId]),
-  ]);
+  await clearChannelVendorAssignments([channelId]);
   await removeChannelAssignments(channelId);
 }
 
@@ -104,6 +101,19 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
+  const mutationActions = new Set([
+    "deleteToken",
+    "revokeToken",
+    "bulkExpireTokens",
+    "removeChannel",
+    "permanentRemoveChannel",
+  ]);
+  if (action && mutationActions.has(action) && request.method !== "DELETE") {
+    return Response.json(
+      { error: "This action requires DELETE" },
+      { status: 405, headers: { Allow: "DELETE" } }
+    );
+  }
 
   switch (action) {
     case "generateInviteLink": {
@@ -116,18 +126,11 @@ export async function GET(request: Request) {
         return Response.json({ error: "You can only validate assigned channels" }, { status: 403 });
       }
 
-      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
-      if (!clientId) {
+      if (!process.env.GOOGLE_CLIENT_ID) {
         return Response.json({ error: "Google Client ID not configured" }, { status: 500 });
       }
 
-      // Use x-forwarded-host for correct public URL on Vercel
-      const forwardedHost = request.headers.get("x-forwarded-host");
-      const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
-      const requestUrl = new URL(request.url);
-      const host = forwardedHost || requestUrl.host;
-      const protocol = forwardedHost ? forwardedProto : requestUrl.protocol.replace(":", "");
-      const redirectUri = `${protocol}://${host}/callback`;
+      const origin = getPublicOrigin(request);
       const nonce = randomBytes(32).toString("base64url");
       const state = `cms-oauth-${nonce}`;
       const oauthState: ChannelOAuthState = {
@@ -138,23 +141,7 @@ export async function GET(request: Request) {
       };
       await kv.setex(`channel_oauth_state:${nonce}`, 15 * 60, oauthState);
 
-      const scopes = [
-        "https://www.googleapis.com/auth/youtube",
-        "https://www.googleapis.com/auth/yt-analytics.readonly",
-        "https://www.googleapis.com/auth/yt-analytics-monetary.readonly",
-      ];
-
-      // Build scope string with literal + separator (not encoded) — matches GMJ format
-      const scopeString = scopes.map(s => encodeURIComponent(s)).join("+");
-
-      const oauthUrl = `https://accounts.google.com/o/oauth2/auth?` +
-        `access_type=offline` +
-        `&client_id=${encodeURIComponent(clientId)}` +
-        `&prompt=consent` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&response_type=code` +
-        `&scope=${scopeString}` +
-        `&state=${encodeURIComponent(state)}`;
+      const oauthUrl = `${origin}/authorize-channel?state=${encodeURIComponent(state)}`;
 
       return Response.json({
         data: {
@@ -162,7 +149,6 @@ export async function GET(request: Request) {
           channelId,
           channelTitle,
           state,
-          redirectUri,
         },
       });
     }
@@ -244,8 +230,16 @@ export async function GET(request: Request) {
         return Response.json({ error: "You can only remove tokens for assigned channels" }, { status: 403 });
       }
 
-      await deleteChannelToken(channelId);
-      return Response.json({ data: { success: true, channelId } });
+      try {
+        const revocation = await revokeChannelAuthorization(channelId);
+        return Response.json({ data: { success: true, channelId, revocation } });
+      } catch (error) {
+        console.error(`[deleteToken] Failed for ${channelId}:`, error);
+        return Response.json(
+          { error: "Failed to revoke Google access and delete authorized data" },
+          { status: 502 }
+        );
+      }
     }
 
     case "bulkExpireTokens": {
@@ -263,7 +257,7 @@ export async function GET(request: Request) {
       const results: { channelId: string; success: boolean; error?: string }[] = [];
       for (const cid of channelIds) {
         try {
-          await deleteChannelToken(cid);
+          await revokeChannelAccess(cid);
           results.push({ channelId: cid, success: true });
         } catch (err) {
           results.push({ channelId: cid, success: false, error: err instanceof Error ? err.message : String(err) });
@@ -307,11 +301,8 @@ export async function GET(request: Request) {
         return Response.json({ error: "Backend channel removal failed" }, { status: 502 });
       }
 
-      await Promise.all([
-        deleteChannelToken(channelId),
-        removeChannelFromAllCaches(channelId),
-        clearChannelVendorAssignments([channelId]),
-      ]);
+      await revokeChannelAuthorization(channelId);
+      await clearChannelVendorAssignments([channelId]);
       await removeChannelAssignments(channelId);
 
       console.log(`[permanentRemoveChannel] Admin ${session.user.email} permanently removed channel ${channelId}`);
@@ -329,4 +320,8 @@ export async function GET(request: Request) {
     default:
       return Response.json({ error: "Invalid action" }, { status: 400 });
   }
+}
+
+export async function DELETE(request: Request) {
+  return GET(request);
 }

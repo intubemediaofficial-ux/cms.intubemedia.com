@@ -8,12 +8,9 @@ import {
   getChannelVideos,
   getChannelVideosPublic,
   getAnalyticsData,
-  getTrafficSources,
   getCountryData,
   getDemographics,
-  getDeviceData,
   getRevenueData,
-  getTopVideos,
   lookupChannel,
 } from "@/lib/youtube";
 import { getValidAccessToken, getTokenStatus, getAnyValidAccessToken } from "@/lib/channel-tokens";
@@ -100,7 +97,7 @@ export async function GET(request: Request) {
     const channelScope = await getChannelScope(sessionEmail);
 
     // All YouTube API actions now use per-channel tokens (login tokens lack YouTube scopes)
-    if (!["dashboardFull", "lookupChannel", "bulkCachedChannels", "dashboard", "videos", "realtime48"].includes(action || "")) {
+    if (!["dashboardFull", "lookupChannel", "bulkCachedChannels", "dashboard", "videos", "demographics", "realtime48"].includes(action || "")) {
       return Response.json(
         { error: "This action requires per-channel token validation. Please validate channel tokens first." },
         { status: 401 }
@@ -140,10 +137,6 @@ export async function GET(request: Request) {
           } catch { /* ignore */ }
         }
         return Response.json({ data: results, _cached: true });
-      }
-      case "channels": {
-        const channels = await getChannelStats(session.accessToken!);
-        return Response.json({ data: channels });
       }
       case "videos": {
         const channelId = url.searchParams.get("channelId");
@@ -189,60 +182,27 @@ export async function GET(request: Request) {
         }
         return Response.json({ error: "No token available for this channel. Please validate the channel token first." }, { status: 401 });
       }
-      case "analytics": {
-        const data = await getAnalyticsData(
-          session.accessToken!,
-          startDate,
-          endDate
-        );
-        return Response.json({ data });
-      }
-      case "traffic": {
-        const data = await getTrafficSources(
-          session.accessToken!,
-          startDate,
-          endDate
-        );
-        return Response.json({ data });
-      }
-      case "countries": {
-        const data = await getCountryData(
-          session.accessToken!,
-          startDate,
-          endDate
-        );
-        return Response.json({ data });
-      }
       case "demographics": {
-        const data = await getDemographics(
-          session.accessToken!,
-          startDate,
-          endDate
-        );
-        return Response.json({ data });
-      }
-      case "devices": {
-        const data = await getDeviceData(
-          session.accessToken!,
-          startDate,
-          endDate
-        );
-        return Response.json({ data });
-      }
-      case "revenue": {
-        const data = await getRevenueData(
-          session.accessToken!,
-          startDate,
-          endDate
-        );
-        return Response.json({ data });
-      }
-      case "topVideos": {
-        const data = await getTopVideos(
-          session.accessToken!,
-          startDate,
-          endDate
-        );
+        const channelId = url.searchParams.get("channelId");
+        if (!channelId) {
+          return Response.json({ error: "channelId required" }, { status: 400 });
+        }
+        if (!channelScope.approved.has(channelId)) {
+          return Response.json(
+            { error: "You can only access channels assigned to your account" },
+            { status: 403 }
+          );
+        }
+        const accessToken = await getValidAccessToken(channelId);
+        if (!accessToken) {
+          return Response.json(
+            { error: "No valid token available for this channel. Please validate it first." },
+            { status: 401 }
+          );
+        }
+        const data = url.searchParams.get("dimension") === "country"
+          ? await getCountryData(accessToken, startDate, endDate, channelId)
+          : await getDemographics(accessToken, startDate, endDate, channelId);
         return Response.json({ data });
       }
       case "lookupChannel": {

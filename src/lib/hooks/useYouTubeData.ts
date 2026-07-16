@@ -48,9 +48,7 @@ export function useYouTubeData<T>(
   useEffect(() => {
     if (status === "loading") return;
 
-    // Allow both OAuth users (have accessToken) and credentials users (admin or client with email/password)
-    const isCredentialsLogin = !session?.accessToken && !!session?.user?.email;
-    if (!session?.accessToken && !isCredentialsLogin) {
+    if (!session?.user?.email) {
       queueMicrotask(() => setLoading(false));
       return;
     }
@@ -97,7 +95,7 @@ export function useYouTubeData<T>(
 
     queueMicrotask(() => void fetchData());
     return () => controller.abort();
-  }, [session?.accessToken, session?.user?.role, session?.user?.email, status, action, paramsKey, cacheKey]);
+  }, [session?.user?.role, session?.user?.email, status, action, paramsKey, cacheKey]);
 
   return { data, loading, error, isReal, cached, lastUpdated };
 }

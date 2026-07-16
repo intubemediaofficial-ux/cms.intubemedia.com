@@ -1,36 +1,10 @@
 import Link from "next/link";
+import { PublicFooter, PublicHeader } from "@/components/branding/PublicSiteChrome";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      {/* Header */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">InTubeMedia</h1>
-              <p className="text-xs text-slate-500">Channel Management System</p>
-            </div>
-          </div>
-          <nav className="flex items-center gap-4">
-            <Link href="/" className="text-sm text-red-600 font-medium">Home</Link>
-            <Link href="/about" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">About Us</Link>
-            <Link href="/contact" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Contact Us</Link>
-            <Link href="/faq" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">FAQ</Link>
-            <Link
-              href="/login"
-              className="px-5 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Sign In
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <PublicHeader active="home" />
 
       {/* Hero Section */}
       <main>
@@ -232,31 +206,7 @@ export default function HomePage() {
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z" />
-                </svg>
-              </div>
-              <span className="text-sm font-semibold text-slate-900">InTubeMedia</span>
-            </div>
-            <nav className="flex items-center gap-6 text-sm text-slate-600">
-              <Link href="/privacy-policy" className="hover:text-slate-900 transition-colors">Privacy Policy</Link>
-              <Link href="/terms" className="hover:text-slate-900 transition-colors">Terms &amp; Conditions</Link>
-              <Link href="/about" className="hover:text-slate-900 transition-colors">About Us</Link>
-              <Link href="/contact" className="hover:text-slate-900 transition-colors">Contact Us</Link>
-              <Link href="/faq" className="hover:text-slate-900 transition-colors">FAQ</Link>
-            </nav>
-            <p className="text-xs text-slate-500">
-              &copy; {new Date().getFullYear()} InTubeMedia. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

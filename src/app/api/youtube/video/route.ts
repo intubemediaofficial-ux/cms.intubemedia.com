@@ -323,9 +323,13 @@ export async function DELETE(request: Request) {
     }
 
     // Check for channel mismatch before attempting delete
-    const tokenData = await getChannelToken(channelId);
-    if (tokenData?.googleChannelId && tokenData.googleChannelId !== channelId) {
-      console.warn(`[YouTube Video] Channel mismatch on delete: token is for ${tokenData.googleChannelId} but trying to delete from ${channelId}`);
+    const channelAuthorization = await getChannelToken(channelId);
+    if (channelAuthorization?.googleChannelId && channelAuthorization.googleChannelId !== channelId) {
+      console.warn(`[YouTube Video] Blocked channel mismatch on delete for ${channelId}`);
+      return Response.json(
+        { error: "The stored authorization does not match this channel. Re-validate the channel with its owner account." },
+        { status: 403 }
+      );
     }
 
     const deleteRes = await fetch(
@@ -339,7 +343,7 @@ export async function DELETE(request: Request) {
     if (!deleteRes.ok && deleteRes.status !== 204) {
       const data = await deleteRes.json().catch(() => ({}));
       const errMsg = (data as Record<string, Record<string, string>>)?.error?.message || "Failed to delete video";
-      console.error(`[YouTube Video] Single delete failed for ${videoId} channel=${channelId} googleCh=${tokenData?.googleChannelId} (status ${deleteRes.status}):`, errMsg);
+      console.error(`[YouTube Video] Single delete failed for ${videoId} channel=${channelId} googleCh=${channelAuthorization?.googleChannelId} (status ${deleteRes.status}):`, errMsg);
       if (deleteRes.status === 404) {
         // Video already deleted or not found on YouTube — remove from local cache
         try {
@@ -352,11 +356,8 @@ export async function DELETE(request: Request) {
         return Response.json({ data: { success: true, alreadyDeleted: true } });
       }
       if (deleteRes.status === 403) {
-        const mismatchHint = tokenData?.googleChannelId && tokenData.googleChannelId !== channelId
-          ? ` The token is authorized for a DIFFERENT channel (${tokenData.googleChannelId}). You must validate the token using the Google account that OWNS this channel.`
-          : "";
         return Response.json(
-          { error: `Delete permission denied by YouTube.${mismatchHint} Please re-validate the channel token with the correct Google account that owns this channel.` },
+          { error: "Delete permission denied by YouTube. Re-validate the channel with the correct owner account and confirm that it grants video-management access." },
           { status: 403 }
         );
       }

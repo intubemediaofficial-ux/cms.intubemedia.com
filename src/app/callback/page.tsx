@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
-import { CheckCircle, XCircle, Loader2, ArrowLeft, AlertTriangle } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 interface ChannelInfo {
@@ -22,9 +22,6 @@ function CallbackContent() {
   const [channelInfo, setChannelInfo] = useState<ChannelInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [kvConfigured, setKvConfigured] = useState<boolean | null>(null);
-  const [quotaWarning, setQuotaWarning] = useState(false);
-  const [channelMismatch, setChannelMismatch] = useState(false);
-  const [mismatchMessage, setMismatchMessage] = useState("");
   const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
@@ -33,27 +30,28 @@ function CallbackContent() {
     const error = searchParams.get("error");
 
     if (error) {
-      setStatus("error");
-      setErrorMessage(error === "access_denied"
-        ? "Access denied. The channel owner did not grant permission."
-        : `OAuth error: ${error}`);
+      queueMicrotask(() => {
+        setStatus("error");
+        setErrorMessage(error === "access_denied"
+          ? "Access denied. The channel owner did not grant permission."
+          : `OAuth error: ${error}`);
+      });
       return;
     }
 
     if (!code || !state) {
-      setStatus("error");
-      setErrorMessage("Missing authorization code or state parameter.");
+      queueMicrotask(() => {
+        setStatus("error");
+        setErrorMessage("Missing authorization code or state parameter.");
+      });
       return;
     }
 
-    // State is the channel ID directly (e.g. UCJL86UBFftNd1BoHAvxgT7Q)
-    if (
-      !state.startsWith("UC") &&
-      !state.startsWith("youtube-auth-") &&
-      !state.startsWith("cms-oauth-")
-    ) {
-      setStatus("error");
-      setErrorMessage("Invalid state parameter.");
+    if (!/^cms-oauth-[A-Za-z0-9_-]+$/.test(state)) {
+      queueMicrotask(() => {
+        setStatus("error");
+        setErrorMessage("Invalid state parameter.");
+      });
       return;
     }
 
@@ -63,7 +61,7 @@ function CallbackContent() {
         const response = await fetch("/api/channel-tokens/exchange", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code, state, redirectUri: `${window.location.origin}/callback` }),
+          body: JSON.stringify({ code, state }),
         });
 
         const result = await response.json();
@@ -75,11 +73,6 @@ function CallbackContent() {
 
         setChannelInfo(result.data.channelInfo);
         setKvConfigured(result.data.kvConfigured ?? null);
-        setQuotaWarning(result.data.quotaWarning ?? false);
-        if (result.data.channelMismatch && result.data.channelMismatchDetails) {
-          setChannelMismatch(true);
-          setMismatchMessage(result.data.channelMismatchDetails.message);
-        }
         setStatus("success");
       } catch {
         setStatus("error");
@@ -129,31 +122,10 @@ function CallbackContent() {
                 </div>
                 <p className="text-sm text-green-600 mt-1">Token validated and stored. Redirecting to Channels page in {countdown}s...</p>
               </div>
-              {channelMismatch && (
-                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-red-700">Wrong Google Account!</p>
-                      <p className="text-sm text-red-600 mt-1">{mismatchMessage}</p>
-                      <p className="text-sm text-red-600 mt-2">
-                        <strong>Fix:</strong> Go to Channels → Delete this channel → Re-add it → Validate with the correct Google account that OWNS this channel.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {quotaWarning && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
-                  <p className="text-sm text-amber-700">
-                    <strong>Note:</strong> YouTube API quota limit reached — channel details could not be loaded right now. But your <strong>token has been saved successfully</strong>. Channel info will load automatically when quota resets (usually within 24 hours).
-                  </p>
-                </div>
-              )}
               {kvConfigured === false && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
                   <p className="text-sm text-amber-700">
-                    <strong>Warning:</strong> Persistent storage (Vercel KV) is not configured. Token will be lost on next deployment. Please set up Vercel KV.
+                    <strong>Warning:</strong> Persistent server storage is unavailable. Please contact InTubeMedia support.
                   </p>
                 </div>
               )}

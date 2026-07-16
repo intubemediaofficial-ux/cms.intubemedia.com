@@ -64,7 +64,7 @@ function transformRevenueData(data: AnalyticsResponse | null) {
 
 export default function RevenuePage() {
   const { data: session, status } = useSession();
-  const isAuthenticated = status === "authenticated" && !!session?.accessToken;
+  const isAuthenticated = status === "authenticated" && !!session?.user?.email;
 
   const { data: revenueApiData, isReal, error, loading } = useYouTubeData<AnalyticsResponse | null>(
     "revenue",

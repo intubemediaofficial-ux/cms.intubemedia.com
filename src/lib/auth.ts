@@ -7,8 +7,6 @@ import crypto from "crypto";
 
 declare module "next-auth" {
   interface Session {
-    accessToken?: string;
-    refreshToken?: string;
     error?: string;
     user: {
       name?: string | null;
@@ -22,9 +20,6 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
-    accessToken?: string;
-    refreshToken?: string;
-    accessTokenExpires?: number;
     error?: string;
     role?: "admin" | "company" | "client";
     userStatus?: "active" | "pending" | "inactive";
@@ -37,17 +32,17 @@ const ADMIN_EMAILS = [
   "shivlalbainslaofficial@gmail.com",
 ];
 
-const ADMIN_CREDENTIALS: Record<string, { password: string; name: string }> = {
+const ADMIN_CREDENTIALS: Record<string, { password?: string; name: string }> = {
   "ajeetgurjarofficial@gmail.com": {
-    password: process.env.ADMIN_PASSWORD_2 || "BainslaAdmin@2026",
+    password: process.env.ADMIN_PASSWORD_2,
     name: "Ajeet Gurjar",
   },
   "bainslamusicofficial@gmail.com": {
-    password: process.env.ADMIN_PASSWORD_3 || "BainslaAdmin@2026",
+    password: process.env.ADMIN_PASSWORD_3,
     name: "Bainsla Music",
   },
   "shivlalbainslaofficial@gmail.com": {
-    password: process.env.ADMIN_PASSWORD_4 || "BainslaAdmin@2026",
+    password: process.env.ADMIN_PASSWORD_4,
     name: "Shivlal Bainsla",
   },
 };
@@ -117,35 +112,6 @@ async function getOrCreateUserStatus(email: string, name: string): Promise<"acti
   }
 }
 
-async function refreshAccessToken(token: import("next-auth/jwt").JWT) {
-  try {
-    const url = "https://oauth2.googleapis.com/token";
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        grant_type: "refresh_token",
-        refresh_token: token.refreshToken!,
-      }),
-    });
-
-    const refreshedTokens = await response.json();
-
-    if (!response.ok) throw refreshedTokens;
-
-    return {
-      ...token,
-      accessToken: refreshedTokens.access_token,
-      accessTokenExpires: Date.now() + refreshedTokens.expires_in * 1000,
-      refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
-    };
-  } catch (error) {
-    return { ...token, error: "RefreshAccessTokenError" };
-  }
-}
-
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -162,7 +128,7 @@ export const authOptions: NextAuthOptions = {
 
         // Admin login
         const admin = ADMIN_CREDENTIALS[email];
-        if (admin && credentials.password === admin.password) {
+        if (admin?.password && credentials.password === admin.password) {
           return {
             id: email,
             email,
@@ -212,12 +178,6 @@ export const authOptions: NextAuthOptions = {
             token.userStatus = storedUser?.status || "pending";
           }
         } else {
-          token.accessToken = account.access_token;
-          token.refreshToken = account.refresh_token;
-          token.accessTokenExpires = account.expires_at
-            ? account.expires_at * 1000
-            : Date.now() + 3600 * 1000;
-
           // NOTE: Do NOT auto-save login tokens to channels.
           // Login scope is "openid email profile" only (no YouTube scopes).
           // Per-channel tokens with YouTube scopes are managed separately
@@ -262,21 +222,9 @@ export const authOptions: NextAuthOptions = {
         } catch { /* ignore */ }
       }
 
-      if (
-        token.accessTokenExpires &&
-        Date.now() < (token.accessTokenExpires as number)
-      ) {
-        return token;
-      }
-
-      if (token.refreshToken) {
-        return await refreshAccessToken(token);
-      }
-
       return token;
     },
     async session({ session, token }) {
-      session.accessToken = token.accessToken as string | undefined;
       session.error = token.error as string | undefined;
       if (session.user) {
         session.user.role = token.role as "admin" | "company" | "client" | undefined;
