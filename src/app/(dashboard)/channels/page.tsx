@@ -26,6 +26,7 @@ import {
   Trash2,
   Eye,
   Clock,
+  ExternalLink,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatNumber } from "@/lib/utils";
@@ -138,7 +139,6 @@ function saveChannelRequests(email: string | null | undefined, requests: Channel
 
 export default function ChannelsPage() {
   const { data: session, status } = useSession();
-  const hasAccessToken = !!session?.accessToken;
   const isAdmin = session?.user?.role === "admin";
   const isAuthenticated = status === "authenticated";
   const storageIdentity = session?.user?.email;
@@ -613,28 +613,44 @@ export default function ChannelsPage() {
     }
   }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, vendorInput, storedChannels, networkOptions, saveCustomNetwork, storageIdentity, guardPending]);
 
-  const handleDelink = (channelId: string) => {
-    const now = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
-    const updated = storedChannels.map((c) =>
-      c.id === channelId ? { ...c, status: "delinked" as const, delinkedDate: now } : c
+  const handleDelink = async (channelId: string) => {
+    const response = await fetch(
+      `/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`,
+      { method: "DELETE" }
     );
-    saveStoredChannels(storageIdentity, updated);
+    if (!response.ok) {
+      alert("Google access could not be revoked. The channel was not delinked. Please retry.");
+      return;
+    }
+
+    const now = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const updated = storedChannels.map((channel) =>
+      channel.id === channelId
+        ? { ...channel, status: "delinked" as const, delinkedDate: now }
+        : channel
+    );
+    await saveStoredChannels(storageIdentity, updated);
     setStoredChannels(updated);
-    // Delete channel token from KV when delinked
-    fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`)
-      .catch(() => {});
   };
 
-  const handleTransfer = (channelId: string) => {
-    const now = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
-    const updated = storedChannels.map((c) =>
-      c.id === channelId ? { ...c, status: "transferred" as const, delinkedDate: now } : c
+  const handleTransfer = async (channelId: string) => {
+    const response = await fetch(
+      `/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`,
+      { method: "DELETE" }
     );
-    saveStoredChannels(storageIdentity, updated);
+    if (!response.ok) {
+      alert("Google access could not be revoked. The channel was not transferred. Please retry.");
+      return;
+    }
+
+    const now = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const updated = storedChannels.map((channel) =>
+      channel.id === channelId
+        ? { ...channel, status: "transferred" as const, delinkedDate: now }
+        : channel
+    );
+    await saveStoredChannels(storageIdentity, updated);
     setStoredChannels(updated);
-    // Delete channel token from KV when transferred
-    fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channelId)}`)
-      .catch(() => {});
   };
 
   const handleRelink = (channelId: string) => {
@@ -651,7 +667,7 @@ export default function ChannelsPage() {
     try {
       const response = await fetch(
         `/api/channel-tokens?action=removeChannel&channelId=${encodeURIComponent(channelId)}`,
-        { cache: "no-store" }
+        { method: "DELETE", cache: "no-store" }
       );
       if (!response.ok) throw new Error("Channel removal failed");
 
@@ -1228,11 +1244,11 @@ export default function ChannelsPage() {
                                 href={`https://www.youtube.com/channel/${channel.id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                title="View on YouTube"
+                                title="View channel on YouTube"
+                                aria-label={`View ${channel.name} on YouTube`}
+                                className="text-red-600 hover:text-red-700"
                               >
-                                <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor">
-                                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                                </svg>
+                                <ExternalLink className="w-4 h-4" />
                               </a>
                             </div>
                             <p className="text-xs text-muted">{channel.id}</p>
@@ -1694,7 +1710,7 @@ export default function ChannelsPage() {
             <div className="p-5 border-b border-border">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground">Channel Invite Link Generated</h2>
+                  <h2 className="text-lg font-semibold text-foreground">Channel Authorization Link Generated</h2>
                   <p className="text-sm text-muted mt-0.5">For channel: {inviteChannelTitle}</p>
                 </div>
                 <button
@@ -1714,8 +1730,11 @@ export default function ChannelsPage() {
               {/* OAuth URL */}
               {inviteOAuthUrl && (
               <div>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 mb-4 text-xs leading-5 text-blue-900">
+                  This link first opens InTubeMedia&apos;s authorization disclosure. The channel owner must confirm ownership, review all three requested permissions, and accept the Privacy Policy and Terms before continuing to Google. Google sign-in happens only on <strong>accounts.google.com</strong>; InTubeMedia never receives the owner&apos;s Google or YouTube password.
+                </div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-foreground">OAuth Authorization URL:</label>
+                  <label className="text-sm font-medium text-foreground">Authorization review URL:</label>
                   <button
                     onClick={handleCopyInviteUrl}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -1740,7 +1759,7 @@ export default function ChannelsPage() {
                 <div className="bg-slate-50 border border-border rounded-lg p-3 max-h-32 overflow-y-auto select-all cursor-text">
                   <p className="text-xs text-foreground break-all font-mono select-all">{inviteOAuthUrl}</p>
                 </div>
-                <p className="text-xs text-muted mt-1.5">Share this link with the channel owner. They need to open it, sign in with their Google account, and authorize access.</p>
+                <p className="text-xs text-muted mt-1.5">Share only with the channel owner or an authorized manager. The link expires after 15 minutes and is bound to this exact channel.</p>
               </div>
               )}
 

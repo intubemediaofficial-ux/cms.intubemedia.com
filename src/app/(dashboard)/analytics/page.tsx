@@ -162,7 +162,7 @@ const DEVICE_BAR_COLORS: Record<string, string> = {
 
 export default function AnalyticsPage() {
   const { data: session, status: sessionStatus } = useSession();
-  const isAuthenticated = sessionStatus === "authenticated" && !!session?.accessToken;
+  const isAuthenticated = sessionStatus === "authenticated" && !!session?.user?.email;
 
   const { data: analyticsData, isReal: analyticsReal, loading: analyticsLoading } = useYouTubeData<AnalyticsResponse | null>(
     "analytics",

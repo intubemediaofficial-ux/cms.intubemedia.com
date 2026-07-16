@@ -23,7 +23,7 @@ interface YouTubeChannel {
 
 export default function SummaryChannelPage() {
   const { data: session, status } = useSession();
-  const isAuthenticated = status === "authenticated" && !!session?.accessToken;
+  const isAuthenticated = status === "authenticated" && !!session?.user?.email;
   const { data: channels, isReal, loading } = useYouTubeData<YouTubeChannel[]>("channels", {}, []);
 
   const totalSubs = channels.reduce((s, c) => s + Number(c.statistics?.subscriberCount || 0), 0);

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PublicFooter, PublicHeader } from "@/components/branding/PublicSiteChrome";
 
 const faqs = [
   {
@@ -7,7 +8,7 @@ const faqs = [
   },
   {
     question: "How do I create an account?",
-    answer: "You can create an account by clicking 'Sign In' and then 'Create Account'. You can register with your email and password, or sign in directly with your Google account. New accounts require admin approval before full access is granted."
+    answer: "You can create an InTubeMedia account with your email and a separate CMS password, or use Google Sign-In hosted by Google. New accounts require admin approval. A local CMS password is not a Google or YouTube password, and CMS login does not itself authorize a YouTube channel."
   },
   {
     question: "Is InTubeMedia free to use?",
@@ -15,7 +16,7 @@ const faqs = [
   },
   {
     question: "How does InTubeMedia access my YouTube data?",
-    answer: "We use official Google OAuth 2.0 and YouTube APIs (YouTube Data API and YouTube Analytics API) to access your channel data. You explicitly authorize which channels to connect, and you can revoke access at any time through your Google account settings at myaccount.google.com/permissions."
+    answer: "We use Google-hosted OAuth 2.0 and the YouTube Data API and YouTube Analytics API. The channel owner or authorized manager reviews the exact permissions, confirms channel authority, and then signs in only on accounts.google.com. InTubeMedia never asks for or receives a Google or YouTube password. Access can be revoked in the CMS or through Google account permissions."
   },
   {
     question: "What YouTube data does InTubeMedia access?",
@@ -23,15 +24,15 @@ const faqs = [
   },
   {
     question: "Is my data safe with InTubeMedia?",
-    answer: "Yes. We use HTTPS encryption for all data transmission, passwords are hashed before storage, and OAuth tokens are stored securely. We never share, sell, or transfer your YouTube data to third parties. We comply with Google's API Services User Data Policy including Limited Use requirements."
+    answer: "We use HTTPS for data in transit, hash local CMS passwords, and encrypt OAuth access and refresh tokens at rest with authenticated server-side encryption. We do not sell YouTube user data or use it for advertising. Limited disclosures to authorized personnel, infrastructure providers, and Google APIs are described in our Privacy Policy."
   },
   {
     question: "How do I connect my YouTube channel?",
-    answer: "After logging in, go to the Channels page and click 'Add Channel'. You'll be redirected to Google to authorize access. Once authorized, your channel data will automatically sync to your dashboard."
+    answer: "After adding an assigned channel, open its authorization link. Review the data-use disclosure, confirm you own or manage the exact channel, accept the Privacy Policy and Terms, and continue to Google. Google hosts sign-in and consent. InTubeMedia stores authorization only after the returned channel ID exactly matches the assigned channel."
   },
   {
     question: "Why is my channel token showing as 'Expired' or 'Not Validated'?",
-    answer: "OAuth tokens can expire periodically. Go to your Channels page and click 'Validate Token' next to the affected channel. You'll be asked to re-authorize through Google. Once done, your token status will update to 'Valid' and data will sync again."
+    answer: "Google authorization can expire or be revoked. Use 'Validate Token' for the affected channel, review the disclosure, and authorize again through Google. If Google reports an invalid grant, InTubeMedia deletes the unusable token and related authorized cache data before showing the channel as not validated."
   },
   {
     question: "How accurate is the revenue data?",
@@ -59,7 +60,7 @@ const faqs = [
   },
   {
     question: "I'm having trouble logging in. What should I do?",
-    answer: "Try these steps: 1) Clear your browser cache and cookies, 2) Try using an incognito/private window, 3) Make sure you're using the correct email and password, 4) If using Google login, ensure you're selecting the right Google account. If problems persist, contact us at shivlalbainslaofficial@gmail.com."
+    answer: "Try these steps: 1) Clear your browser cache and cookies, 2) Try an incognito/private window, 3) Make sure you are using the correct InTubeMedia email and CMS password, 4) Use the password-reset option if needed. Never enter your Google or YouTube password on an InTubeMedia page. If problems persist, contact shivlalbainslaofficial@gmail.com."
   },
   {
     question: "How do I contact support?",
@@ -70,31 +71,7 @@ const faqs = [
 export default function FAQPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      {/* Header */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">InTubeMedia</h1>
-                <p className="text-xs text-slate-500">Channel Management System</p>
-              </div>
-            </Link>
-          </div>
-          <nav className="flex items-center gap-4">
-            <Link href="/" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Home</Link>
-            <Link href="/about" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">About Us</Link>
-            <Link href="/contact" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Contact Us</Link>
-            <Link href="/faq" className="text-sm text-red-600 font-medium">FAQ</Link>
-            <Link href="/login" className="px-5 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors">Sign In</Link>
-          </nav>
-        </div>
-      </header>
+      <PublicHeader active="faq" />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {/* Page Title */}
@@ -146,31 +123,7 @@ export default function FAQPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-8 mt-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z" />
-                </svg>
-              </div>
-              <span className="text-sm font-semibold text-slate-900">InTubeMedia</span>
-            </div>
-            <nav className="flex items-center gap-6 text-sm text-slate-600">
-              <Link href="/privacy-policy" className="hover:text-slate-900 transition-colors">Privacy Policy</Link>
-              <Link href="/terms" className="hover:text-slate-900 transition-colors">Terms &amp; Conditions</Link>
-              <Link href="/about" className="hover:text-slate-900 transition-colors">About Us</Link>
-              <Link href="/contact" className="hover:text-slate-900 transition-colors">Contact Us</Link>
-              <Link href="/faq" className="hover:text-slate-900 transition-colors">FAQ</Link>
-            </nav>
-            <p className="text-xs text-slate-500">
-              &copy; {new Date().getFullYear()} InTubeMedia. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

@@ -1568,15 +1568,19 @@ export default function AdminClientsPage() {
                       if (!confirm(`Are you sure you want to expire/revoke tokens for ALL ${clientChannels.length} channels connected to ${viewingClient.name}?\n\nThe user will need to reconnect their YouTube account/channels.`)) return;
                       try {
                         const channelIds = clientChannels.map((ch) => ch.id).join(",");
-                        const res = await fetch(`/api/channel-tokens?action=bulkExpireTokens&clientId=${viewingClient.id}&channelIds=${channelIds}`);
-                        if (res.ok) {
-                          const json = await res.json();
-                          alert(`Tokens expired for ${json.data.affectedChannels.length} channels. Client will need to re-validate.`);
-                          // Refresh channel data
-                          setViewingClient({ ...viewingClient });
-                        } else {
-                          alert("Failed to expire tokens");
+                        const res = await fetch(
+                          `/api/channel-tokens?action=bulkExpireTokens&clientId=${viewingClient.id}&channelIds=${channelIds}`,
+                          { method: "DELETE" }
+                        );
+                        const json = await res.json();
+                        const results = json.data?.results || [];
+                        const failedCount = results.filter((result: { success: boolean }) => !result.success).length;
+                        if (!res.ok || failedCount > 0) {
+                          alert(`${results.length - failedCount} channel authorizations revoked; ${failedCount} failed. Retry the failed channels.`);
+                          return;
                         }
+                        alert(`Access revoked for ${results.length} channels. The client will need to authorize them again.`);
+                        setViewingClient({ ...viewingClient });
                       } catch (err) {
                         console.error("Bulk expire error:", err);
                         alert("Failed to expire tokens");

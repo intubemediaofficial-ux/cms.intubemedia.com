@@ -30,6 +30,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { InTubeMediaMark } from "@/components/branding/InTubeMediaMark";
 
 interface NavItem {
   href: string;
@@ -181,11 +182,7 @@ export default function Sidebar() {
         {branding?.brandLogo ? (
           <img src={branding.brandLogo} alt="" className="w-9 h-9 rounded-lg shrink-0 object-contain" />
         ) : (
-          <div className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-700 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-              <path d="M8 5v14l11-7z"/>
-            </svg>
-          </div>
+          <InTubeMediaMark className="w-9 h-9" textClassName="text-[11px]" />
         )}
         {!collapsed && (
           <div className="overflow-hidden">

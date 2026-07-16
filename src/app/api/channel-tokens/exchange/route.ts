@@ -1,129 +1,112 @@
-import { setChannelToken, isKVConfigured, type ChannelToken, deleteChannelToken } from "@/lib/channel-tokens";
-import { google } from "googleapis";
+import { google, type youtube_v3 } from "googleapis";
+import {
+  getChannelToken,
+  isKVConfigured,
+  revokeGoogleCredential,
+  setChannelToken,
+  type ChannelToken,
+} from "@/lib/channel-tokens";
 import { kv } from "@/lib/redis";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { removeChannelFromAllCaches } from "@/lib/client-data-cache";
+import {
+  getPublicOrigin,
+  YOUTUBE_OAUTH_CONSENT_VERSION,
+  YOUTUBE_OAUTH_SCOPES,
+  type ChannelOAuthState,
+} from "@/lib/youtube-oauth";
 
-const ADMIN_EMAILS = [
-  "ajeetgurjarofficial@gmail.com",
-  "bainslamusicofficial@gmail.com",
-  "shivlalbainslaofficial@gmail.com",
-];
+export const dynamic = "force-dynamic";
 
 interface ChannelScopeUser {
-  id: string;
-  email: string;
-  role: "client" | "company";
-  parentId?: string;
   channels?: string[];
   pendingChannels?: string[];
   status?: "active" | "inactive" | "pending";
 }
 
-export const dynamic = "force-dynamic";
+interface GoogleTokenResponse {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  scope?: string;
+  error?: string;
+  error_description?: string;
+}
 
-interface ChannelOAuthState {
-  channelId: string;
-  channelTitle: string;
-  createdBy: string;
-  createdAt: string;
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
+async function safelyRevokeCredential(token: string): Promise<void> {
+  try {
+    await revokeGoogleCredential(token);
+  } catch (error) {
+    console.warn(`[OAuth] Failed to revoke rejected authorization: ${errorMessage(error)}`);
+  }
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { code, state } = body as { code?: string; state?: string; redirectUri?: string };
-
+    const body = (await request.json()) as {
+      code?: string;
+      state?: string;
+    };
+    const { code, state } = body;
     if (!code || !state) {
       return Response.json({ error: "Missing code or state" }, { status: 400 });
     }
 
-    const users = (await kv.get<ChannelScopeUser[]>("bainsla_users")) || [];
     const inviteMatch = state.match(/^cms-oauth-([A-Za-z0-9_-]+)$/);
-    let expectedChannelId: string;
-    let oauthStateKey: string | null = null;
+    if (!inviteMatch) {
+      return Response.json({ error: "Invalid or unsupported OAuth state" }, { status: 400 });
+    }
 
-    if (inviteMatch) {
-      oauthStateKey = `channel_oauth_state:${inviteMatch[1]}`;
-      const oauthState = await kv.get<ChannelOAuthState>(oauthStateKey);
-      if (!oauthState?.channelId) {
-        return Response.json(
-          { error: "This validation link has expired. Generate a new Validate Token link." },
-          { status: 400 }
-        );
-      }
-      expectedChannelId = oauthState.channelId;
-      const isStillAssigned = users.some(
-        (user) =>
-          user.status !== "inactive" &&
-          [...(user.channels || []), ...(user.pendingChannels || [])].includes(expectedChannelId)
+    const oauthStateKey = `channel_oauth_state:${inviteMatch[1]}`;
+    const oauthState = await kv.get<ChannelOAuthState>(oauthStateKey);
+    if (!oauthState?.channelId) {
+      return Response.json(
+        { error: "This validation link has expired. Generate a new Validate Token link." },
+        { status: 400 }
       );
-      if (!isStillAssigned) {
-        return Response.json({ error: "This channel is no longer assigned" }, { status: 403 });
-      }
-    } else {
-      const session = await getServerSession(authOptions);
-      if (!session?.user?.email) {
-        return Response.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      if (session.user.userStatus === "inactive") {
-        return Response.json({ error: "Account is inactive" }, { status: 403 });
-      }
-
-      const legacyMatch = state.match(/^youtube-auth-(.+)-\d+$/);
-      if (legacyMatch) {
-        expectedChannelId = legacyMatch[1];
-      } else if (state.startsWith("UC")) {
-        expectedChannelId = state;
-      } else {
-        return Response.json({ error: "Invalid state parameter" }, { status: 400 });
-      }
-
-      const normalizedEmail = session.user.email.toLowerCase();
-      const isAdminUser = session.user.role === "admin" || ADMIN_EMAILS.includes(normalizedEmail);
-      if (!isAdminUser) {
-        const currentUser = users.find((user) => user.email.toLowerCase() === normalizedEmail);
-        const scopedUsers = currentUser?.status === "inactive"
-          ? []
-          : currentUser?.role === "company"
-          ? [currentUser, ...users.filter((user) => user.parentId === currentUser.id && user.status !== "inactive")]
-          : currentUser
-            ? [currentUser]
-            : [];
-        const assignedChannels = new Set(
-          scopedUsers.flatMap((user) => [...(user.channels || []), ...(user.pendingChannels || [])])
-        );
-
-        if (!assignedChannels.has(expectedChannelId)) {
-          return Response.json(
-            { error: "You can only validate channels assigned to your account" },
-            { status: 403 }
-          );
-        }
-      }
+    }
+    if (
+      !oauthState.consentedAt ||
+      oauthState.consentVersion !== YOUTUBE_OAUTH_CONSENT_VERSION
+    ) {
+      return Response.json(
+        { error: "Review and accept the authorization disclosures before continuing." },
+        { status: 400 }
+      );
     }
 
-    // Use NEXT_PUBLIC_GOOGLE_CLIENT_ID (same as invite link) for token exchange
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+    const stateClaimed = await kv.setIfNotExists(`${oauthStateKey}:used`, "1", 15 * 60);
+    if (!stateClaimed) {
+      return Response.json(
+        { error: "This authorization link has already been used. Generate a new link." },
+        { status: 400 }
+      );
+    }
+    await kv.del(oauthStateKey);
+
+    const expectedChannelId = oauthState.channelId;
+    const users = (await kv.get<ChannelScopeUser[]>("bainsla_users")) || [];
+    const isStillAssigned = users.some(
+      (user) =>
+        user.status !== "inactive" &&
+        [...(user.channels || []), ...(user.pendingChannels || [])].includes(
+          expectedChannelId
+        )
+    );
+    if (!isStillAssigned) {
+      return Response.json({ error: "This channel is no longer assigned" }, { status: 403 });
+    }
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    
-    // Prefer client-provided redirectUri (exact match with what was used in OAuth request)
-    // Fall back to computing from request headers
-    let redirectUri = body.redirectUri;
-    if (!redirectUri) {
-      const forwardedHost = request.headers.get("x-forwarded-host");
-      const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
-      const requestUrl = new URL(request.url);
-      const host = forwardedHost || requestUrl.host;
-      const protocol = forwardedHost ? forwardedProto : requestUrl.protocol.replace(":", "");
-      redirectUri = `${protocol}://${host}/callback`;
-    }
-
+    const redirectUri = `${getPublicOrigin(request)}/callback`;
     if (!clientId || !clientSecret) {
       return Response.json({ error: "Google OAuth not configured" }, { status: 500 });
     }
 
-    // Exchange authorization code for tokens
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -135,36 +118,38 @@ export async function POST(request: Request) {
         grant_type: "authorization_code",
       }),
     });
-
+    const tokenData = (await tokenResponse.json()) as GoogleTokenResponse;
     if (!tokenResponse.ok) {
-      const errData = await tokenResponse.json();
-      console.error("Token exchange error:", errData);
+      console.error(
+        `[OAuth] Authorization-code exchange failed: ${tokenData.error || tokenResponse.status}`
+      );
       return Response.json(
-        { error: errData.error_description || "Failed to exchange authorization code" },
+        { error: tokenData.error_description || "Failed to exchange authorization code" },
         { status: 400 }
       );
     }
 
-    const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
-    const refreshToken = tokenData.refresh_token;
-    const grantedScopes = tokenData.scope || "";
-
-    console.log(`[Token Exchange] Granted scopes for ${expectedChannelId}: ${grantedScopes}`);
-
     if (!accessToken) {
       return Response.json({ error: "No access token received" }, { status: 400 });
     }
 
-    // Try to get channel info (may fail if quota exceeded — that's OK, token still gets saved)
-    let googleChannelId = expectedChannelId;
-    let channelTitle = expectedChannelId;
-    let subscribers = 0;
-    let totalViews = 0;
-    let totalVideos = 0;
-    let thumbnail = "";
-    let quotaWarning = false;
+    const grantedScopes = (tokenData.scope || "").split(" ").filter(Boolean);
+    const missingScopes = YOUTUBE_OAUTH_SCOPES.filter(
+      (scope) => !grantedScopes.includes(scope)
+    );
+    if (missingScopes.length > 0) {
+      await safelyRevokeCredential(accessToken);
+      return Response.json(
+        {
+          error:
+            "Required YouTube permissions were not granted. Please retry and approve all requested permissions.",
+        },
+        { status: 400 }
+      );
+    }
 
+    let channel: youtube_v3.Schema$Channel | undefined;
     try {
       const oauth2Client = new google.auth.OAuth2();
       oauth2Client.setCredentials({ access_token: accessToken });
@@ -173,94 +158,110 @@ export async function POST(request: Request) {
         part: ["snippet", "statistics"],
         mine: true,
       });
-      const channel = channelResponse.data.items?.[0];
-      googleChannelId = channel?.id || expectedChannelId;
-      channelTitle = channel?.snippet?.title || expectedChannelId;
-      subscribers = Number(channel?.statistics?.subscriberCount || 0);
-      totalViews = Number(channel?.statistics?.viewCount || 0);
-      totalVideos = Number(channel?.statistics?.videoCount || 0);
-      thumbnail = channel?.snippet?.thumbnails?.default?.url || "";
-    } catch (ytError) {
-      console.warn("YouTube API call failed (quota?), saving token anyway:", ytError);
-      quotaWarning = true;
-    }
-
-    // Store the token with the expectedChannelId from state parameter
-    const storageChannelId = expectedChannelId;
-
-    // Check channel mismatch — if Google channel differs from expected, the user
-    // logged in with the wrong account. Token won't have delete/edit permission for the expected channel.
-    const channelMismatch = googleChannelId !== expectedChannelId && googleChannelId !== storageChannelId;
-
-    if (channelMismatch && !quotaWarning) {
-      console.warn(`[Token Exchange] CHANNEL MISMATCH! Expected: ${expectedChannelId}, Got: ${googleChannelId} ("${channelTitle}")`);
+      channel = channelResponse.data.items?.[0];
+    } catch (error) {
+      await safelyRevokeCredential(accessToken);
+      console.warn(
+        `[OAuth] Channel ownership verification failed for ${expectedChannelId}: ${errorMessage(error)}`
+      );
       return Response.json(
         {
-          error: `This Google account owns "${channelTitle}" (${googleChannelId}), not the assigned channel (${expectedChannelId}).`,
+          error:
+            "Google authorization succeeded, but channel ownership could not be verified. No token was stored. Please retry later.",
+        },
+        { status: 502 }
+      );
+    }
+
+    if (!channel?.id) {
+      await safelyRevokeCredential(accessToken);
+      return Response.json(
+        {
+          error:
+            "The selected Google account did not return a YouTube channel. No token was stored.",
+        },
+        { status: 400 }
+      );
+    }
+    const verifiedChannel = channel;
+    const googleChannelId = verifiedChannel.id;
+    const channelTitle = verifiedChannel.snippet?.title || expectedChannelId;
+    if (googleChannelId !== expectedChannelId) {
+      await safelyRevokeCredential(accessToken);
+      console.warn(
+        `[OAuth] Channel mismatch. Expected ${expectedChannelId}; received ${googleChannelId}`
+      );
+      return Response.json(
+        {
+          error: `This Google account manages "${channelTitle}" (${googleChannelId}), not the assigned channel (${expectedChannelId}). No token was stored.`,
         },
         { status: 400 }
       );
     }
 
-    // Clear old token and cached data only after ownership validation succeeds.
-    try {
-      await deleteChannelToken(expectedChannelId);
-      await kv.del(`yt_cache:videos:${expectedChannelId}`);
-      await kv.del(`yt_cache:stats:${expectedChannelId}`);
-      console.log(`[Token Exchange] Cleared old token and cache for ${expectedChannelId}`);
-    } catch (error) {
-      console.warn("[Token Exchange] Cache clear error (non-fatal):", error);
+    const existingToken = await getChannelToken(expectedChannelId);
+    const refreshToken = tokenData.refresh_token || existingToken?.refreshToken;
+    if (!refreshToken) {
+      await safelyRevokeCredential(accessToken);
+      return Response.json(
+        {
+          error:
+            "Google did not return offline authorization. No token was stored. Revoke InTubeMedia in Google permissions and retry.",
+        },
+        { status: 400 }
+      );
     }
 
+    const now = new Date().toISOString();
     const channelToken: ChannelToken = {
-      channelId: storageChannelId,
-      channelTitle: channelMismatch ? channelTitle : channelTitle,
+      channelId: expectedChannelId,
+      channelTitle,
       accessToken,
-      refreshToken: refreshToken || "",
+      refreshToken,
       tokenExpiry: Date.now() + (tokenData.expires_in || 3600) * 1000,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: existingToken?.createdAt || now,
+      updatedAt: now,
+      lastValidatedAt: now,
+      lastChannelVerifiedAt: now,
       googleChannelId,
-      grantedScopes: grantedScopes,
+      grantedScopes: grantedScopes.join(" "),
     };
+    try {
+      await removeChannelFromAllCaches(expectedChannelId);
+      await setChannelToken(expectedChannelId, channelToken);
+    } catch (error) {
+      await safelyRevokeCredential(accessToken);
+      console.error(
+        `[OAuth] Failed to persist verified authorization for ${expectedChannelId}: ${errorMessage(error)}`
+      );
+      return Response.json(
+        { error: "Authorization could not be stored securely. No token was retained." },
+        { status: 503 }
+      );
+    }
 
-    // Log whether youtube write scope was granted (space-separated scopes from Google)
-    const scopeList = grantedScopes.split(" ");
-    const hasFullYouTube = scopeList.some((s: string) => s.endsWith("/auth/youtube"));
-    console.log(`[Token Exchange] Has YouTube write scope: ${hasFullYouTube}, scopes: ${grantedScopes}`);
-
-    await setChannelToken(storageChannelId, channelToken);
-    if (oauthStateKey) await kv.del(oauthStateKey);
-
-    console.log(`Token stored for channel: ${storageChannelId} (Google: ${googleChannelId}), KV: ${isKVConfigured()}`);
+    console.log(
+      `[OAuth] Verified and stored encrypted authorization for ${expectedChannelId}`
+    );
 
     return Response.json({
       data: {
         success: true,
         kvConfigured: isKVConfigured(),
-        quotaWarning,
-        channelMismatch,
-        channelMismatchDetails: channelMismatch ? {
-          expectedChannelId,
-          actualGoogleChannelId: googleChannelId,
-          actualChannelTitle: channelTitle,
-          message: `Token validated but this Google account owns channel "${channelTitle}" (${googleChannelId}), not the channel you added (${expectedChannelId}). Video delete/edit will NOT work. Please login with the Google account that owns this channel.`,
-        } : undefined,
         channelInfo: {
-          channelId: storageChannelId,
+          channelId: expectedChannelId,
           channelTitle,
-          subscribers,
-          totalViews,
-          totalVideos,
-          thumbnail,
+          subscribers: Number(verifiedChannel.statistics?.subscriberCount || 0),
+          totalViews: Number(verifiedChannel.statistics?.viewCount || 0),
+          totalVideos: Number(verifiedChannel.statistics?.videoCount || 0),
+          thumbnail: verifiedChannel.snippet?.thumbnails?.default?.url || "",
         },
       },
     });
   } catch (error) {
-    console.error("Exchange error:", error);
-    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[OAuth] Exchange failed: ${errorMessage(error)}`);
     return Response.json(
-      { error: `Failed to process authorization callback: ${errMsg}` },
+      { error: "Failed to process authorization callback" },
       { status: 500 }
     );
   }

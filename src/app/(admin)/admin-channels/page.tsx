@@ -84,7 +84,7 @@ type ChannelRow = {
 export default function AdminChannelsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const isAuthenticated = status === "authenticated" && (!!session?.accessToken || session?.user?.role === "admin");
+  const isAuthenticated = status === "authenticated" && !!session?.user?.email;
 
   const [clients, setClients] = useState<Client[]>([]);
   const [channelDataMap, setChannelDataMap] = useState<Record<string, YouTubeChannel>>({});
@@ -411,7 +411,7 @@ export default function AdminChannelsPage() {
     try {
       const response = await fetch(
         `/api/channel-tokens?action=removeChannel&channelId=${encodeURIComponent(channelId)}`,
-        { cache: "no-store" }
+        { method: "DELETE", cache: "no-store" }
       );
       if (!response.ok) throw new Error("Channel removal failed");
 
@@ -1022,15 +1022,22 @@ export default function AdminChannelsPage() {
                 {selectedChannel.tokenStatus === "valid" && (
                   <button
                     onClick={async () => {
-                      if (!confirm(`Expire token for ${selectedChannel.name}? Client will need to re-authorize.`)) return;
-                      await fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(selectedChannel.channelId)}`);
+                      if (!confirm(`Revoke Google access for ${selectedChannel.name} and delete its stored YouTube data? The channel owner will need to authorize again.`)) return;
+                      const response = await fetch(
+                        `/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(selectedChannel.channelId)}`,
+                        { method: "DELETE" }
+                      );
+                      if (!response.ok) {
+                        alert("Google access could not be revoked. Please retry.");
+                        return;
+                      }
                       setTokenStatuses((prev) => ({ ...prev, [selectedChannel.channelId]: "none" }));
                       setSelectedChannel({ ...selectedChannel, tokenStatus: "none" });
                     }}
                     className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-sm"
                   >
                     <XCircle className="w-4 h-4" />
-                    Expire Token
+                    Revoke Access
                   </button>
                 )}
               </div>
@@ -1155,14 +1162,22 @@ export default function AdminChannelsPage() {
                 <button
                   className="w-full px-4 py-2.5 text-left text-sm hover:bg-amber-50 flex items-center gap-2 text-amber-600"
                   onClick={async () => {
-                    await fetch(`/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channel.channelId)}`);
+                    if (!confirm(`Revoke Google access for ${channel.name} and delete its stored YouTube data?`)) return;
+                    const response = await fetch(
+                      `/api/channel-tokens?action=deleteToken&channelId=${encodeURIComponent(channel.channelId)}`,
+                      { method: "DELETE" }
+                    );
+                    if (!response.ok) {
+                      alert("Google access could not be revoked. Please retry.");
+                      return;
+                    }
                     setTokenStatuses((prev) => ({ ...prev, [channel.channelId]: "none" }));
                     setActiveActionMenu(null);
                     setMenuPosition(null);
                   }}
                 >
                   <XCircle className="w-4 h-4" />
-                  Expire Token
+                  Revoke Access
                 </button>
               )}
               <div className="border-t border-border my-1" />
@@ -1182,7 +1197,10 @@ export default function AdminChannelsPage() {
                 onClick={async () => {
                   if (!confirm(`PERMANENT REMOVE: Are you sure you want to permanently remove ${channel.name} (${channel.channelId})?\n\nThis will:\n- Delete token\n- Remove all cached data\n- Remove from client's account\n\nThis action CANNOT be undone!`)) return;
                   try {
-                    const res = await fetch(`/api/channel-tokens?action=permanentRemoveChannel&channelId=${encodeURIComponent(channel.channelId)}`);
+                    const res = await fetch(
+                      `/api/channel-tokens?action=permanentRemoveChannel&channelId=${encodeURIComponent(channel.channelId)}`,
+                      { method: "DELETE" }
+                    );
                     if (res.ok) {
                       alert(`Channel ${channel.name} permanently removed.`);
                       window.location.reload();

@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import { Loader2 } from "lucide-react";
+import { InTubeMediaMark } from "@/components/branding/InTubeMediaMark";
+import { YouTubeAttribution } from "@/components/branding/YouTubeAttribution";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
@@ -252,46 +254,6 @@ export default function LoginPage() {
           </svg>
         </div>
 
-        {/* Floating YouTube Icons — continuously moving & rotating */}
-        <div className="absolute top-[10%] left-[5%] opacity-[0.08]" style={{ animation: "float1 18s ease-in-out infinite" }}>
-          <svg width="70" height="49" viewBox="0 0 24 17" fill="white">
-            <path d="M23.5 4.7s-.2-1.7-.9-2.4c-.9-.9-1.8-.9-2.3-1C17 1 12 1 12 1s-5 0-8.3.3c-.5.1-1.4.1-2.3 1-.7.7-.9 2.4-.9 2.4S0 6.7 0 8.6v1.8c0 2 .5 3.9.5 3.9s.2 1.7.9 2.4c.9.9 2 .9 2.5 1 1.8.2 7.1.2 7.1.2s5 0 8.3-.3c.5-.1 1.4-.1 2.3-1 .7-.7.9-2.4.9-2.4s.5-2 .5-3.9V8.6c0-2-.5-3.9-.5-3.9z"/>
-            <path d="M9.5 12V5.5l6.5 3.3L9.5 12z" fill="#0f0f0f"/>
-          </svg>
-        </div>
-        <div className="absolute top-[55%] right-[8%] opacity-[0.07]" style={{ animation: "float2 22s ease-in-out infinite" }}>
-          <svg width="55" height="55" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
-            <path d="M9 18V5l12-2v13"/>
-            <circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
-          </svg>
-        </div>
-        <div className="absolute bottom-[15%] left-[20%] opacity-[0.06]" style={{ animation: "float3 16s ease-in-out infinite" }}>
-          <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
-            <polygon points="5 3 19 12 5 21 5 3"/>
-          </svg>
-        </div>
-        <div className="absolute top-[35%] right-[35%] opacity-[0.05]" style={{ animation: "float4 20s ease-in-out infinite" }}>
-          <svg width="45" height="45" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
-            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/>
-          </svg>
-        </div>
-        <div className="absolute top-[70%] left-[60%] opacity-[0.06]" style={{ animation: "float1 24s ease-in-out infinite reverse" }}>
-          <svg width="40" height="28" viewBox="0 0 24 17" fill="white">
-            <path d="M23.5 4.7s-.2-1.7-.9-2.4c-.9-.9-1.8-.9-2.3-1C17 1 12 1 12 1s-5 0-8.3.3c-.5.1-1.4.1-2.3 1-.7.7-.9 2.4-.9 2.4S0 6.7 0 8.6v1.8c0 2 .5 3.9.5 3.9s.2 1.7.9 2.4c.9.9 2 .9 2.5 1 1.8.2 7.1.2 7.1.2s5 0 8.3-.3c.5-.1 1.4-.1 2.3-1 .7-.7.9-2.4.9-2.4s.5-2 .5-3.9V8.6c0-2-.5-3.9-.5-3.9z"/>
-            <path d="M9.5 12V5.5l6.5 3.3L9.5 12z" fill="#0f0f0f"/>
-          </svg>
-        </div>
-        <div className="absolute top-[5%] left-[55%] opacity-[0.05]" style={{ animation: "float3 28s ease-in-out infinite" }}>
-          <svg width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
-          </svg>
-        </div>
-        <div className="absolute bottom-[35%] right-[20%] opacity-[0.04]" style={{ animation: "float2 15s ease-in-out infinite reverse" }}>
-          <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-          </svg>
-        </div>
-
         {/* Sliding light streaks */}
         <div className="absolute top-[30%] h-[1px] w-[300px] bg-gradient-to-r from-transparent via-red-500/30 to-transparent" style={{ animation: "slideRight 8s linear infinite" }} />
         <div className="absolute top-[50%] h-[1px] w-[200px] bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" style={{ animation: "slideRight 12s linear infinite", animationDelay: "-4s" }} />
@@ -315,16 +277,8 @@ export default function LoginPage() {
       {/* Left Side — Branding */}
       <div className="hidden lg:flex flex-1 items-center justify-center relative z-10">
         <div className="max-w-md text-center px-8">
-          {/* YouTube Play Button Logo */}
           <div className="mb-8 flex justify-center">
-            <div className="relative">
-              <div className="w-28 h-28 bg-gradient-to-br from-red-500 to-red-700 rounded-3xl flex items-center justify-center shadow-2xl shadow-red-500/30 transform hover:scale-105 transition-transform duration-300" style={{ animation: "spinSlow 60s linear infinite" }}>
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="white" style={{ animation: "spinSlow 60s linear infinite reverse" }}>
-                  <path d="M8 5v14l11-7z"/>
-                </svg>
-              </div>
-              <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full border-2 border-[#1a0a1e] animate-pulse" />
-            </div>
+            <InTubeMediaMark className="w-28 h-28 rounded-3xl" textClassName="text-4xl" />
           </div>
 
           {/* InTubeMedia Text */}
@@ -363,11 +317,7 @@ export default function LoginPage() {
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
             <div className="inline-flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-700 rounded-xl flex items-center justify-center shadow-lg shadow-red-500/20">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                  <path d="M8 5v14l11-7z"/>
-                </svg>
-              </div>
+              <InTubeMediaMark className="w-12 h-12" textClassName="text-sm" />
               <div className="text-left">
                 <h1 className="text-2xl font-black text-white">
                   <span className="bg-gradient-to-r from-red-400 to-pink-500 bg-clip-text text-transparent">InTubeMedia</span>
@@ -693,6 +643,17 @@ export default function LoginPage() {
               </svg>
               {googleLoading ? "Connecting..." : "Sign in with Google"}
             </button>}
+            {mode !== "forgot" && (
+              <p className="mt-3 text-center text-[11px] leading-4 text-white/40">
+                Google Sign-In authenticates your CMS account on Google&apos;s domain. It does not connect or manage a YouTube channel.
+              </p>
+            )}
+            <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-3 text-xs leading-5 text-white/50">
+              Never enter your Google or YouTube password into an InTubeMedia email/password field. YouTube channel authorization is a separate Google-hosted consent flow.
+            </div>
+            <div className="mt-5 flex justify-center rounded-lg bg-white px-3 py-2">
+              <YouTubeAttribution />
+            </div>
           </div>
 
           <p className="text-center text-xs text-white/25 mt-4">
@@ -704,6 +665,8 @@ export default function LoginPage() {
           </p>
           <p className="text-center text-xs text-white/20 mt-3">
             <a href="/privacy-policy" target="_blank" className="hover:text-white/40 underline">Privacy Policy</a>
+            <span className="mx-2">·</span>
+            <a href="/terms" target="_blank" className="hover:text-white/40 underline">Terms</a>
           </p>
         </div>
       </div>

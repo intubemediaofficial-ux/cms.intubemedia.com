@@ -1,199 +1,167 @@
-import Link from "next/link";
+import { PublicFooter, PublicHeader } from "@/components/branding/PublicSiteChrome";
+import { YouTubeAttribution } from "@/components/branding/YouTubeAttribution";
+
+const externalLinkClass = "text-red-600 hover:underline break-words";
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border p-8 sm:p-12">
-        <div className="flex items-center gap-4 mb-6">
-          <Link href="/" className="text-sm text-blue-600 hover:underline">&larr; Home</Link>
-          <Link href="/privacy-policy" className="text-sm text-blue-600 hover:underline">Privacy Policy</Link>
-          <Link href="/about" className="text-sm text-blue-600 hover:underline">About Us</Link>
-          <Link href="/contact" className="text-sm text-blue-600 hover:underline">Contact Us</Link>
-          <Link href="/faq" className="text-sm text-blue-600 hover:underline">FAQ</Link>
-        </div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Terms &amp; Conditions</h1>
-        <p className="text-sm text-gray-500 mb-8">Last updated: May 14, 2026</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+      <PublicHeader />
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-10">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between mb-10">
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">Terms of Service</h1>
+              <p className="text-sm text-slate-500 mt-2">Effective and last updated: June 7, 2026</p>
+            </div>
+            <YouTubeAttribution />
+          </div>
 
-        <div className="space-y-6 text-gray-700 text-sm leading-relaxed">
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">1. Acceptance of Terms</h2>
-            <p>
-              By accessing and using InTubeMedia (&quot;the Service&quot;) at cms.intubemedia.com,
-              you agree to be bound by these Terms &amp; Conditions. If you do not agree with any part
-              of these terms, you must not use our Service.
-            </p>
-          </section>
+          <div className="space-y-9 text-slate-700 leading-7">
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">1. Acceptance and service</h2>
+              <p>
+                These Terms govern use of InTubeMedia at cms.intubemedia.com. InTubeMedia provides
+                role-based channel management, YouTube video operations, analytics, revenue reporting,
+                exports, payments, and related CMS tools for authorized creators, companies, and
+                administrators. By creating an account, using the service, or authorizing a channel, you
+                agree to these Terms and the <a className={externalLinkClass} href="/privacy-policy">Privacy Policy</a>.
+              </p>
+            </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">2. Description of Service</h2>
-            <p>
-              InTubeMedia is a YouTube channel management system (CMS) operated by InTubeMedia.
-              The Service provides the following features to registered users:
-            </p>
-            <ul className="list-disc pl-5 space-y-1 mt-2">
-              <li>YouTube channel analytics dashboard (revenue, views, subscribers, watch time)</li>
-              <li>Per-channel and per-video revenue tracking with daily and monthly breakdowns</li>
-              <li>Video management including privacy status, monetization, and duplicate detection</li>
-              <li>Revenue reports with INR conversion and Excel export</li>
-              <li>Payment tracking and withdrawal request management</li>
-              <li>Music distribution to streaming platforms</li>
-              <li>Copyright claim monitoring and release requests</li>
-              <li>Multi-channel management under a single account</li>
-            </ul>
-          </section>
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">2. CMS accounts and Google credentials</h2>
+              <ul className="list-disc pl-6 space-y-2">
+                <li>You may authenticate your CMS account using a local InTubeMedia email/password or Google Sign-In.</li>
+                <li>A local CMS password is separate from your Google and YouTube credentials. You must never enter a Google or YouTube password into an InTubeMedia email/password field.</li>
+                <li>Google Sign-In and YouTube channel authorization are hosted by Google. InTubeMedia does not receive or store your Google password.</li>
+                <li>You are responsible for accurate account information, protecting your CMS credentials, and promptly reporting unauthorized access.</li>
+                <li>Accounts and channel assignments may require administrator approval and may be restricted according to the user&apos;s authorized role.</li>
+              </ul>
+            </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">3. User Accounts</h2>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>You must create an account to use the Service by registering with your email and password or signing in through Google OAuth.</li>
-              <li>New accounts require admin approval before full access is granted.</li>
-              <li>You are responsible for maintaining the security of your account credentials.</li>
-              <li>You must provide accurate and complete information during registration.</li>
-              <li>You must not share your account credentials with any other person.</li>
-              <li>You are responsible for all activities that occur under your account.</li>
-            </ul>
-          </section>
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">3. YouTube authorization</h2>
+              <p className="mb-3">
+                InTubeMedia uses Google-hosted OAuth 2.0, the YouTube Data API, and the YouTube Analytics
+                API. Before Google authorization, the channel owner or authorized manager must review the
+                requested data and purposes, accept the policies, and confirm authority over the exact channel.
+              </p>
+              <ul className="list-disc pl-6 space-y-2">
+                <li><code>youtube</code> supports authorized channel/video reads and explicit video update or delete actions.</li>
+                <li><code>yt-analytics.readonly</code> supports analytics dashboards and reports.</li>
+                <li><code>yt-analytics-monetary.readonly</code> supports revenue and monetary reporting.</li>
+                <li>Authorization is channel-specific. InTubeMedia verifies the Google-returned channel ID against the assigned CMS channel and rejects mismatches.</li>
+                <li>You represent that you own the channel or have valid authority from the owner to grant the requested access.</li>
+              </ul>
+            </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">4. YouTube API &amp; Google Services</h2>
-            <p className="mb-2">
-              The Service uses the YouTube Data API and YouTube Analytics API to access your YouTube channel data.
-              By connecting your YouTube channel(s), you agree to the following:
-            </p>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>
-                You authorize us to access your YouTube channel data (statistics, analytics, revenue, videos)
-                as described in our{" "}
-                <Link href="/privacy-policy" className="text-blue-600 underline">
-                  Privacy Policy
-                </Link>.
-              </li>
-              <li>
-                Your use of the Service is also subject to{" "}
-                <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                  YouTube Terms of Service
-                </a>{" "}
-                and{" "}
-                <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                  Google Privacy Policy
-                </a>.
-              </li>
-              <li>You can revoke our access to your YouTube data at any time through your Google Account permissions at{" "}
-                <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                  myaccount.google.com/permissions
-                </a>.
-              </li>
-              <li>We adhere to the{" "}
-                <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">4. Video and write actions</h2>
+              <p>
+                InTubeMedia does not silently edit or delete YouTube videos. An authorized user must
+                deliberately initiate the specific update, privacy change, or delete action in the CMS.
+                The service sends the request to YouTube first and updates local state only after YouTube
+                confirms success or confirms that the item was already removed. You are responsible for
+                reviewing the selected channel, video, and requested action before confirming it.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">5. Revocation, channel removal, and deletion</h2>
+              <ul className="list-disc pl-6 space-y-2">
+                <li>You may revoke channel access through InTubeMedia&apos;s Revoke Access, delink, or remove controls.</li>
+                <li>An in-app revocation requests revocation from Google and deletes the local token and authorized channel caches. If cleanup fails, the service will not intentionally present the operation as successful.</li>
+                <li>You may also revoke access through <a className={externalLinkClass} href="https://security.google.com/settings/security/permissions" target="_blank" rel="noopener noreferrer">Google Account permissions</a>. InTubeMedia detects invalid authorization during scheduled refresh/API revalidation and deletes related authorized data.</li>
+                <li>Removing a channel from the CMS does not delete the YouTube channel itself. It removes the CMS assignment, authorization, and stored authorized data.</li>
+                <li>Account or data-deletion requests can be sent to <a className={externalLinkClass} href="mailto:shivlalbainslaofficial@gmail.com">shivlalbainslaofficial@gmail.com</a>. We may require identity and channel verification before deletion.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">6. Analytics, revenue, and exports</h2>
+              <p>
+                Analytics and estimated revenue are obtained from YouTube APIs and may be delayed,
+                corrected, withheld, rounded, or unavailable due to YouTube processing, channel
+                permissions, API quota, invalid authorization, currency conversion, or other factors.
+                Current-month figures may be incomplete. InTubeMedia may keep monthly caches while
+                authorization remains valid so dashboards and authorized exports remain consistent, but
+                revalidates or refreshes stored API statistics at least every 30 days. Reports are
+                informational and do not replace YouTube&apos;s final accounting, contracts, tax records, or
+                professional financial advice.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">7. Google API Limited Use</h2>
+              <p>
+                InTubeMedia&apos;s use and transfer of information received from Google APIs adheres to the{" "}
+                <a className={externalLinkClass} href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">
                   Google API Services User Data Policy
-                </a>, including the Limited Use requirements.
-              </li>
-            </ul>
-          </section>
+                </a>, including its Limited Use requirements. YouTube API data is not sold, used for
+                targeted advertising, or used for unrelated credit, employment, or eligibility decisions.
+              </p>
+            </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">5. Acceptable Use</h2>
-            <p className="mb-2">You agree not to:</p>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Use the Service for any unlawful purpose or in violation of any applicable laws</li>
-              <li>Attempt to gain unauthorized access to the Service or its related systems</li>
-              <li>Interfere with or disrupt the Service or its infrastructure</li>
-              <li>Use automated systems (bots, scrapers) to access the Service without our consent</li>
-              <li>Impersonate another user or misrepresent your affiliation with any entity</li>
-              <li>Upload or distribute malicious content or software through the Service</li>
-              <li>Use the Service to violate YouTube&apos;s Terms of Service or Community Guidelines</li>
-            </ul>
-          </section>
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">8. Acceptable use</h2>
+              <p>You must not:</p>
+              <ul className="list-disc pl-6 mt-3 space-y-2">
+                <li>authorize a channel you do not own or manage, impersonate another person, or provide misleading authorization information;</li>
+                <li>attempt to access another client&apos;s channels, tokens, analytics, revenue, or account;</li>
+                <li>circumvent Google consent, API quotas, role controls, security checks, or channel-ID verification;</li>
+                <li>use the service to violate copyright, privacy, law, the YouTube Terms, or Google/YouTube API policies;</li>
+                <li>extract, disclose, sell, or misuse Google or YouTube user data;</li>
+                <li>interfere with the service, upload malicious code, or attempt unauthorized access.</li>
+              </ul>
+            </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">6. Revenue Data &amp; Financial Information</h2>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Revenue data displayed in the Service is sourced from the YouTube Analytics API and may be subject to YouTube&apos;s reporting delays and adjustments.</li>
-              <li>INR conversion rates are fetched from third-party exchange rate APIs and may vary slightly from bank rates.</li>
-              <li>The Service provides revenue data for informational purposes only. We are not responsible for discrepancies between our displayed data and actual YouTube payments.</li>
-              <li>Revenue figures are estimates and may change until finalized by YouTube.</li>
-            </ul>
-          </section>
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">9. Third-party terms</h2>
+              <p>
+                Connected YouTube functionality is also governed by the{" "}
+                <a className={externalLinkClass} href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer">YouTube Terms of Service</a>, the{" "}
+                <a className={externalLinkClass} href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>, and applicable Google/YouTube API terms and policies. Google and YouTube may change, limit, or discontinue APIs independently of InTubeMedia.
+              </p>
+            </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">7. Intellectual Property</h2>
-            <p>
-              The Service, including its design, features, code, and content (excluding user data), is owned by
-              InTubeMedia. You retain ownership of your YouTube channel data and content. By using the Service,
-              you do not transfer any intellectual property rights to us.
-            </p>
-          </section>
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">10. Suspension and termination</h2>
+              <p>
+                We may suspend or terminate access when reasonably necessary for security, inactivity,
+                nonpayment, legal compliance, API-policy compliance, loss of authorization, false channel
+                authority, or a material breach of these Terms. Where appropriate, we will provide notice
+                and an opportunity to correct the issue. Users may stop using the service and request
+                account/data deletion at any time.
+              </p>
+            </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">8. Account Termination</h2>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>We reserve the right to suspend or terminate your account if you violate these Terms.</li>
-              <li>You may request account deletion at any time by contacting our admin team.</li>
-              <li>Upon account deletion, your personal data will be removed within 30 days as described in our Privacy Policy.</li>
-              <li>Admin may expire or revoke your channel tokens at any time for security or maintenance purposes. You will be notified and can re-authorize your channels.</li>
-            </ul>
-          </section>
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">11. Availability, warranties, and liability</h2>
+              <p>
+                The service is provided on an &quot;as available&quot; basis. To the extent permitted by law,
+                InTubeMedia does not guarantee uninterrupted API availability, exact real-time analytics,
+                final revenue amounts, or that every third-party API operation will succeed. Nothing in
+                these Terms excludes liability that cannot legally be excluded. To the extent permitted by
+                law, InTubeMedia is not liable for indirect or consequential loss caused by third-party API
+                outages, user error, unauthorized user actions, or data supplied by Google/YouTube.
+              </p>
+            </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">9. Limitation of Liability</h2>
-            <p>
-              The Service is provided &quot;as is&quot; without warranties of any kind. InTubeMedia shall not
-              be liable for any indirect, incidental, special, or consequential damages arising from your
-              use of the Service. This includes but is not limited to loss of revenue data, service
-              interruptions, or inaccuracies in displayed analytics.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">10. Service Availability</h2>
-            <p>
-              We strive to keep the Service available at all times but do not guarantee uninterrupted access.
-              The Service may be temporarily unavailable due to maintenance, updates, or circumstances beyond
-              our control. YouTube API quota limits may also affect data availability.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">11. Changes to Terms</h2>
-            <p>
-              We may update these Terms &amp; Conditions from time to time. Changes will be posted on this
-              page with an updated revision date. Continued use of the Service after changes constitutes
-              acceptance of the updated terms.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">12. Governing Law</h2>
-            <p>
-              These Terms shall be governed by and construed in accordance with the laws of India.
-              Any disputes arising from these Terms or the Service shall be subject to the exclusive
-              jurisdiction of the courts in India.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">13. Contact Us</h2>
-            <p>
-              If you have questions about these Terms &amp; Conditions, contact us at:
-            </p>
-            <ul className="list-none mt-2 space-y-1">
-              <li><strong>Email:</strong> contact@intubemedia.com</li>
-              <li><strong>Website:</strong>{" "}
-                <a href="https://intubemedia.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                  intubemedia.com
-                </a>
-              </li>
-            </ul>
-          </section>
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">12. Changes, governing law, and contact</h2>
+              <p>
+                We may update these Terms when the service, API requirements, or law changes. Updated Terms
+                will be posted with a revised effective date. These Terms are governed by applicable laws of
+                India, and disputes will be subject to the competent courts in India, except where mandatory
+                consumer law provides otherwise. Questions, complaints, or deletion requests should be sent to{" "}
+                <a className={externalLinkClass} href="mailto:shivlalbainslaofficial@gmail.com">shivlalbainslaofficial@gmail.com</a>.
+              </p>
+            </section>
+          </div>
         </div>
-
-        <div className="mt-8 pt-6 border-t flex items-center justify-between text-xs text-gray-400">
-          <span>&copy; {new Date().getFullYear()} InTubeMedia. All rights reserved.</span>
-          <Link href="/privacy-policy" className="text-blue-500 hover:underline">
-            Privacy Policy
-          </Link>
-        </div>
-      </div>
+      </main>
+      <PublicFooter />
     </div>
   );
 }

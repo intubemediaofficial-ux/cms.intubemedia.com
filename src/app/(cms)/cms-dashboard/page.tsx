@@ -33,7 +33,7 @@ const channelOverviewRows: ChannelOverviewRow[] = [
 export default function CmsDashboardPage() {
   return (
     <div>
-      {/* Two-column layout matching YouTube CMS exactly */}
+      {/* Two-column content overview */}
       <div className="flex gap-6">
         {/* Issues Card */}
         <div className="flex-1 bg-white rounded-lg border border-[#e5e5e5]">
