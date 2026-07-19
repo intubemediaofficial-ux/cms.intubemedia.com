@@ -151,6 +151,13 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
   const refreshedMetadata = addRequests.length > 0
     ? await sheets.spreadsheets.get({ spreadsheetId })
     : metadata;
+  const sheetIdByTitle = new Map(
+    (refreshedMetadata.data.sheets || []).flatMap((sheet) =>
+      sheet.properties?.title && sheet.properties.sheetId !== undefined
+        ? [[sheet.properties.title, sheet.properties.sheetId] as const]
+        : []
+    )
+  );
   const staleSheetIds = (refreshedMetadata.data.sheets || []).flatMap((sheet) => {
     const title = sheet.properties?.title;
     const sheetId = sheet.properties?.sheetId;
@@ -255,6 +262,67 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
       data: updates,
     },
   });
+
+  const formatRequests = Array.from(vendorRows, ([title, rows]) => {
+    const sheetId = sheetIdByTitle.get(title);
+    if (sheetId === undefined) return [];
+    const totalRowIndex = rows.length - 1;
+    return [
+      {
+        repeatCell: {
+          range: {
+            sheetId,
+            startColumnIndex: 0,
+            endColumnIndex: 4 + monthlyCaches.length,
+          },
+          cell: {
+            userEnteredFormat: {
+              textFormat: {
+                bold: false,
+                fontSize: 10,
+                foregroundColor: { red: 0, green: 0, blue: 0 },
+              },
+            },
+          },
+          fields: "userEnteredFormat.textFormat",
+        },
+      },
+      {
+        repeatCell: {
+          range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
+          cell: { userEnteredFormat: { textFormat: { bold: true } } },
+          fields: "userEnteredFormat.textFormat.bold",
+        },
+      },
+      {
+        repeatCell: {
+          range: {
+            sheetId,
+            startRowIndex: totalRowIndex,
+            endRowIndex: totalRowIndex + 1,
+            startColumnIndex: 0,
+            endColumnIndex: 4 + monthlyCaches.length,
+          },
+          cell: {
+            userEnteredFormat: {
+              textFormat: {
+                bold: true,
+                fontSize: 14,
+                foregroundColor: { red: 0.85, green: 0, blue: 0 },
+              },
+            },
+          },
+          fields: "userEnteredFormat.textFormat",
+        },
+      },
+    ];
+  }).flat();
+  if (formatRequests.length > 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: formatRequests },
+    });
+  }
 
   return {
     status: "updated",
