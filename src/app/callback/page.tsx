@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { CheckCircle, XCircle, Loader2, ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import { CheckCircle, XCircle, Loader2, ExternalLink } from "lucide-react";
 
 interface ChannelInfo {
   channelId: string;
@@ -17,12 +16,10 @@ interface ChannelInfo {
 
 function CallbackContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [channelInfo, setChannelInfo] = useState<ChannelInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [kvConfigured, setKvConfigured] = useState<boolean | null>(null);
-  const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
     const code = searchParams.get("code");
@@ -83,22 +80,6 @@ function CallbackContent() {
     exchangeCode();
   }, [searchParams]);
 
-  // Auto-redirect to channels page after successful token validation
-  useEffect(() => {
-    if (status !== "success") return;
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          router.push("/channels");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [status, router]);
-
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-lg w-full">
@@ -120,7 +101,9 @@ function CallbackContent() {
                   <CheckCircle className="w-5 h-5 text-green-600" />
                   <span className="text-green-700 font-medium">YouTube OAuth2 callback processed successfully</span>
                 </div>
-                <p className="text-sm text-green-600 mt-1">Token validated and stored. Redirecting to Channels page in {countdown}s...</p>
+                <p className="text-sm text-green-600 mt-1">
+                  Token validated and stored. You can close this page or open the verified channel on YouTube.
+                </p>
               </div>
               {kvConfigured === false && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
@@ -179,15 +162,17 @@ function CallbackContent() {
             </div>
           )}
 
-          <div className="mt-6 flex justify-end gap-3">
-            <Link
-              href="/channels"
-              className="inline-flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-lg hover:bg-primary/90 transition-colors font-medium"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Go to Channels
-            </Link>
-          </div>
+          {status === "success" && channelInfo && (
+            <div className="mt-6 flex justify-end gap-3">
+              <a
+                href={`https://www.youtube.com/channel/${channelInfo.channelId}`}
+                className="inline-flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-lg hover:bg-primary/90 transition-colors font-medium"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Go to YouTube Channel
+              </a>
+            </div>
+          )}
         </div>
       </div>
     </div>
