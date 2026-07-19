@@ -15,6 +15,10 @@ import { syncVendorGoogleSheet } from "@/lib/vendor-google-sheets";
 const USERS_KEY = "bainsla_users";
 const SYNC_LOCK_KEY = "client_data_sync_lock";
 const SYNC_STATUS_KEY = "client_data_sync_status";
+const DOWNSTREAM_SYNC_LOCK_KEY = "revenue_downstream_sync_lock";
+const CLIENT_CHANNELS_SYNC_URL =
+  process.env.CLIENT_CHANNELS_SYNC_URL ||
+  "https://data.intubemedia.com/api/client-channels-sync";
 
 export type ClientDataSyncMode = "stats" | "revenue";
 
@@ -78,6 +82,12 @@ export interface ClientDataSyncSummary {
   revenueTargetDate?: string;
   results: ClientDataSyncResult[];
   error?: string;
+}
+
+export interface RevenueDownstreamSyncResult {
+  status: "completed" | "already_running" | "partial";
+  vendorSheet: "updated" | "not_configured" | "failed" | "skipped";
+  clientSheet: "updated" | "not_configured" | "failed" | "skipped";
 }
 
 function getRecord(value: unknown): Record<string, unknown> | null {
@@ -259,6 +269,75 @@ function getRevenueDateRange(): { startDate: string; endDate: string } {
     startDate: start.toISOString().slice(0, 10),
     endDate: end.toISOString().slice(0, 10),
   };
+}
+
+async function syncClientChannelsGoogleSheet(): Promise<
+  "updated" | "not_configured" | "failed"
+> {
+  const apiKey = process.env.REVENUE_EXPORT_API_KEY?.trim();
+  if (!apiKey) return "not_configured";
+
+  try {
+    const response = await fetch(CLIENT_CHANNELS_SYNC_URL, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "x-api-key": apiKey,
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(240_000),
+    });
+    if (!response.ok) {
+      console.error(
+        `[ClientDataSync] Client Channels sheet sync failed with HTTP ${response.status}`
+      );
+      return "failed";
+    }
+    return "updated";
+  } catch (error) {
+    console.error(
+      "[ClientDataSync] Client Channels sheet sync failed:",
+      error instanceof Error ? error.message : error
+    );
+    return "failed";
+  }
+}
+
+export async function syncRevenueDownstreamSheets(): Promise<RevenueDownstreamSyncResult> {
+  const acquired = await kv.setIfNotExists(
+    DOWNSTREAM_SYNC_LOCK_KEY,
+    { startedAt: new Date().toISOString() },
+    10 * 60
+  );
+  if (!acquired) {
+    return {
+      status: "already_running",
+      vendorSheet: "skipped",
+      clientSheet: "skipped",
+    };
+  }
+
+  let vendorSheet: RevenueDownstreamSyncResult["vendorSheet"] = "failed";
+  let clientSheet: RevenueDownstreamSyncResult["clientSheet"] = "failed";
+  try {
+    await warmRecentMonths(7);
+
+    try {
+      vendorSheet = (await syncVendorGoogleSheet()).status;
+    } catch (error) {
+      console.error("[ClientDataSync] vendor Google Sheets sync failed:", error);
+    }
+
+    clientSheet = await syncClientChannelsGoogleSheet();
+    return {
+      status:
+        vendorSheet === "failed" || clientSheet === "failed" ? "partial" : "completed",
+      vendorSheet,
+      clientSheet,
+    };
+  } finally {
+    await kv.del(DOWNSTREAM_SYNC_LOCK_KEY);
+  }
 }
 
 export async function syncVerifiedChannelRevenue(
@@ -534,16 +613,7 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
     }
 
     if (mode === "revenue") {
-      try {
-        await warmRecentMonths(7);
-      } catch (error) {
-        console.error("[ClientDataSync] warmRecentMonths failed:", error);
-      }
-      try {
-        await syncVendorGoogleSheet();
-      } catch (error) {
-        console.error("[ClientDataSync] vendor Google Sheets sync failed:", error);
-      }
+      await syncRevenueDownstreamSheets();
     }
 
     summary.completedAt = new Date().toISOString();

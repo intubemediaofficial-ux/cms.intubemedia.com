@@ -20,13 +20,14 @@ function apiKeysMatch(requestKey: string, configuredKey: string): boolean {
     timingSafeEqual(requestBuffer, configuredBuffer);
 }
 
-function isCompletedMonth(month: string): boolean {
+function isAvailableMonth(month: string): boolean {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return false;
-  const now = new Date();
-  const currentMonth = `${now.getUTCFullYear()}-${String(
-    now.getUTCMonth() + 1
+  const reliableDate = new Date();
+  reliableDate.setUTCDate(reliableDate.getUTCDate() - 2);
+  const latestAvailableMonth = `${reliableDate.getUTCFullYear()}-${String(
+    reliableDate.getUTCMonth() + 1
   ).padStart(2, "0")}`;
-  return month < currentMonth;
+  return month <= latestAvailableMonth;
 }
 
 export async function GET(request: Request) {
@@ -44,9 +45,9 @@ export async function GET(request: Request) {
   }
 
   const month = new URL(request.url).searchParams.get("month") || "";
-  if (!isCompletedMonth(month)) {
+  if (!isAvailableMonth(month)) {
     return Response.json(
-      { error: "month must be a completed month in YYYY-MM format" },
+      { error: "month must have available YouTube data in YYYY-MM format" },
       { status: 400 }
     );
   }

@@ -9,8 +9,10 @@ import {
 import { kv } from "@/lib/redis";
 import { removeChannelFromAllCaches } from "@/lib/client-data-cache";
 import {
+  syncRevenueDownstreamSheets,
   syncVerifiedChannelRevenue,
   type ChannelRevenueSyncStatus,
+  type RevenueDownstreamSyncResult,
 } from "@/lib/client-data-sync";
 import {
   getPublicOrigin,
@@ -20,6 +22,7 @@ import {
 } from "@/lib/youtube-oauth";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 interface ChannelScopeUser {
   channels?: string[];
@@ -263,11 +266,25 @@ export async function POST(request: Request) {
       );
     }
 
+    let downstreamSyncStatus: RevenueDownstreamSyncResult = {
+      status: "partial",
+      vendorSheet: "failed",
+      clientSheet: "failed",
+    };
+    try {
+      downstreamSyncStatus = await syncRevenueDownstreamSheets();
+    } catch (error) {
+      console.warn(
+        `[OAuth] Immediate downstream sync failed for ${expectedChannelId}: ${errorMessage(error)}`
+      );
+    }
+
     return Response.json({
       data: {
         success: true,
         kvConfigured: isKVConfigured(),
         revenueSyncStatus,
+        downstreamSyncStatus,
         channelInfo: {
           channelId: expectedChannelId,
           channelTitle,
