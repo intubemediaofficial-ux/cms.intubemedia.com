@@ -7,6 +7,7 @@ import {
   isValidMonth,
 } from "@/lib/monthly-channel-analytics";
 import { kv } from "@/lib/redis";
+import { saveVendorGoogleSheetConfig } from "@/lib/vendor-google-sheet-config";
 import { syncVendorGoogleSheet } from "@/lib/vendor-google-sheets";
 import {
   ChannelVendorAssignment,
@@ -292,6 +293,36 @@ export async function PUT(request: Request) {
 
   const body = await request.json();
   const action = body.action;
+  if (action === "configureSheet") {
+    if (!scope.isAdmin) {
+      return Response.json({ error: "Admin only" }, { status: 403 });
+    }
+    const spreadsheetInput =
+      typeof body.spreadsheetId === "string" ? body.spreadsheetId.trim() : "";
+    const spreadsheetId =
+      spreadsheetInput.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)?.[1] ||
+      (/^[a-zA-Z0-9_-]{20,}$/.test(spreadsheetInput) ? spreadsheetInput : "");
+    const clientEmail = typeof body.clientEmail === "string" ? body.clientEmail.trim() : "";
+    const privateKey = typeof body.privateKey === "string" ? body.privateKey.trim() : "";
+    if (
+      !spreadsheetId ||
+      !clientEmail.endsWith(".gserviceaccount.com") ||
+      !privateKey.includes("-----BEGIN PRIVATE KEY-----") ||
+      !privateKey.includes("-----END PRIVATE KEY-----")
+    ) {
+      return Response.json({ error: "Invalid Google Sheet or service-account JSON" }, { status: 400 });
+    }
+    await saveVendorGoogleSheetConfig({ spreadsheetId, clientEmail, privateKey });
+    try {
+      return Response.json({ data: await syncVendorGoogleSheet() });
+    } catch (error) {
+      console.error("[Vendors] Google Sheets configuration test failed:", error);
+      return Response.json(
+        { error: "Configuration saved, but Google Sheet access failed" },
+        { status: 502 }
+      );
+    }
+  }
   if (action === "syncSheet") {
     if (!scope.isAdmin) {
       return Response.json({ error: "Admin only" }, { status: 403 });
