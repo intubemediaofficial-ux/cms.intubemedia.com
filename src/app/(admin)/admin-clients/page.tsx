@@ -1064,8 +1064,8 @@ export default function AdminClientsPage() {
       {/* Create/Edit User Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl">
-            <div className="flex items-center justify-between p-5 border-b border-border">
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[calc(100vh-2rem)] shadow-xl flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
               <h2 className="text-lg font-semibold text-foreground">
                 {editingClient ? "Edit User" : "Create New User"}
               </h2>
@@ -1079,7 +1079,7 @@ export default function AdminClientsPage() {
                 <X className="w-5 h-5 text-muted" />
               </button>
             </div>
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-y-scroll flex-1 [scrollbar-gutter:stable]">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
@@ -1385,7 +1385,7 @@ export default function AdminClientsPage() {
                 <p className="text-sm text-red-500">{formError}</p>
               )}
             </div>
-            <div className="flex items-center justify-end gap-3 p-5 border-t border-border">
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-border shrink-0">
               <button
                 onClick={() => {
                   setShowModal(false);
