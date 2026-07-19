@@ -19,6 +19,7 @@ interface Vendor {
   id: string;
   name: string;
   channelCount: number;
+  canEdit?: boolean;
 }
 
 interface ReportChannel {
@@ -458,7 +459,10 @@ export function VendorManagementPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="font-medium truncate">{vendor.name}</p>
-                    <p className="text-xs text-muted">{vendor.channelCount} active channels</p>
+                    <p className="text-xs text-muted">
+                      {vendor.channelCount} active channels
+                      {vendor.canEdit === false ? " · Assigned by Admin" : ""}
+                    </p>
                   </div>
                 </button>
               ))}
@@ -485,16 +489,20 @@ export function VendorManagementPage() {
                   <button onClick={fetchReport} className="p-2 border border-border rounded-lg" title="Refresh report">
                     <RefreshCw className={`w-4 h-4 ${reportLoading ? "animate-spin" : ""}`} />
                   </button>
-                  <button
-                    onClick={() => setEditingName(selectedVendor.name)}
-                    className="p-2 border border-border rounded-lg"
-                    title="Rename vendor"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button onClick={deleteVendor} className="p-2 border border-red-200 text-red-600 rounded-lg" title="Delete vendor">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {selectedVendor.canEdit !== false && (
+                    <>
+                      <button
+                        onClick={() => setEditingName(selectedVendor.name)}
+                        className="p-2 border border-border rounded-lg"
+                        title="Rename vendor"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={deleteVendor} className="p-2 border border-red-200 text-red-600 rounded-lg" title="Delete vendor">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={exportReport}
                     disabled={!report || report.channels.length === 0}
@@ -505,7 +513,7 @@ export function VendorManagementPage() {
                 </div>
               </div>
 
-              {editingName && (
+              {editingName && selectedVendor.canEdit !== false && (
                 <div className="bg-white border border-border rounded-xl p-4 flex gap-2">
                   <input value={editingName} onChange={(event) => setEditingName(event.target.value)} className="flex-1 px-3 py-2 border border-border rounded-lg text-sm" />
                   <button onClick={renameVendor} disabled={saving} className="px-4 py-2 bg-primary text-white rounded-lg text-sm">Save</button>

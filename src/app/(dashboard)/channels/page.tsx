@@ -80,6 +80,7 @@ interface ChannelRequest {
 interface VendorOption {
   id: string;
   name: string;
+  canAssign?: boolean;
 }
 
 interface VendorAssignment {
@@ -114,7 +115,8 @@ function getStoredChannels(email: string | null | undefined): StoredChannel[] {
 
 async function saveStoredChannels(
   email: string | null | undefined,
-  channels: StoredChannel[]
+  channels: StoredChannel[],
+  throwOnError = false
 ): Promise<string[]> {
   writeStoredChannels(email, channels);
   const activeIds = channels.filter((channel) => channel.status === "active").map((channel) => channel.id);
@@ -148,7 +150,8 @@ async function saveStoredChannels(
     const json = await response.json();
     if (!response.ok) throw new Error(json.error || "Failed to sync channels");
     return json.data?.rejectedChannels || [];
-  } catch {
+  } catch (error) {
+    if (throwOnError) throw error;
     return [];
   }
 }
@@ -184,6 +187,7 @@ export default function ChannelsPage() {
   const [channelTypeInput, setChannelTypeInput] = useState("");
   const [cmsInput, setCmsInput] = useState("");
   const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
+  const [assignedVendorOptions, setAssignedVendorOptions] = useState<VendorOption[]>([]);
   const [channelVendorIds, setChannelVendorIds] = useState<Record<string, string>>({});
   const [vendorSavingId, setVendorSavingId] = useState<string | null>(null);
   const [vendorInput, setVendorInput] = useState("");
@@ -224,6 +228,11 @@ export default function ChannelsPage() {
   const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null);
   const [userNetworks, setUserNetworks] = useState<string[]>([]);
   const [myCustomNetworks, setMyCustomNetworks] = useState<string[]>([]);
+  const [networkCreateTarget, setNetworkCreateTarget] = useState<"add" | "bulk" | string | null>(null);
+  const [newNetworkName, setNewNetworkName] = useState("");
+  const [networkCreateError, setNetworkCreateError] = useState("");
+  const [networkCreating, setNetworkCreating] = useState(false);
+  const [networkSavingId, setNetworkSavingId] = useState<string | null>(null);
   const [showChannelDetail, setShowChannelDetail] = useState<string | null>(null);
   const [channelDetailData, setChannelDetailData] = useState<{
     revenue?: number;
@@ -422,7 +431,9 @@ export default function ChannelsPage() {
       const response = await fetch("/api/vendors?action=list", { cache: "no-store" });
       const json = await response.json();
       if (response.ok) {
-        setVendorOptions(json.data?.vendors || []);
+        const vendors: VendorOption[] = json.data?.vendors || [];
+        setVendorOptions(vendors.filter((vendor) => vendor.canAssign !== false));
+        setAssignedVendorOptions(json.data?.assignedVendors || vendors);
         setChannelVendorIds(
           Object.fromEntries(
             (json.data?.assignments || []).map((assignment: VendorAssignment) => [
@@ -434,6 +445,7 @@ export default function ChannelsPage() {
       }
     } catch {
       setVendorOptions([]);
+      setAssignedVendorOptions([]);
       setChannelVendorIds({});
     }
   }, [isAuthenticated]);
@@ -515,24 +527,93 @@ export default function ChannelsPage() {
     fetchAllNetworks();
   }, [isAuthenticated]);
 
-  // networkOptions = all available networks (no hardcoded defaults)
-  const networkOptions = userNetworks;
+  const networkOptions = useMemo(
+    () => [...userNetworks].sort((a, b) => a.localeCompare(b)),
+    [userNetworks]
+  );
 
-  // Save custom network to user's profile
-  const saveCustomNetwork = useCallback(async (networkName: string) => {
-    if (!networkName.trim()) return;
-    // Update display list instantly
-    setUserNetworks((prev) => [...new Set([...prev, networkName.trim()])]);
-    // Track only custom networks separately for KV save
-    const updatedCustom = [...new Set([...myCustomNetworks, networkName.trim()])];
-    setMyCustomNetworks(updatedCustom);
-    // Save ONLY custom networks to KV (background, non-blocking)
-    fetch("/api/users", {
-      method: "PATCH",
+  const saveCustomNetwork = useCallback(async (networkName: string): Promise<string> => {
+    const name = networkName.trim().replace(/\s+/g, " ");
+    if (!name) throw new Error("Network name is required");
+    const existing = userNetworks.find(
+      (network) => network.toLowerCase() === name.toLowerCase()
+    );
+    if (existing) return existing;
+
+    const updatedCustom = [...myCustomNetworks, name].filter(
+      (network, index, networks) =>
+        networks.findIndex((item) => item.toLowerCase() === network.toLowerCase()) === index
+    );
+    const response = await fetch(isAdmin ? "/api/networks" : "/api/users", {
+      method: isAdmin ? "POST" : "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customNetworks: updatedCustom }),
-    }).catch(() => {});
-  }, [myCustomNetworks]);
+      body: JSON.stringify(
+        isAdmin
+          ? { name, revenueSharePercent: 0 }
+          : { customNetworks: updatedCustom }
+      ),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error || "Failed to create network");
+
+    if (!isAdmin) setMyCustomNetworks(json.data?.customNetworks || updatedCustom);
+    setUserNetworks((current) => [...current, name].filter(
+      (network, index, networks) =>
+        networks.findIndex((item) => item.toLowerCase() === network.toLowerCase()) === index
+    ));
+    return name;
+  }, [isAdmin, myCustomNetworks, userNetworks]);
+
+  const openNetworkCreator = useCallback((target: "add" | "bulk" | string) => {
+    setNetworkCreateTarget(target);
+    setNewNetworkName("");
+    setNetworkCreateError("");
+  }, []);
+
+  const handleChannelNetworkChange = useCallback(async (channelId: string, networkName: string): Promise<boolean> => {
+    const previousChannels = storedChannels;
+    const updatedChannels = storedChannels.map((channel) =>
+      channel.id === channelId ? { ...channel, cms: networkName } : channel
+    );
+    setNetworkSavingId(channelId);
+    try {
+      await saveStoredChannels(storageIdentity, updatedChannels, true);
+      setStoredChannels(updatedChannels);
+      return true;
+    } catch (error) {
+      writeStoredChannels(storageIdentity, previousChannels);
+      window.alert(error instanceof Error ? error.message : "Failed to save network assignment");
+      return false;
+    } finally {
+      setNetworkSavingId(null);
+    }
+  }, [storageIdentity, storedChannels]);
+
+  const handleCreateNetwork = useCallback(async () => {
+    if (!networkCreateTarget || networkCreating) return;
+    setNetworkCreating(true);
+    setNetworkCreateError("");
+    try {
+      const name = await saveCustomNetwork(newNetworkName);
+      if (networkCreateTarget === "add") {
+        setCmsInput(name);
+      } else if (networkCreateTarget === "bulk") {
+        setBulkCms(name);
+      } else {
+        const saved = await handleChannelNetworkChange(networkCreateTarget, name);
+        if (!saved) {
+          setNetworkCreateError("Network was created, but the channel assignment could not be saved.");
+          return;
+        }
+      }
+      setNetworkCreateTarget(null);
+      setNewNetworkName("");
+    } catch (error) {
+      setNetworkCreateError(error instanceof Error ? error.message : "Failed to create network");
+    } finally {
+      setNetworkCreating(false);
+    }
+  }, [handleChannelNetworkChange, networkCreateTarget, networkCreating, newNetworkName, saveCustomNetwork]);
 
   const [inviteError, setInviteError] = useState("");
 
@@ -665,10 +746,6 @@ export default function ChannelsPage() {
       if (channelData) {
         setChannelDataMap((prev) => ({ ...prev, [actualId]: channelData! }));
       }
-      // Save custom network name if it's new
-      if (cmsInput.trim() && !networkOptions.includes(cmsInput.trim())) {
-        saveCustomNetwork(cmsInput.trim());
-      }
       setShowModal(false);
       setChannelIdInput("");
       setCategoryInput("");
@@ -681,7 +758,7 @@ export default function ChannelsPage() {
     } finally {
       setAddingChannel(false);
     }
-  }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, vendorInput, storedChannels, networkOptions, saveCustomNetwork, storageIdentity, guardPending, handleVendorAssignment]);
+  }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, vendorInput, storedChannels, storageIdentity, guardPending, handleVendorAssignment]);
 
   const handleDelink = async (channelId: string) => {
     const response = await fetch(
@@ -862,14 +939,10 @@ export default function ChannelsPage() {
       setStoredChannels(nextChannels);
     }
 
-    // Save custom network name if it's new
-    if (bulkCms.trim() && !networkOptions.includes(bulkCms.trim())) {
-      saveCustomNetwork(bulkCms.trim());
-    }
     setBulkAdding(false);
     setBulkResult(`Added ${added} channel(s). ${skipped > 0 ? `Skipped ${skipped} (already exist or not found).` : ""}`);
     if (added > 0) setBulkInput("");
-  }, [bulkInput, bulkCategory, bulkChannelType, bulkCms, storedChannels, networkOptions, saveCustomNetwork, storageIdentity, guardPending]);
+  }, [bulkInput, bulkCategory, bulkChannelType, bulkCms, storedChannels, storageIdentity, guardPending]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -1357,29 +1430,29 @@ export default function ChannelsPage() {
                           </button>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-foreground">
-                        <input
-                          type="text"
-                          defaultValue={channel.cms}
-                          placeholder="Type network..."
-                          list={`net-opts-${channel.id}`}
-                          onBlur={(e) => {
-                            const val = e.target.value.trim();
-                            if (val !== channel.cms) {
-                              const updated = storedChannels.map((c) => c.id === channel.id ? { ...c, cms: val } : c);
-                              saveStoredChannels(storageIdentity, updated);
-                              setStoredChannels(updated);
-                              if (val && !networkOptions.includes(val)) {
-                                saveCustomNetwork(val);
-                              }
+                      <td className="px-4 py-3 text-foreground min-w-[180px]">
+                        <select
+                          value={channel.cms}
+                          disabled={networkSavingId === channel.id}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            if (value === "__create__") {
+                              openNetworkCreator(channel.id);
+                            } else {
+                              void handleChannelNetworkChange(channel.id, value);
                             }
                           }}
-                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                          className="w-full px-1.5 py-0.5 border border-transparent hover:border-border focus:border-primary rounded text-sm bg-transparent focus:bg-background focus:outline-none"
-                        />
-                        <datalist id={`net-opts-${channel.id}`}>
-                          {networkOptions.map((n) => <option key={n} value={n} />)}
-                        </datalist>
+                          className="w-full px-2 py-1.5 border border-border rounded text-xs bg-white disabled:opacity-60"
+                        >
+                          <option value="">No network</option>
+                          {channel.cms && !networkOptions.includes(channel.cms) && (
+                            <option value={channel.cms}>{channel.cms}</option>
+                          )}
+                          {networkOptions.map((network) => (
+                            <option key={network} value={network}>{network}</option>
+                          ))}
+                          <option value="__create__">+ Create New Network</option>
+                        </select>
                       </td>
                       <td className="px-4 py-3 text-foreground min-w-[150px]">
                         {activeTab === "channels" ? (
@@ -1390,12 +1463,20 @@ export default function ChannelsPage() {
                             className="w-full px-2 py-1.5 border border-border rounded text-xs bg-white disabled:opacity-60"
                           >
                             <option value="">No vendor</option>
+                            {channelVendorIds[channel.id] &&
+                              !vendorOptions.some((vendor) => vendor.id === channelVendorIds[channel.id]) && (
+                                <option value={channelVendorIds[channel.id]} disabled>
+                                  {assignedVendorOptions.find((vendor) => vendor.id === channelVendorIds[channel.id])?.name || "Assigned vendor"}
+                                </option>
+                              )}
                             {vendorOptions.map((vendor) => (
                               <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
                             ))}
                           </select>
                         ) : (
-                          vendorOptions.find((vendor) => vendor.id === channelVendorIds[channel.id])?.name || "—"
+                          assignedVendorOptions.find((vendor) => vendor.id === channelVendorIds[channel.id])?.name ||
+                          vendorOptions.find((vendor) => vendor.id === channelVendorIds[channel.id])?.name ||
+                          "—"
                         )}
                       </td>
                       <td className="px-4 py-3 text-foreground">{channel.category}</td>
@@ -1596,17 +1677,23 @@ export default function ChannelsPage() {
               <option value="">Select Channel Type</option>
               {CHANNEL_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
-            <input
-              type="text"
+            <select
               value={bulkCms}
-              onChange={(e) => setBulkCms(e.target.value)}
-              placeholder="Type network name..."
-              list="network-options-bulk"
+              onChange={(event) => {
+                if (event.target.value === "__create__") {
+                  openNetworkCreator("bulk");
+                } else {
+                  setBulkCms(event.target.value);
+                }
+              }}
               className="border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-            <datalist id="network-options-bulk">
-              {networkOptions.map((c) => <option key={c} value={c} />)}
-            </datalist>
+            >
+              <option value="">Select Network</option>
+              {networkOptions.map((network) => (
+                <option key={network} value={network}>{network}</option>
+              ))}
+              <option value="__create__">+ Create New Network</option>
+            </select>
           </div>
 
           <textarea
@@ -1708,20 +1795,24 @@ export default function ChannelsPage() {
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Network
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={cmsInput}
-                      onChange={(e) => setCmsInput(e.target.value)}
-                      placeholder="Type network name or select..."
-                      list="network-options-add"
-                      className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                    />
-                    <datalist id="network-options-add">
-                      {networkOptions.map((c) => <option key={c} value={c} />)}
-                    </datalist>
-                  </div>
-                  <p className="text-xs text-muted mt-1">Type a custom name or select from list. New names are saved automatically.</p>
+                  <select
+                    value={cmsInput}
+                    onChange={(event) => {
+                      if (event.target.value === "__create__") {
+                        openNetworkCreator("add");
+                      } else {
+                        setCmsInput(event.target.value);
+                      }
+                    }}
+                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  >
+                    <option value="">Select Network</option>
+                    {networkOptions.map((network) => (
+                      <option key={network} value={network}>{network}</option>
+                    ))}
+                    <option value="__create__">+ Create New Network</option>
+                  </select>
+                  <p className="text-xs text-muted mt-1">Select an existing network or create a new one explicitly.</p>
                 </div>
               </div>
               <div>
@@ -1787,6 +1878,65 @@ export default function ChannelsPage() {
                   <Plus className="w-4 h-4" />
                 )}
                 Add Channel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {networkCreateTarget && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">Create New Network</h2>
+              <button
+                type="button"
+                onClick={() => setNetworkCreateTarget(null)}
+                className="p-1.5 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5 text-muted" />
+              </button>
+            </div>
+            <div className="p-5">
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Network Name
+              </label>
+              <input
+                type="text"
+                value={newNetworkName}
+                onChange={(event) => setNewNetworkName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && newNetworkName.trim()) {
+                    void handleCreateNetwork();
+                  }
+                }}
+                placeholder="Enter the exact network name"
+                className="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                autoFocus
+              />
+              <p className="text-xs text-muted mt-2">
+                This creates one saved option. Channel network fields cannot be freely edited.
+              </p>
+              {networkCreateError && (
+                <p className="text-sm text-red-500 mt-3">{networkCreateError}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 p-5 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setNetworkCreateTarget(null)}
+                className="px-4 py-2 text-sm font-medium text-muted border border-border rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCreateNetwork()}
+                disabled={networkCreating || !newNetworkName.trim()}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg disabled:opacity-50"
+              >
+                {networkCreating && <Loader2 className="w-4 h-4 animate-spin" />}
+                {networkCreating ? "Creating..." : "Create Network"}
               </button>
             </div>
           </div>
