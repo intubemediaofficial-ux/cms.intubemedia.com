@@ -82,6 +82,11 @@ interface VendorOption {
   name: string;
 }
 
+interface VendorAssignment {
+  channelId: string;
+  vendorId: string;
+}
+
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 const CATEGORIES = ["Music", "Entertainment", "Education", "Comedy", "Gaming", "News", "Sports"];
 const CHANNEL_TYPES = ["Original", "Refurbished", "Licensed"];
@@ -114,12 +119,28 @@ async function saveStoredChannels(
   writeStoredChannels(email, channels);
   const activeIds = channels.filter((channel) => channel.status === "active").map((channel) => channel.id);
   const pendingIds = channels.filter((channel) => channel.status === "pending_approval").map((channel) => channel.id);
+  const channelNetworks = channels
+    .filter(
+      (channel) =>
+        (channel.status === "active" || channel.status === "pending_approval") &&
+        channel.cms.trim()
+    )
+    .map((channel) => ({
+      channelId: channel.id,
+      networkId: `name:${channel.cms.trim().toLowerCase().replace(/\s+/g, "-")}`,
+      networkName: channel.cms.trim(),
+      revenueSharePercent: 0,
+    }));
 
   try {
     const response = await fetch("/api/users", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channels: activeIds, pendingChannels: pendingIds }),
+      body: JSON.stringify({
+        channels: activeIds,
+        pendingChannels: pendingIds,
+        channelNetworks,
+      }),
     });
     const json = await response.json();
     if (!response.ok) throw new Error(json.error || "Failed to sync channels");
@@ -160,6 +181,8 @@ export default function ChannelsPage() {
   const [channelTypeInput, setChannelTypeInput] = useState("");
   const [cmsInput, setCmsInput] = useState("");
   const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
+  const [channelVendorIds, setChannelVendorIds] = useState<Record<string, string>>({});
+  const [vendorSavingId, setVendorSavingId] = useState<string | null>(null);
   const [vendorInput, setVendorInput] = useState("");
   const [newVendorName, setNewVendorName] = useState("");
   const [vendorCreating, setVendorCreating] = useState(false);
@@ -318,6 +341,14 @@ export default function ChannelsPage() {
       .then(([meJson, scopeJson]) => {
         const approvedIds: string[] = scopeJson.data?.channelIds || [];
         const pendingIds: string[] = meJson.data?.pendingChannels || [];
+        const channelNetworkById = new Map<string, string>(
+          (meJson.data?.channelNetworks || []).map(
+            (assignment: { channelId: string; networkName: string }) => [
+              assignment.channelId,
+              assignment.networkName,
+            ]
+          )
+        );
         const currentStored = getStoredChannels(storageIdentity);
         const currentById = new Map(currentStored.map((channel) => [channel.id, channel]));
         const today = new Date().toISOString().split("T")[0];
@@ -332,6 +363,7 @@ export default function ChannelsPage() {
               cms: "",
               addedDate: today,
             }),
+            cms: channelNetworkById.get(id) || currentById.get(id)?.cms || "",
             status: "active" as const,
           })),
           ...pendingIds.map((id) => ({
@@ -343,6 +375,7 @@ export default function ChannelsPage() {
               cms: "",
               addedDate: today,
             }),
+            cms: channelNetworkById.get(id) || currentById.get(id)?.cms || "",
             status: "pending_approval" as const,
           })),
         ];
@@ -372,15 +405,44 @@ export default function ChannelsPage() {
     try {
       const response = await fetch("/api/vendors?action=list", { cache: "no-store" });
       const json = await response.json();
-      if (response.ok) setVendorOptions(json.data?.vendors || []);
+      if (response.ok) {
+        setVendorOptions(json.data?.vendors || []);
+        setChannelVendorIds(
+          Object.fromEntries(
+            (json.data?.assignments || []).map((assignment: VendorAssignment) => [
+              assignment.channelId,
+              assignment.vendorId,
+            ])
+          )
+        );
+      }
     } catch {
       setVendorOptions([]);
+      setChannelVendorIds({});
     }
   }, [isAuthenticated]);
 
   useEffect(() => {
     queueMicrotask(() => void fetchVendors());
   }, [fetchVendors]);
+
+  const handleVendorAssignment = useCallback(async (channelId: string, vendorId: string) => {
+    setVendorSavingId(channelId);
+    try {
+      const response = await fetch("/api/vendors", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "assign", channelId, vendorId }),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to assign vendor");
+      setChannelVendorIds((current) => ({ ...current, [channelId]: vendorId }));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Failed to assign vendor");
+    } finally {
+      setVendorSavingId(null);
+    }
+  }, []);
 
   const handleCreateVendor = useCallback(async () => {
     const name = newVendorName.trim();
@@ -581,15 +643,7 @@ export default function ChannelsPage() {
         return;
       }
       if (vendorInput) {
-        const vendorResponse = await fetch("/api/vendors", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "assign", channelId: actualId, vendorId: vendorInput }),
-        });
-        if (!vendorResponse.ok) {
-          const vendorJson = await vendorResponse.json();
-          console.error("Failed to assign vendor:", vendorJson.error);
-        }
+        await handleVendorAssignment(actualId, vendorInput);
       }
       setStoredChannels(updatedChannels);
       if (channelData) {
@@ -611,7 +665,7 @@ export default function ChannelsPage() {
     } finally {
       setAddingChannel(false);
     }
-  }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, vendorInput, storedChannels, networkOptions, saveCustomNetwork, storageIdentity, guardPending]);
+  }, [channelIdInput, categoryInput, channelTypeInput, cmsInput, vendorInput, storedChannels, networkOptions, saveCustomNetwork, storageIdentity, guardPending, handleVendorAssignment]);
 
   const handleDelink = async (channelId: string) => {
     const response = await fetch(
@@ -1203,6 +1257,9 @@ export default function ChannelsPage() {
                       NETWORK {renderSortIcon("cms")}
                     </th>
                     <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                      VENDOR
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
                       CATEGORY {renderSortIcon("category")}
                     </th>
                     <th className="text-left px-4 py-3 font-semibold text-foreground whitespace-nowrap">
@@ -1308,6 +1365,23 @@ export default function ChannelsPage() {
                           {networkOptions.map((n) => <option key={n} value={n} />)}
                         </datalist>
                       </td>
+                      <td className="px-4 py-3 text-foreground min-w-[150px]">
+                        {activeTab === "channels" ? (
+                          <select
+                            value={channelVendorIds[channel.id] || ""}
+                            disabled={vendorSavingId === channel.id}
+                            onChange={(event) => void handleVendorAssignment(channel.id, event.target.value)}
+                            className="w-full px-2 py-1.5 border border-border rounded text-xs bg-white disabled:opacity-60"
+                          >
+                            <option value="">No vendor</option>
+                            {vendorOptions.map((vendor) => (
+                              <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          vendorOptions.find((vendor) => vendor.id === channelVendorIds[channel.id])?.name || "—"
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-foreground">{channel.category}</td>
                       <td className="px-4 py-3 text-muted">{channel.addedDate}</td>
                       {activeTab === "transferred" && (
@@ -1337,7 +1411,7 @@ export default function ChannelsPage() {
                   ))}
                   {pageChannels.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="px-4 py-12 text-center text-muted">
+                      <td colSpan={11} className="px-4 py-12 text-center text-muted">
                         {loading ? "Loading..." : activeTab === "transferred" ? "No transferred channels" : "No channels found"}
                       </td>
                     </tr>

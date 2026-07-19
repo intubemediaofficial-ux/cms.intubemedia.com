@@ -10,9 +10,10 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Search,
   Trash2,
 } from "lucide-react";
-import { downloadExcel } from "@/lib/excel-export";
+import { downloadExcel, downloadMultiSheetExcel } from "@/lib/excel-export";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 
 interface Vendor {
@@ -68,6 +69,11 @@ export default function AdminVendorsPage() {
   const [newName, setNewName] = useState("");
   const [editingName, setEditingName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
+  const [sheetSyncing, setSheetSyncing] = useState(false);
+  const [sheetStatus, setSheetStatus] = useState("");
+  const [vendorSearch, setVendorSearch] = useState("");
+  const [channelSearch, setChannelSearch] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -204,7 +210,7 @@ export default function AdminVendorsPage() {
         channel.channel_name,
         channel.channel_id,
         channel.views,
-        Number(channel.revenue_usd.toFixed(2)),
+        Number(channel.revenue_usd.toFixed(3)),
         channel.available ? "Available" : "Pending",
       ]),
       `${report.vendor.name.replace(/[^a-z0-9]+/gi, "-")}-${report.month}-vendor-report`,
@@ -212,7 +218,89 @@ export default function AdminVendorsPage() {
     );
   };
 
+  const exportAllVendors = async () => {
+    if (!selectedMonth) return;
+    setExportingAll(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/vendors?action=reports&month=${selectedMonth}`, { cache: "no-store" });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to load all vendor reports");
+      const reports: VendorReport[] = json.data?.reports || [];
+      const monthLabel = months.find((month) => month.value === selectedMonth)?.label || selectedMonth;
+      downloadMultiSheetExcel(
+        [
+          {
+            name: "Vendor Summary",
+            headers: ["Month", "Vendor", "Channels", "Views", "Revenue USD", "Pending Channels"],
+            rows: reports.map((item) => [
+              monthLabel,
+              item.vendor.name,
+              item.totals.channels,
+              item.totals.views,
+              Number(item.totals.revenue_usd.toFixed(3)),
+              item.missingChannels,
+            ]),
+          },
+          ...reports.map((item) => ({
+            name: item.vendor.name,
+            headers: ["Month", "Vendor", "Client", "Channel", "Channel ID", "Views", "Revenue USD", "Status"],
+            rows: item.channels.map((channel) => [
+              monthLabel,
+              item.vendor.name,
+              channel.client_name,
+              channel.channel_name,
+              channel.channel_id,
+              channel.views,
+              Number(channel.revenue_usd.toFixed(3)),
+              channel.available ? "Available" : "Pending",
+            ]),
+          })),
+        ],
+        `all-vendors-${selectedMonth}-report`
+      );
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "Failed to export vendor reports");
+    } finally {
+      setExportingAll(false);
+    }
+  };
+
+  const syncGoogleSheet = async () => {
+    setSheetSyncing(true);
+    setSheetStatus("");
+    setError("");
+    try {
+      const response = await fetch("/api/vendors", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "syncSheet" }),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Google Sheets sync failed");
+      setSheetStatus(
+        json.data?.status === "not_configured"
+          ? "Google Sheet is not configured yet."
+          : `Google Sheet updated: ${json.data?.vendors || 0} vendors, ${json.data?.rows || 0} rows.`
+      );
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : "Google Sheets sync failed");
+    } finally {
+      setSheetSyncing(false);
+    }
+  };
+
   const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId);
+  const filteredVendors = vendors.filter((vendor) =>
+    vendor.name.toLowerCase().includes(vendorSearch.trim().toLowerCase())
+  );
+  const filteredChannels = (report?.channels || []).filter((channel) => {
+    const query = channelSearch.trim().toLowerCase();
+    return !query ||
+      channel.channel_name.toLowerCase().includes(query) ||
+      channel.channel_id.toLowerCase().includes(query) ||
+      channel.client_name.toLowerCase().includes(query);
+  });
 
   return (
     <div className="space-y-6">
@@ -221,7 +309,23 @@ export default function AdminVendorsPage() {
           <h1 className="text-2xl font-bold text-foreground">Vendor Management</h1>
           <p className="text-sm text-muted mt-1">Assign channels and review exact calendar-month revenue and views.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => void syncGoogleSheet()}
+            disabled={sheetSyncing}
+            className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg text-sm disabled:opacity-50"
+          >
+            {sheetSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sync Google Sheet
+          </button>
+          <button
+            onClick={() => void exportAllVendors()}
+            disabled={exportingAll || vendors.length === 0}
+            className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm disabled:opacity-50"
+          >
+            {exportingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            All Vendors Excel
+          </button>
           <input
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
@@ -240,17 +344,31 @@ export default function AdminVendorsPage() {
       </div>
 
       {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
+      {sheetStatus && <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">{sheetStatus}</div>}
 
       <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-6">
         <div className="bg-white border border-border rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-border font-semibold">Vendors ({vendors.length})</div>
+          <div className="p-4 border-b border-border space-y-3">
+            <div className="font-semibold">Vendors ({vendors.length})</div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+              <input
+                value={vendorSearch}
+                onChange={(event) => setVendorSearch(event.target.value)}
+                placeholder="Search vendors..."
+                className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm"
+              />
+            </div>
+          </div>
           {loading ? (
             <div className="p-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin" /></div>
           ) : vendors.length === 0 ? (
             <div className="p-8 text-sm text-muted text-center">No vendors added yet.</div>
+          ) : filteredVendors.length === 0 ? (
+            <div className="p-8 text-sm text-muted text-center">No vendors match your search.</div>
           ) : (
             <div className="divide-y divide-border max-h-[640px] overflow-y-auto">
-              {vendors.map((vendor) => (
+              {filteredVendors.map((vendor) => (
                 <button
                   key={vendor.id}
                   onClick={() => setSelectedVendorId(vendor.id)}
@@ -316,6 +434,18 @@ export default function AdminVendorsPage() {
                 </div>
               )}
 
+              <div className="bg-white border border-border rounded-xl p-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                  <input
+                    value={channelSearch}
+                    onChange={(event) => setChannelSearch(event.target.value)}
+                    placeholder="Search channel name, full ID, or client..."
+                    className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+
               {reportLoading ? (
                 <div className="bg-white border border-border rounded-xl p-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin" /></div>
               ) : report ? (
@@ -328,18 +458,23 @@ export default function AdminVendorsPage() {
                   <div className="bg-white border border-border rounded-xl overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        <thead><tr className="bg-slate-50 border-b border-border"><th className="text-left px-4 py-3">Channel</th><th className="text-left px-4 py-3">Client</th><th className="text-right px-4 py-3">Views</th><th className="text-right px-4 py-3">Revenue</th><th className="text-right px-4 py-3">Status</th></tr></thead>
+                        <thead><tr className="bg-slate-50 border-b border-border"><th className="text-left px-4 py-3">Channel</th><th className="text-left px-4 py-3">Client</th><th className="text-left px-4 py-3">Vendor</th><th className="text-left px-4 py-3">Month</th><th className="text-right px-4 py-3">Views</th><th className="text-right px-4 py-3">Revenue</th><th className="text-right px-4 py-3">Status</th></tr></thead>
                         <tbody>
-                          {report.channels.map((channel) => (
-                            <tr key={channel.channel_id} className="border-b border-border last:border-0">
-                              <td className="px-4 py-3"><p className="font-medium">{channel.channel_name}</p><p className="text-xs text-muted font-mono">{channel.channel_id}</p></td>
+                          {filteredChannels.map((channel) => (
+                            <tr key={channel.channel_id} className="border-b border-border last:border-0 hover:bg-slate-50">
+                              <td className="px-4 py-3">
+                                <a href={`https://www.youtube.com/channel/${channel.channel_id}`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">{channel.channel_name}</a>
+                                <p className="text-xs text-muted font-mono whitespace-nowrap">{channel.channel_id}</p>
+                              </td>
                               <td className="px-4 py-3">{channel.client_name || "—"}</td>
+                              <td className="px-4 py-3">{report.vendor.name}</td>
+                              <td className="px-4 py-3 whitespace-nowrap">{months.find((month) => month.value === report.month)?.label || report.month}</td>
                               <td className="px-4 py-3 text-right">{formatNumber(channel.views)}</td>
                               <td className="px-4 py-3 text-right font-medium text-green-600">{formatCurrency(channel.revenue_usd)}</td>
                               <td className="px-4 py-3 text-right"><span className={`text-xs px-2 py-1 rounded-full ${channel.available ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{channel.available ? "Cached" : "Pending"}</span></td>
                             </tr>
                           ))}
-                          {report.channels.length === 0 && <tr><td colSpan={5} className="px-4 py-12 text-center text-muted">No active channels assigned to this vendor.</td></tr>}
+                          {filteredChannels.length === 0 && <tr><td colSpan={7} className="px-4 py-12 text-center text-muted">No channels match this vendor and search.</td></tr>}
                         </tbody>
                       </table>
                     </div>

@@ -129,6 +129,8 @@ export default function AdminClientsPage() {
   const [availableVendors, setAvailableVendors] = useState<VendorOption[]>([]);
   const [vendorAssignments, setVendorAssignments] = useState<VendorAssignment[]>([]);
   const [formChannelVendors, setFormChannelVendors] = useState<Record<string, string>>({});
+  const [channelNames, setChannelNames] = useState<Record<string, string>>({});
+  const [assignmentSearch, setAssignmentSearch] = useState("");
   const [formWhiteLabel, setFormWhiteLabel] = useState(false);
   const [formRevenueShare, setFormRevenueShare] = useState<number>(0);
 
@@ -214,6 +216,23 @@ export default function AdminClientsPage() {
     }
   }, []);
 
+  const fetchChannelNames = useCallback(async () => {
+    try {
+      const response = await fetch("/api/client-data?action=getAllCachedData", { cache: "no-store" });
+      const json = await response.json();
+      if (!response.ok) throw new Error("Failed to load channel names");
+      const names: Record<string, string> = {};
+      for (const client of json.data || []) {
+        for (const channel of client.channels || []) {
+          if (channel.channelId) names[channel.channelId] = channel.channelTitle || channel.channelId;
+        }
+      }
+      setChannelNames(names);
+    } catch {
+      setChannelNames({});
+    }
+  }, []);
+
   const fetchVendors = useCallback(async () => {
     try {
       const response = await fetch("/api/vendors?action=list", { cache: "no-store" });
@@ -234,9 +253,10 @@ export default function AdminClientsPage() {
         fetchClients();
         fetchNetworks();
         fetchVendors();
+        fetchChannelNames();
       });
     }
-  }, [status, session, fetchClients, fetchNetworks, fetchVendors]);
+  }, [status, session, fetchClients, fetchNetworks, fetchVendors, fetchChannelNames]);
 
   const resetForm = () => {
     setFormName("");
@@ -249,6 +269,7 @@ export default function AdminClientsPage() {
     setFormNetworks([]);
     setFormChannelNetworks([]);
     setFormChannelVendors({});
+    setAssignmentSearch("");
     setFormWhiteLabel(false);
     setFormRevenueShare(0);
     setFormError(null);
@@ -280,6 +301,7 @@ export default function AdminClientsPage() {
     );
     setFormWhiteLabel(client.whiteLabelEnabled || false);
     setFormRevenueShare(client.revenueSharePercent || 0);
+    setAssignmentSearch("");
     setFormError(null);
     setShowModal(true);
   }, [vendorAssignments]);
@@ -700,6 +722,13 @@ export default function AdminClientsPage() {
     (currentPage - 1) * perPage,
     currentPage * perPage
   );
+  const formChannelIds = formChannels.split(",").map((channel) => channel.trim()).filter(Boolean);
+  const filteredAssignmentChannelIds = formChannelIds.filter((channelId) => {
+    const query = assignmentSearch.trim().toLowerCase();
+    return !query ||
+      channelId.toLowerCase().includes(query) ||
+      (channelNames[channelId] || "").toLowerCase().includes(query);
+  });
 
   return (
     <div className="space-y-6">
@@ -1186,22 +1215,37 @@ export default function AdminClientsPage() {
                 </p>
               </div>
               {formChannels.trim() && (
-                <div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">
+                      Find Channel for Vendor or Network Assignment
+                    </label>
+                    <input
+                      value={assignmentSearch}
+                      onChange={(event) => setAssignmentSearch(event.target.value)}
+                      placeholder="Search channel name or full channel ID"
+                      className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Per-Channel Vendor
                   </label>
                   <p className="text-xs text-muted mb-2">Optional. Select who manages or pays for each channel.</p>
-                  <div className="space-y-2">
-                    {formChannels.split(",").map((channel) => channel.trim()).filter(Boolean).map((channelId) => (
-                      <div key={channelId} className="flex items-center gap-2 p-2 border border-border rounded-lg bg-slate-50">
-                        <span className="text-xs font-mono text-foreground flex-shrink-0 truncate max-w-[150px]" title={channelId}>{channelId}</span>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {filteredAssignmentChannelIds.map((channelId) => (
+                      <div key={channelId} className="flex items-center gap-3 p-2 border border-border rounded-lg bg-slate-50">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-foreground truncate">{channelNames[channelId] || "Channel name unavailable"}</p>
+                          <p className="text-xs font-mono text-muted break-all">{channelId}</p>
+                        </div>
                         <select
                           value={formChannelVendors[channelId] || ""}
                           onChange={(e) => setFormChannelVendors((current) => ({
                             ...current,
                             [channelId]: e.target.value,
                           }))}
-                          className="flex-1 px-2 py-1.5 border border-border rounded text-xs bg-white"
+                          className="w-48 px-2 py-1.5 border border-border rounded text-xs bg-white"
                         >
                           <option value="">No vendor</option>
                           {availableVendors.map((vendor) => (
@@ -1210,6 +1254,7 @@ export default function AdminClientsPage() {
                         </select>
                       </div>
                     ))}
+                  </div>
                   </div>
                 </div>
               )}
@@ -1276,11 +1321,14 @@ export default function AdminClientsPage() {
                   </label>
                   <p className="text-xs text-muted mb-2">Assign each channel to a specific network with custom revenue share %</p>
                   <div className="space-y-2">
-                    {formChannels.split(",").map((ch) => ch.trim()).filter((ch) => ch.length > 0).map((chId) => {
+                    {filteredAssignmentChannelIds.map((chId) => {
                       const assigned = formChannelNetworks.find((cn) => cn.channelId === chId);
                       return (
-                        <div key={chId} className="flex items-center gap-2 p-2 border border-border rounded-lg bg-slate-50">
-                          <span className="text-xs font-mono text-foreground flex-shrink-0 truncate max-w-[120px]" title={chId}>{chId}</span>
+                        <div key={chId} className="flex items-center gap-3 p-2 border border-border rounded-lg bg-slate-50">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground truncate">{channelNames[chId] || "Channel name unavailable"}</p>
+                            <p className="text-xs font-mono text-muted break-all">{chId}</p>
+                          </div>
                           <select
                             value={assigned?.networkId || ""}
                             onChange={(e) => {

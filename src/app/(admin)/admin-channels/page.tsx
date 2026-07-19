@@ -67,6 +67,16 @@ function getClients(): Client[] {
   }
 }
 
+interface VendorOption {
+  id: string;
+  name: string;
+}
+
+interface VendorAssignment {
+  channelId: string;
+  vendorId: string;
+}
+
 type ChannelRow = {
   channelId: string;
   name: string;
@@ -108,6 +118,9 @@ export default function AdminChannelsPage() {
   const [revenuePeriod, setRevenuePeriod] = useState<string>("cached");
   const [periodRevenueMap, setPeriodRevenueMap] = useState<Record<string, number>>({});
   const [periodRevenueLoading, setPeriodRevenueLoading] = useState(false);
+  const [vendors, setVendors] = useState<VendorOption[]>([]);
+  const [channelVendorIds, setChannelVendorIds] = useState<Record<string, string>>({});
+  const [vendorSavingId, setVendorSavingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -136,6 +149,49 @@ export default function AdminChannelsPage() {
       queueMicrotask(() => setClients(getClients()));
     }
   }, [status, session]);
+
+  const fetchVendors = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const response = await fetch("/api/vendors?action=list", { cache: "no-store" });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to load vendors");
+      setVendors(json.data?.vendors || []);
+      setChannelVendorIds(
+        Object.fromEntries(
+          (json.data?.assignments || []).map((assignment: VendorAssignment) => [
+            assignment.channelId,
+            assignment.vendorId,
+          ])
+        )
+      );
+    } catch {
+      setVendors([]);
+      setChannelVendorIds({});
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    queueMicrotask(() => void fetchVendors());
+  }, [fetchVendors]);
+
+  const handleVendorAssignment = useCallback(async (channelId: string, vendorId: string) => {
+    setVendorSavingId(channelId);
+    try {
+      const response = await fetch("/api/vendors", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "assign", channelId, vendorId }),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to assign vendor");
+      setChannelVendorIds((current) => ({ ...current, [channelId]: vendorId }));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Failed to assign vendor");
+    } finally {
+      setVendorSavingId(null);
+    }
+  }, []);
 
   // Fetch token statuses for all channels (KV + cached)
   useEffect(() => {
@@ -806,6 +862,7 @@ export default function AdminChannelsPage() {
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Views</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Revenue</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Client</th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground">Vendor</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Category</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Token</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Actions</th>
@@ -842,6 +899,19 @@ export default function AdminChannelsPage() {
                   <td className="px-4 py-3 text-green-600 font-medium">${channel.revenue.toFixed(2)}</td>
                   <td className="px-4 py-3">
                     <span className="text-sm font-medium text-primary">{channel.clientName}</span>
+                  </td>
+                  <td className="px-4 py-3 min-w-[160px]" onClick={(event) => event.stopPropagation()}>
+                    <select
+                      value={channelVendorIds[channel.channelId] || ""}
+                      disabled={vendorSavingId === channel.channelId}
+                      onChange={(event) => void handleVendorAssignment(channel.channelId, event.target.value)}
+                      className="w-full px-2 py-1.5 border border-border rounded text-xs bg-white disabled:opacity-60"
+                    >
+                      <option value="">No vendor</option>
+                      {vendors.map((vendor) => (
+                        <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-4 py-3 text-foreground">{channel.category}</td>
                   <td className="px-4 py-3">
@@ -905,7 +975,7 @@ export default function AdminChannelsPage() {
               ))}
               {pageChannels.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={10} className="px-4 py-12 text-center text-muted">
                     {loadingChannels
                       ? "Loading..."
                       : "No channels found. Add clients with channel IDs first."}
@@ -1002,6 +1072,12 @@ export default function AdminChannelsPage() {
                 <div className="flex justify-between py-2 border-b border-border">
                   <span className="text-muted">Client</span>
                   <span className="font-medium text-foreground">{selectedChannel.clientName}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted">Vendor</span>
+                  <span className="font-medium text-foreground">
+                    {vendors.find((vendor) => vendor.id === channelVendorIds[selectedChannel.channelId])?.name || "No vendor"}
+                  </span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-border">
                   <span className="text-muted">Category</span>

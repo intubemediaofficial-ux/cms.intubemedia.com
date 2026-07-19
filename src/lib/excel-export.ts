@@ -24,11 +24,25 @@ export function downloadExcel(
   XLSX.writeFile(wb, `${filename}.xlsx`);
 }
 
+function safeWorksheetName(name: string, used: Set<string>): string {
+  const base = (name.replace(/[\\/?*\[\]:]/g, " ").replace(/\s+/g, " ").trim() || "Report").slice(0, 31);
+  let candidate = base;
+  let suffix = 2;
+  while (used.has(candidate.toLowerCase())) {
+    const ending = ` (${suffix})`;
+    candidate = `${base.slice(0, 31 - ending.length)}${ending}`;
+    suffix += 1;
+  }
+  used.add(candidate.toLowerCase());
+  return candidate;
+}
+
 export function downloadMultiSheetExcel(
   sheets: { name: string; headers: string[]; rows: (string | number)[][] }[],
   filename: string
 ) {
   const wb = XLSX.utils.book_new();
+  const usedSheetNames = new Set<string>();
   for (const sheet of sheets) {
     const data = [sheet.headers, ...sheet.rows];
     const ws = XLSX.utils.aoa_to_sheet(data);
@@ -41,7 +55,7 @@ export function downloadMultiSheetExcel(
       return { wch: Math.min(max + 2, 40) };
     });
     ws["!cols"] = colWidths;
-    XLSX.utils.book_append_sheet(wb, ws, sheet.name.slice(0, 31));
+    XLSX.utils.book_append_sheet(wb, ws, safeWorksheetName(sheet.name, usedSheetNames));
   }
   XLSX.writeFile(wb, `${filename}.xlsx`);
 }

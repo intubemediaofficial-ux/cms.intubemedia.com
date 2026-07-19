@@ -10,6 +10,7 @@ import { kv } from "@/lib/redis";
 import { cacheChannelStats } from "@/lib/youtube-cache";
 import { getChannelStatsById, getRevenueData } from "@/lib/youtube";
 import { warmRecentMonths } from "@/lib/monthly-channel-analytics";
+import { syncVendorGoogleSheet } from "@/lib/vendor-google-sheets";
 
 const USERS_KEY = "bainsla_users";
 const SYNC_LOCK_KEY = "client_data_sync_lock";
@@ -448,6 +449,11 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
         await warmRecentMonths(5);
       } catch (error) {
         console.error("[ClientDataSync] warmRecentMonths failed:", error);
+      }
+      try {
+        await syncVendorGoogleSheet();
+      } catch (error) {
+        console.error("[ClientDataSync] vendor Google Sheets sync failed:", error);
       }
     }
 
