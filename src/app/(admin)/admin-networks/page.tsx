@@ -30,6 +30,7 @@ interface Network {
 }
 
 interface CustomNetwork {
+  id: string;
   name: string;
   createdBy: string;
   createdByEmail: string;
@@ -100,8 +101,10 @@ export default function AdminNetworksPage() {
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role === "admin") {
-      fetchNetworks();
-      fetchClients();
+      queueMicrotask(() => {
+        void fetchNetworks();
+        void fetchClients();
+      });
     }
   }, [status, session, fetchNetworks, fetchClients]);
 
@@ -206,13 +209,19 @@ export default function AdminNetworksPage() {
   const handleDelete = async (id: string) => {
     setDeleting(true);
     try {
-      const res = await fetch(`/api/networks?id=${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setDeleteId(null);
-        fetchNetworks();
-      }
-    } catch {
-      // silent
+      const res = await fetch(`/api/networks?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to delete network");
+      setDeleteId(null);
+      await fetchNetworks();
+      const affected = Number(json.data?.affectedChannels || 0);
+      window.alert(
+        affected > 0
+          ? `Network deleted. ${affected} channel(s) are now Not Validated and must be authorized again.`
+          : "Network deleted. No channel authorization was affected."
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Failed to delete network");
     } finally {
       setDeleting(false);
     }
@@ -355,6 +364,7 @@ export default function AdminNetworksPage() {
                   <th className="text-left px-4 py-3 font-semibold text-foreground">Network Name</th>
                   <th className="text-left px-4 py-3 font-semibold text-foreground">Created By</th>
                   <th className="text-left px-4 py-3 font-semibold text-foreground">Email</th>
+                  <th className="text-center px-4 py-3 font-semibold text-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -371,6 +381,15 @@ export default function AdminNetworksPage() {
                     </td>
                     <td className="px-4 py-3 text-foreground">{cn.createdBy}</td>
                     <td className="px-4 py-3 text-muted text-xs">{cn.createdByEmail}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => setDeleteId(cn.id)}
+                        className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete user-created network"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -450,7 +469,7 @@ export default function AdminNetworksPage() {
           <div className="bg-white rounded-xl w-full max-w-sm shadow-xl p-5">
             <h3 className="text-lg font-semibold text-foreground mb-2">Delete Network?</h3>
             <p className="text-sm text-muted mb-4">
-              Are you sure? This will remove the network. Users assigned to it won&apos;t be affected.
+              This removes the network and its channel relationships. Affected channels will become Not Validated, their stored YouTube data will be cleared, and fresh authorization will be required before data can sync again.
             </p>
             <div className="flex justify-end gap-3">
               <button

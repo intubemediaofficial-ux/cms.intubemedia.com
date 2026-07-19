@@ -10,10 +10,17 @@ import crypto from "crypto";
 export const dynamic = "force-dynamic";
 
 const USERS_KEY = "bainsla_users";
+const NETWORKS_KEY = "bainsla_networks";
 
 export interface NetworkAssignment {
   networkId: string;
   networkName: string;
+  revenueSharePercent: number;
+}
+
+interface NetworkRecord {
+  id: string;
+  name: string;
   revenueSharePercent: number;
 }
 
@@ -60,6 +67,17 @@ function normalizeChannelIds(value: unknown): string[] {
   return Array.from(
     new Set(value.filter((channelId): channelId is string => typeof channelId === "string" && channelId.length > 0))
   );
+}
+
+function normalizeNetworkName(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function customNetworkId(email: string, name: string): string {
+  return `custom-${crypto
+    .createHash("sha256")
+    .update(`${email.toLowerCase()}:${normalizeNetworkName(name)}`)
+    .digest("hex")}`;
 }
 
 // Deprecated network names to auto-remove from user assignments
@@ -688,10 +706,10 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    const { channels, pendingChannels, removeChannels, customNetworks } = body;
+    const { channels, pendingChannels, removeChannels, customNetworks, channelNetworks } = body;
 
-    if (!Array.isArray(channels) && !Array.isArray(pendingChannels) && !Array.isArray(removeChannels) && !Array.isArray(customNetworks)) {
-      return Response.json({ error: "channels, pendingChannels, removeChannels, or customNetworks array required" }, { status: 400 });
+    if (!Array.isArray(channels) && !Array.isArray(pendingChannels) && !Array.isArray(removeChannels) && !Array.isArray(customNetworks) && !Array.isArray(channelNetworks)) {
+      return Response.json({ error: "channels, pendingChannels, removeChannels, customNetworks, or channelNetworks array required" }, { status: 400 });
     }
 
     const users = await getUsers();
@@ -761,6 +779,51 @@ export async function PATCH(request: Request) {
       users[idx].customNetworks = [...new Set(validNetworks)];
     }
 
+    if (Array.isArray(channelNetworks)) {
+      const availableNetworks = (await kv.get<NetworkRecord[]>(NETWORKS_KEY)) || [];
+      const networkByName = new Map(
+        availableNetworks.map((network) => [normalizeNetworkName(network.name), network])
+      );
+      const customNames = new Set(
+        (users[idx].customNetworks || []).map((name) => normalizeNetworkName(name))
+      );
+      const managedChannelIds = new Set([
+        ...(users[idx].channels || []),
+        ...(users[idx].pendingChannels || []),
+      ]);
+      const validAssignments: ChannelNetworkAssignment[] = channelNetworks.flatMap((assignment: unknown) => {
+        if (!assignment || typeof assignment !== "object") return [];
+        const value = assignment as Partial<ChannelNetworkAssignment>;
+        if (
+          typeof value.channelId !== "string" ||
+          !managedChannelIds.has(value.channelId) ||
+          typeof value.networkId !== "string" ||
+          typeof value.networkName !== "string" ||
+          !value.networkName.trim()
+        ) {
+          return [];
+        }
+        const networkName = value.networkName.trim();
+        const knownNetwork = networkByName.get(normalizeNetworkName(networkName));
+        const isCustom = customNames.has(normalizeNetworkName(networkName));
+        return [{
+          channelId: value.channelId,
+          networkId: knownNetwork?.id || (isCustom ? customNetworkId(users[idx].email, networkName) : value.networkId),
+          networkName,
+          revenueSharePercent:
+            typeof value.revenueSharePercent === "number"
+              ? Math.min(100, Math.max(0, value.revenueSharePercent))
+              : knownNetwork?.revenueSharePercent || 0,
+        }];
+      });
+      users[idx].channelNetworks = [
+        ...(users[idx].channelNetworks || []).filter(
+          (assignment) => !managedChannelIds.has(assignment.channelId)
+        ),
+        ...validAssignments,
+      ];
+    }
+
     const saved = await saveUsers(users);
     if (!saved) {
       return Response.json({ error: "Failed to sync channels" }, { status: 500 });
@@ -782,6 +845,7 @@ export async function PATCH(request: Request) {
         channels: users[idx].channels,
         pendingChannels: users[idx].pendingChannels || [],
         customNetworks: users[idx].customNetworks || [],
+        channelNetworks: users[idx].channelNetworks || [],
         rejectedChannels: Array.from(rejectedChannels),
       },
     });

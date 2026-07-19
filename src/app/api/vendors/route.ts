@@ -7,6 +7,7 @@ import {
   isValidMonth,
 } from "@/lib/monthly-channel-analytics";
 import { kv } from "@/lib/redis";
+import { syncVendorGoogleSheet } from "@/lib/vendor-google-sheets";
 import {
   ChannelVendorAssignment,
   getVendorAssignments,
@@ -117,6 +118,76 @@ function normalizeName(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
 
+async function buildVendorReports(
+  scope: VendorScope,
+  vendors: Vendor[],
+  assignments: ChannelVendorAssignment[],
+  month: string
+) {
+  const [analytics, cachedClients] = await Promise.all([
+    getMonthlyChannelAnalytics(month),
+    getAllCachedClientData(),
+  ]);
+  const analyticsMap = new Map(
+    analytics.channels.map((channel) => [channel.channel_id, channel])
+  );
+  const nameMap = new Map<string, string>();
+  for (const client of cachedClients) {
+    for (const channel of client.channels || []) {
+      if (channel.channelTitle) nameMap.set(channel.channelId, channel.channelTitle);
+    }
+  }
+
+  return vendors.map((vendor) => {
+    const channelIds = assignments
+      .filter(
+        (assignment) =>
+          assignment.vendorId === vendor.id &&
+          scope.approvedChannelIds.has(assignment.channelId)
+      )
+      .map((assignment) => assignment.channelId);
+    const channels = channelIds
+      .map((channelId) => {
+        const row = analyticsMap.get(channelId);
+        const owner = scope.channelOwners.get(channelId);
+        return {
+          channel_id: channelId,
+          channel_name: row?.channel_name || nameMap.get(channelId) || channelId,
+          client_name: owner?.name || "",
+          vendor_name: vendor.name,
+          revenue_usd: row?.revenue_usd || 0,
+          views: row?.views || 0,
+          synced_through: row?.synced_through || null,
+          updated_at: row?.updated_at || null,
+          available: Boolean(row),
+        };
+      })
+      .sort((a, b) => a.channel_name.localeCompare(b.channel_name));
+
+    return {
+      month,
+      vendor,
+      channels,
+      totals: {
+        channels: channels.length,
+        revenue_usd: channels.reduce((sum, channel) => sum + channel.revenue_usd, 0),
+        views: channels.reduce((sum, channel) => sum + channel.views, 0),
+      },
+      cacheStatus: analytics.cacheStatus,
+      missingChannels: channels.filter((channel) => !channel.available).length,
+    };
+  });
+}
+
+async function syncSheetAfterMutation() {
+  try {
+    return await syncVendorGoogleSheet();
+  } catch (error) {
+    console.error("[Vendors] Google Sheets sync failed:", error);
+    return { status: "failed" as const };
+  }
+}
+
 export async function GET(request: Request) {
   const scope = await getScope();
   if (!scope) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -154,73 +225,28 @@ export async function GET(request: Request) {
     });
   }
 
-  if (action === "report") {
+  if (action === "report" || action === "reports") {
     const vendorId = url.searchParams.get("vendorId") || "";
     const month = url.searchParams.get("month") || "";
-    if (!vendorId || !isValidMonth(month)) {
+    if (!isValidMonth(month) || (action === "report" && !vendorId)) {
       return Response.json(
-        { error: "vendorId and month=YYYY-MM are required" },
+        { error: action === "report" ? "vendorId and month=YYYY-MM are required" : "month=YYYY-MM is required" },
         { status: 400 }
       );
     }
-    const vendor = visibleVendors.find((item) => item.id === vendorId);
-    if (!vendor) return Response.json({ error: "Vendor not found" }, { status: 404 });
-
-    const assignedChannelIds = scopedAssignments
-      .filter(
-        (assignment) =>
-          assignment.vendorId === vendorId &&
-          scope.approvedChannelIds.has(assignment.channelId)
-      )
-      .map((assignment) => assignment.channelId);
-    const assignedSet = new Set(assignedChannelIds);
-    const analytics = await getMonthlyChannelAnalytics(month);
-    const analyticsMap = new Map(
-      analytics.channels
-        .filter((channel) => assignedSet.has(channel.channel_id))
-        .map((channel) => [channel.channel_id, channel])
-    );
-    const cachedClients = await getAllCachedClientData();
-    const nameMap = new Map<string, string>();
-    for (const client of cachedClients) {
-      for (const channel of client.channels || []) {
-        if (assignedSet.has(channel.channelId) && channel.channelTitle) {
-          nameMap.set(channel.channelId, channel.channelTitle);
-        }
-      }
+    const reportVendors = action === "report"
+      ? visibleVendors.filter((vendor) => vendor.id === vendorId)
+      : visibleVendors;
+    if (action === "report" && reportVendors.length === 0) {
+      return Response.json({ error: "Vendor not found" }, { status: 404 });
     }
-
-    const channels = assignedChannelIds
-      .map((channelId) => {
-        const row = analyticsMap.get(channelId);
-        const owner = scope.channelOwners.get(channelId);
-        return {
-          channel_id: channelId,
-          channel_name: row?.channel_name || nameMap.get(channelId) || channelId,
-          client_name: owner?.name || "",
-          revenue_usd: row?.revenue_usd || 0,
-          views: row?.views || 0,
-          synced_through: row?.synced_through || null,
-          updated_at: row?.updated_at || null,
-          available: Boolean(row),
-        };
-      })
-      .sort((a, b) => a.channel_name.localeCompare(b.channel_name));
-
-    return Response.json({
-      data: {
-        month,
-        vendor,
-        channels,
-        totals: {
-          channels: channels.length,
-          revenue_usd: channels.reduce((sum, channel) => sum + channel.revenue_usd, 0),
-          views: channels.reduce((sum, channel) => sum + channel.views, 0),
-        },
-        cacheStatus: analytics.cacheStatus,
-        missingChannels: channels.filter((channel) => !channel.available).length,
-      },
-    });
+    const reports = await buildVendorReports(
+      scope,
+      reportVendors,
+      scopedAssignments,
+      month
+    );
+    return Response.json({ data: action === "report" ? reports[0] : { month, reports } });
   }
 
   return Response.json({ error: "Unknown action" }, { status: 400 });
@@ -256,7 +282,8 @@ export async function POST(request: Request) {
     updatedAt: now,
   };
   await saveVendors([...vendors, vendor]);
-  return Response.json({ data: vendor }, { status: 201 });
+  const sheetSync = await syncSheetAfterMutation();
+  return Response.json({ data: vendor, sheetSync }, { status: 201 });
 }
 
 export async function PUT(request: Request) {
@@ -265,6 +292,17 @@ export async function PUT(request: Request) {
 
   const body = await request.json();
   const action = body.action;
+  if (action === "syncSheet") {
+    if (!scope.isAdmin) {
+      return Response.json({ error: "Admin only" }, { status: 403 });
+    }
+    try {
+      return Response.json({ data: await syncVendorGoogleSheet() });
+    } catch (error) {
+      console.error("[Vendors] Google Sheets sync failed:", error);
+      return Response.json({ error: "Google Sheets sync failed" }, { status: 502 });
+    }
+  }
   const [vendors, assignments] = await Promise.all([
     getVendors(),
     getVendorAssignments(),
@@ -294,7 +332,8 @@ export async function PUT(request: Request) {
       });
     }
     await saveVendorAssignments(next);
-    return Response.json({ data: { channelId, vendorId: vendorId || null } });
+    const sheetSync = await syncSheetAfterMutation();
+    return Response.json({ data: { channelId, vendorId: vendorId || null }, sheetSync });
   }
 
   if (action === "assignMany") {
@@ -337,7 +376,8 @@ export async function PUT(request: Request) {
       });
     }
     await saveVendorAssignments(next);
-    return Response.json({ data: { updated: requested.length } });
+    const sheetSync = await syncSheetAfterMutation();
+    return Response.json({ data: { updated: requested.length }, sheetSync });
   }
 
   if (action === "rename") {
@@ -358,7 +398,8 @@ export async function PUT(request: Request) {
       item.id === vendorId ? { ...item, name, updatedAt: new Date().toISOString() } : item
     );
     await saveVendors(updated);
-    return Response.json({ data: updated.find((item) => item.id === vendorId) });
+    const sheetSync = await syncSheetAfterMutation();
+    return Response.json({ data: updated.find((item) => item.id === vendorId), sheetSync });
   }
 
   return Response.json({ error: "Unknown action" }, { status: 400 });
@@ -391,5 +432,6 @@ export async function DELETE(request: Request) {
       assignments.filter((assignment) => assignment.vendorId !== vendorId)
     ),
   ]);
-  return Response.json({ data: { deleted: true } });
+  const sheetSync = await syncSheetAfterMutation();
+  return Response.json({ data: { deleted: true }, sheetSync });
 }
