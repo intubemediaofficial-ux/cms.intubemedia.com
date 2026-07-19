@@ -1229,31 +1229,87 @@ export default function AdminClientsPage() {
                   </div>
                   <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Per-Channel Vendor
+                    Per-Channel Vendor & Network
                   </label>
-                  <p className="text-xs text-muted mb-2">Optional. Select who manages or pays for each channel.</p>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {filteredAssignmentChannelIds.map((channelId) => (
-                      <div key={channelId} className="flex items-center gap-3 p-2 border border-border rounded-lg bg-slate-50">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground truncate">{channelNames[channelId] || "Channel name unavailable"}</p>
-                          <p className="text-xs font-mono text-muted break-all">{channelId}</p>
+                  <p className="text-xs text-muted mb-2">Assign or correct each channel&apos;s vendor and network in one place.</p>
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {filteredAssignmentChannelIds.map((channelId) => {
+                      const assignedNetwork = formChannelNetworks.find((assignment) => assignment.channelId === channelId);
+                      return (
+                        <div key={channelId} className="p-2 border border-border rounded-lg bg-slate-50 space-y-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{channelNames[channelId] || "Channel name unavailable"}</p>
+                            <p className="text-xs font-mono text-muted break-all">{channelId}</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="text-xs text-muted">
+                              Vendor
+                              <select
+                                value={formChannelVendors[channelId] || ""}
+                                onChange={(e) => setFormChannelVendors((current) => ({
+                                  ...current,
+                                  [channelId]: e.target.value,
+                                }))}
+                                className="mt-1 w-full px-2 py-1.5 border border-border rounded text-xs bg-white"
+                              >
+                                <option value="">No vendor</option>
+                                {availableVendors.map((vendor) => (
+                                  <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="text-xs text-muted">
+                              Network
+                              <select
+                                value={assignedNetwork?.networkId || ""}
+                                onChange={(e) => {
+                                  const networkId = e.target.value;
+                                  if (!networkId) {
+                                    setFormChannelNetworks(formChannelNetworks.filter((assignment) => assignment.channelId !== channelId));
+                                    return;
+                                  }
+                                  const network = availableNetworks.find((item) => item.id === networkId);
+                                  if (!network) return;
+                                  setFormChannelNetworks([
+                                    ...formChannelNetworks.filter((assignment) => assignment.channelId !== channelId),
+                                    {
+                                      channelId,
+                                      networkId: network.id,
+                                      networkName: network.name,
+                                      revenueSharePercent: assignedNetwork?.revenueSharePercent ?? network.revenueSharePercent,
+                                    },
+                                  ]);
+                                }}
+                                className="mt-1 w-full px-2 py-1.5 border border-border rounded text-xs bg-white"
+                              >
+                                <option value="">No network</option>
+                                {availableNetworks.map((network) => (
+                                  <option key={network.id} value={network.id}>{network.name}</option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                          {assignedNetwork && (
+                            <label className="flex items-center justify-end gap-2 text-xs text-muted">
+                              Revenue share
+                              <input
+                                type="number"
+                                value={assignedNetwork.revenueSharePercent}
+                                onChange={(e) => setFormChannelNetworks(formChannelNetworks.map((assignment) =>
+                                  assignment.channelId === channelId
+                                    ? { ...assignment, revenueSharePercent: Number(e.target.value) || 0 }
+                                    : assignment
+                                ))}
+                                min="0"
+                                max="100"
+                                className="w-16 px-2 py-1 border border-border rounded text-xs text-center bg-white"
+                              />
+                              %
+                            </label>
+                          )}
                         </div>
-                        <select
-                          value={formChannelVendors[channelId] || ""}
-                          onChange={(e) => setFormChannelVendors((current) => ({
-                            ...current,
-                            [channelId]: e.target.value,
-                          }))}
-                          className="w-48 px-2 py-1.5 border border-border rounded text-xs bg-white"
-                        >
-                          <option value="">No vendor</option>
-                          {availableVendors.map((vendor) => (
-                            <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   </div>
                 </div>
@@ -1313,74 +1369,6 @@ export default function AdminClientsPage() {
                   </div>
                 )}
               </div>
-              {/* Per-Channel Network Assignment */}
-              {formChannels.trim() && availableNetworks.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Per-Channel Network & Revenue Share
-                  </label>
-                  <p className="text-xs text-muted mb-2">Assign each channel to a specific network with custom revenue share %</p>
-                  <div className="space-y-2">
-                    {filteredAssignmentChannelIds.map((chId) => {
-                      const assigned = formChannelNetworks.find((cn) => cn.channelId === chId);
-                      return (
-                        <div key={chId} className="flex items-center gap-3 p-2 border border-border rounded-lg bg-slate-50">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-foreground truncate">{channelNames[chId] || "Channel name unavailable"}</p>
-                            <p className="text-xs font-mono text-muted break-all">{chId}</p>
-                          </div>
-                          <select
-                            value={assigned?.networkId || ""}
-                            onChange={(e) => {
-                              const netId = e.target.value;
-                              if (!netId) {
-                                setFormChannelNetworks(formChannelNetworks.filter((cn) => cn.channelId !== chId));
-                              } else {
-                                const net = availableNetworks.find((n) => n.id === netId);
-                                if (net) {
-                                  const existing = formChannelNetworks.find((cn) => cn.channelId === chId);
-                                  if (existing) {
-                                    setFormChannelNetworks(formChannelNetworks.map((cn) =>
-                                      cn.channelId === chId ? { ...cn, networkId: net.id, networkName: net.name } : cn
-                                    ));
-                                  } else {
-                                    setFormChannelNetworks([...formChannelNetworks, {
-                                      channelId: chId, networkId: net.id, networkName: net.name,
-                                      revenueSharePercent: net.revenueSharePercent,
-                                    }]);
-                                  }
-                                }
-                              }
-                            }}
-                            className="flex-1 px-2 py-1 border border-border rounded text-xs"
-                          >
-                            <option value="">No network</option>
-                            {availableNetworks.map((n) => (
-                              <option key={n.id} value={n.id}>{n.name}</option>
-                            ))}
-                          </select>
-                          {assigned && (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                value={assigned.revenueSharePercent}
-                                onChange={(e) => {
-                                  setFormChannelNetworks(formChannelNetworks.map((cn) =>
-                                    cn.channelId === chId ? { ...cn, revenueSharePercent: Number(e.target.value) || 0 } : cn
-                                  ));
-                                }}
-                                min="0" max="100"
-                                className="w-14 px-1 py-1 border border-border rounded text-xs text-center"
-                              />
-                              <span className="text-xs text-muted">%</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
               {formError && (
                 <p className="text-sm text-red-500">{formError}</p>
               )}

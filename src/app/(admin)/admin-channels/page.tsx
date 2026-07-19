@@ -32,6 +32,7 @@ interface Client {
   phone: string;
   channels: string[];
   pendingChannels?: string[];
+  channelNetworks?: ChannelNetworkAssignment[];
   status: "active" | "inactive";
   joinedDate: string;
   category: string;
@@ -77,6 +78,19 @@ interface VendorAssignment {
   vendorId: string;
 }
 
+interface NetworkOption {
+  id: string;
+  name: string;
+  revenueSharePercent: number;
+}
+
+interface ChannelNetworkAssignment {
+  channelId: string;
+  networkId: string;
+  networkName: string;
+  revenueSharePercent: number;
+}
+
 type ChannelRow = {
   channelId: string;
   name: string;
@@ -85,6 +99,7 @@ type ChannelRow = {
   videos: number;
   views: number;
   revenue: number;
+  clientId: string;
   clientName: string;
   category: string;
   tokenStatus?: string;
@@ -121,6 +136,8 @@ export default function AdminChannelsPage() {
   const [vendors, setVendors] = useState<VendorOption[]>([]);
   const [channelVendorIds, setChannelVendorIds] = useState<Record<string, string>>({});
   const [vendorSavingId, setVendorSavingId] = useState<string | null>(null);
+  const [networkOptions, setNetworkOptions] = useState<NetworkOption[]>([]);
+  const [networkSavingId, setNetworkSavingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -171,9 +188,26 @@ export default function AdminChannelsPage() {
     }
   }, [isAuthenticated]);
 
+  const fetchNetworks = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const response = await fetch("/api/networks", { cache: "no-store" });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to load networks");
+      setNetworkOptions(
+        (json.data || []).sort((a: NetworkOption, b: NetworkOption) => a.name.localeCompare(b.name))
+      );
+    } catch {
+      setNetworkOptions([]);
+    }
+  }, [isAuthenticated]);
+
   useEffect(() => {
-    queueMicrotask(() => void fetchVendors());
-  }, [fetchVendors]);
+    queueMicrotask(() => {
+      void fetchVendors();
+      void fetchNetworks();
+    });
+  }, [fetchNetworks, fetchVendors]);
 
   const handleVendorAssignment = useCallback(async (channelId: string, vendorId: string) => {
     setVendorSavingId(channelId);
@@ -190,6 +224,45 @@ export default function AdminChannelsPage() {
       window.alert(error instanceof Error ? error.message : "Failed to assign vendor");
     } finally {
       setVendorSavingId(null);
+    }
+  }, []);
+
+  const handleNetworkAssignment = useCallback(async (
+    userId: string,
+    channelId: string,
+    networkName: string
+  ) => {
+    if (!userId) {
+      window.alert("Channel owner could not be found");
+      return;
+    }
+    setNetworkSavingId(channelId);
+    try {
+      const response = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "assign_channel_network",
+          userId,
+          channelId,
+          networkName,
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to assign network");
+      const nextAssignment = json.data?.network as ChannelNetworkAssignment | null;
+      setClients((current) => current.map((client) => {
+        if (client.id !== userId) return client;
+        const nextAssignments = (client.channelNetworks || []).filter(
+          (assignment) => assignment.channelId !== channelId
+        );
+        if (nextAssignment) nextAssignments.push(nextAssignment);
+        return { ...client, channelNetworks: nextAssignments };
+      }));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Failed to assign network");
+    } finally {
+      setNetworkSavingId(null);
     }
   }, []);
 
@@ -365,6 +438,7 @@ export default function AdminChannelsPage() {
           videos: Number(data?.statistics?.videoCount || 0),
           views: Number(data?.statistics?.viewCount || 0),
           revenue: (revenuePeriod !== "cached" ? periodRevenueMap[chId] : channelRevenueMap[chId]) || 0,
+          clientId: client.id,
           clientName: client.name,
           category: client.category,
           tokenStatus: tokenStatuses[chId] || "none",
@@ -388,6 +462,7 @@ export default function AdminChannelsPage() {
         videos: Number(data?.statistics?.videoCount || 0),
         views: Number(data?.statistics?.viewCount || 0),
         revenue: (revenuePeriod !== "cached" ? periodRevenueMap[chId] : channelRevenueMap[chId]) || 0,
+        clientId: matchedClient?.id || "",
         clientName: cachedClientName || "Unknown",
         category: matchedClient?.category || "-",
         tokenStatus: tokenStatuses[chId] || "none",
@@ -863,6 +938,7 @@ export default function AdminChannelsPage() {
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Revenue</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Client</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Vendor</th>
+                <th className="text-left px-4 py-3 font-semibold text-foreground">Network</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Category</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Token</th>
                 <th className="text-left px-4 py-3 font-semibold text-foreground">Actions</th>
@@ -912,6 +988,35 @@ export default function AdminChannelsPage() {
                         <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
                       ))}
                     </select>
+                  </td>
+                  <td className="px-4 py-3 min-w-[170px]" onClick={(event) => event.stopPropagation()}>
+                    {(() => {
+                      const currentNetwork = clients
+                        .find((client) => client.id === channel.clientId)
+                        ?.channelNetworks?.find((assignment) => assignment.channelId === channel.channelId)
+                        ?.networkName || "";
+                      return (
+                        <select
+                          value={currentNetwork}
+                          disabled={networkSavingId === channel.channelId || !channel.clientId}
+                          onChange={(event) => void handleNetworkAssignment(
+                            channel.clientId,
+                            channel.channelId,
+                            event.target.value
+                          )}
+                          className="w-full px-2 py-1.5 border border-border rounded text-xs bg-white disabled:opacity-60"
+                          aria-label={`Network for ${channel.name}`}
+                        >
+                          <option value="">No network</option>
+                          {currentNetwork && !networkOptions.some((network) => network.name === currentNetwork) && (
+                            <option value={currentNetwork}>{currentNetwork}</option>
+                          )}
+                          {networkOptions.map((network) => (
+                            <option key={network.id} value={network.name}>{network.name}</option>
+                          ))}
+                        </select>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-foreground">{channel.category}</td>
                   <td className="px-4 py-3">
@@ -975,7 +1080,7 @@ export default function AdminChannelsPage() {
               ))}
               {pageChannels.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={11} className="px-4 py-12 text-center text-muted">
                     {loadingChannels
                       ? "Loading..."
                       : "No channels found. Add clients with channel IDs first."}
@@ -1077,6 +1182,15 @@ export default function AdminChannelsPage() {
                   <span className="text-muted">Vendor</span>
                   <span className="font-medium text-foreground">
                     {vendors.find((vendor) => vendor.id === channelVendorIds[selectedChannel.channelId])?.name || "No vendor"}
+                  </span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted">Network</span>
+                  <span className="font-medium text-foreground">
+                    {clients
+                      .find((client) => client.id === selectedChannel.clientId)
+                      ?.channelNetworks?.find((assignment) => assignment.channelId === selectedChannel.channelId)
+                      ?.networkName || "No network"}
                   </span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-border">

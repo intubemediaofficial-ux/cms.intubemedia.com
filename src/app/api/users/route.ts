@@ -1,10 +1,12 @@
 import { kv } from "@/lib/redis";
 import { getServerSession } from "next-auth";
+import { after } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { sendEmail, getWelcomeEmailHtml } from "@/lib/email";
 import { addAuditLog } from "@/lib/audit-log";
 import { createSystemNotification } from "@/lib/notifications";
 import { clearChannelVendorAssignments } from "@/lib/vendors";
+import { syncVendorGoogleSheet } from "@/lib/vendor-google-sheets";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -102,6 +104,15 @@ function customNetworkId(email: string, name: string): string {
     .createHash("sha256")
     .update(`${email.toLowerCase()}:${normalizeNetworkName(name)}`)
     .digest("hex")}`;
+}
+
+async function syncSheetAfterNetworkChange() {
+  try {
+    return await syncVendorGoogleSheet();
+  } catch (error) {
+    console.error("[Users] Google Sheets network sync failed:", error);
+    return { status: "failed" as const };
+  }
 }
 
 // Deprecated network names to auto-remove from user assignments
@@ -469,6 +480,77 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const { id, name, email, password, phone, channels, category, status, networks, channelNetworks } = body;
 
+    if (body.type === "assign_channel_network") {
+      if (!admin && !isComp) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      const userId = typeof body.userId === "string" ? body.userId : "";
+      const channelId = typeof body.channelId === "string" ? body.channelId.trim() : "";
+      const networkName = typeof body.networkName === "string" ? body.networkName.trim() : "";
+      if (!userId || !channelId) {
+        return Response.json({ error: "userId and channelId required" }, { status: 400 });
+      }
+
+      const users = await getUsers();
+      const userIdx = users.findIndex((user) => user.id === userId);
+      if (userIdx === -1) {
+        return Response.json({ error: "User not found" }, { status: 404 });
+      }
+      if (isComp && companyUser && users[userIdx].parentId !== companyUser.id) {
+        return Response.json({ error: "You can only manage networks for your own clients" }, { status: 403 });
+      }
+      const managedChannelIds = new Set([
+        ...(users[userIdx].channels || []),
+        ...(users[userIdx].pendingChannels || []),
+      ]);
+      if (!managedChannelIds.has(channelId)) {
+        return Response.json({ error: "Channel is not assigned to this user" }, { status: 400 });
+      }
+
+      let nextAssignment: ChannelNetworkAssignment | null = null;
+      if (networkName) {
+        const availableNetworks = (await kv.get<NetworkRecord[]>(NETWORKS_KEY)) || [];
+        const network = availableNetworks.find(
+          (item) => normalizeNetworkName(item.name) === normalizeNetworkName(networkName)
+        );
+        if (!network) {
+          return Response.json({ error: "Network not found" }, { status: 404 });
+        }
+        nextAssignment = {
+          channelId,
+          networkId: network.id,
+          networkName: network.name,
+          revenueSharePercent: network.revenueSharePercent || 0,
+        };
+      }
+
+      users[userIdx].channelNetworks = (users[userIdx].channelNetworks || []).filter(
+        (assignment) => assignment.channelId !== channelId
+      );
+      if (nextAssignment) users[userIdx].channelNetworks.push(nextAssignment);
+
+      const saved = await saveUsers(users);
+      if (!saved) {
+        return Response.json({ error: "Failed to save network assignment" }, { status: 500 });
+      }
+      after(syncSheetAfterNetworkChange);
+      addAuditLog({
+        action: "channel_network_assigned",
+        performedBy: putSession?.user?.email || "unknown",
+        performedByRole: admin ? "admin" : "company",
+        targetUser: users[userIdx].name,
+        targetEmail: users[userIdx].email,
+        details: `${networkName ? `Assigned network "${nextAssignment?.networkName}" to` : "Removed network from"} channel ${channelId}`,
+      }).catch(() => {});
+      return Response.json({
+        data: {
+          channelId,
+          network: nextAssignment,
+          user: users[userIdx].name,
+        },
+      });
+    }
+
     // Approve, reject, or unapprove a channel
     if (body.type === "approve_channel" || body.type === "reject_channel" || body.type === "unapprove_channel") {
       const { userId, channelId } = body;
@@ -722,6 +804,7 @@ export async function PUT(request: Request) {
       details: `Updated "${users[idx].name}": ${changes.join(", ")}`,
     }).catch(() => {});
 
+    if (channelNetworks !== undefined) after(syncSheetAfterNetworkChange);
     const { password: _, ...safeUser } = users[idx];
     return Response.json({ data: safeUser });
   } catch (error) {
@@ -916,6 +999,7 @@ export async function PATCH(request: Request) {
       ),
     ]);
 
+    if (Array.isArray(channelNetworks)) after(syncSheetAfterNetworkChange);
     return Response.json({
       data: {
         success: true,
