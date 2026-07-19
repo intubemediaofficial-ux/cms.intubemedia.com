@@ -9,6 +9,10 @@ import {
 import { kv } from "@/lib/redis";
 import { removeChannelFromAllCaches } from "@/lib/client-data-cache";
 import {
+  syncVerifiedChannelRevenue,
+  type ChannelRevenueSyncStatus,
+} from "@/lib/client-data-sync";
+import {
   getPublicOrigin,
   YOUTUBE_OAUTH_CONSENT_VERSION,
   YOUTUBE_OAUTH_SCOPES,
@@ -244,10 +248,26 @@ export async function POST(request: Request) {
       `[OAuth] Verified and stored encrypted authorization for ${expectedChannelId}`
     );
 
+    let revenueSyncStatus: ChannelRevenueSyncStatus = "failed";
+    try {
+      revenueSyncStatus = await syncVerifiedChannelRevenue(expectedChannelId, {
+        channelTitle,
+        subscribers: Number(verifiedChannel.statistics?.subscriberCount || 0),
+        views: Number(verifiedChannel.statistics?.viewCount || 0),
+        videoCount: Number(verifiedChannel.statistics?.videoCount || 0),
+        thumbnail: verifiedChannel.snippet?.thumbnails?.default?.url || "",
+      });
+    } catch (error) {
+      console.warn(
+        `[OAuth] Immediate revenue sync failed for ${expectedChannelId}: ${errorMessage(error)}`
+      );
+    }
+
     return Response.json({
       data: {
         success: true,
         kvConfigured: isKVConfigured(),
+        revenueSyncStatus,
         channelInfo: {
           channelId: expectedChannelId,
           channelTitle,

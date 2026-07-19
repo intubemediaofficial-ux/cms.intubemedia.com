@@ -32,11 +32,26 @@ interface StoredUser {
   status: "active" | "inactive" | "pending";
 }
 
+export type ChannelRevenueSyncStatus =
+  | "updated"
+  | "no_token"
+  | "quota_exceeded"
+  | "analytics_empty"
+  | "failed";
+
 interface RevenueResult {
   channelId: string;
-  status: "updated" | "no_token" | "quota_exceeded" | "analytics_empty" | "failed";
+  status: ChannelRevenueSyncStatus;
   revenue?: number;
   rpm?: number;
+}
+
+interface VerifiedChannelSnapshot {
+  channelTitle: string;
+  thumbnail: string;
+  subscribers: number;
+  views: number;
+  videoCount: number;
 }
 
 export interface ClientDataSyncResult {
@@ -244,6 +259,80 @@ function getRevenueDateRange(): { startDate: string; endDate: string } {
     startDate: start.toISOString().slice(0, 10),
     endDate: end.toISOString().slice(0, 10),
   };
+}
+
+export async function syncVerifiedChannelRevenue(
+  channelId: string,
+  snapshot: VerifiedChannelSnapshot
+): Promise<ChannelRevenueSyncStatus> {
+  const revenueRange = getRevenueDateRange();
+  const revenueResult = await fetchRevenue(
+    channelId,
+    revenueRange.startDate,
+    revenueRange.endDate
+  );
+  if (revenueResult.status !== "updated") return revenueResult.status;
+
+  const users = (await kv.get<StoredUser[]>(USERS_KEY)) || [];
+  const owners = users.filter(
+    (user) => user.status === "active" && (user.channels || []).includes(channelId)
+  );
+  const now = new Date().toISOString();
+
+  for (const user of owners) {
+    const previous =
+      (await getCachedClientData(user.email)) ||
+      (await getCachedClientData(user.id));
+    const existingChannel = previous?.channels.find(
+      (channel) => channel.channelId === channelId
+    );
+    const syncedChannel: CachedChannelData = {
+      channelId,
+      channelTitle: snapshot.channelTitle || existingChannel?.channelTitle || channelId,
+      thumbnail: snapshot.thumbnail || existingChannel?.thumbnail || "",
+      subscribers: snapshot.subscribers,
+      views: snapshot.views,
+      videoCount: snapshot.videoCount,
+      estimatedRevenue: revenueResult.revenue || 0,
+      rpm: revenueResult.rpm || 0,
+      cpm: existingChannel?.cpm || 0,
+      lastUpdated: now,
+      statsUpdatedAt: now,
+      revenueUpdatedAt: now,
+      revenueSyncedThrough: revenueRange.endDate,
+    };
+    const channels = previous
+      ? previous.channels.some((channel) => channel.channelId === channelId)
+        ? previous.channels.map((channel) =>
+            channel.channelId === channelId ? syncedChannel : channel
+          )
+        : [...previous.channels, syncedChannel]
+      : [syncedChannel];
+    const data: CachedClientData = {
+      userId: user.id,
+      email: user.email,
+      channels,
+      totalRevenue: channels.reduce(
+        (total, channel) => total + (channel.estimatedRevenue || 0),
+        0
+      ),
+      totalViews: channels.reduce((total, channel) => total + (channel.views || 0), 0),
+      totalSubscribers: channels.reduce(
+        (total, channel) => total + (channel.subscribers || 0),
+        0
+      ),
+      lastUpdated: now,
+      lastStatsSync: now,
+      lastRevenueSync: now,
+      source: "channel_oauth_verification",
+    };
+    await cacheClientData(user.email, data, {
+      preserveRevenue: false,
+      source: "channel_oauth_verification",
+    });
+  }
+
+  return revenueResult.status;
 }
 
 export async function getClientDataSyncStatus(): Promise<ClientDataSyncSummary | null> {
