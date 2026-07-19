@@ -63,6 +63,15 @@ function quoteSheetName(name: string): string {
   return `'${name.replace(/'/g, "''")}'`;
 }
 
+function monthLabel(month: string): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, monthNumber - 1, 1)));
+}
+
 export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
   let spreadsheetId = process.env.VENDOR_GOOGLE_SHEET_ID?.trim();
   let clientEmail = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim();
@@ -161,64 +170,68 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
     "Month",
     "Vendor",
     "Channels",
-    "Views",
     "Revenue USD",
     "Synced At",
   ]];
   const vendorRows = new Map<string, Array<Array<string | number>>>();
+  const monthlyAnalytics = monthlyCaches.map((cache) => ({
+    cache,
+    channels: new Map(cache.channels.map((channel) => [channel.channel_id, channel])),
+  }));
+  const monthlyHeaders = monthlyCaches.map(
+    (cache) => `${monthLabel(cache.month)} Revenue USD`
+  );
   let totalRows = 0;
 
   vendors.forEach((vendor, index) => {
     const title = vendorSheetNames[index];
     const channelIds = assignmentByVendor.get(vendor.id) || [];
     const rows: Array<Array<string | number>> = [[
-      "Month",
       "Vendor",
       "Client",
       "Channel",
       "Channel ID",
-      "Views",
-      "Revenue USD",
-      "Status",
-      "Synced Through",
-      "Updated At",
+      ...monthlyHeaders,
     ]];
+    const monthlyRevenueTotals = monthlyCaches.map(() => 0);
 
-    for (const cache of monthlyCaches) {
-      const analyticsByChannel = new Map(
-        cache.channels.map((channel) => [channel.channel_id, channel])
-      );
-      let monthViews = 0;
-      let monthRevenue = 0;
-      for (const channelId of channelIds) {
-        const analytics = analyticsByChannel.get(channelId);
-        const views = analytics?.views || 0;
-        const revenue = analytics?.revenue_usd || 0;
-        monthViews += views;
-        monthRevenue += revenue;
-        rows.push([
-          cache.month,
-          vendor.name,
-          channelOwners.get(channelId) || "",
-          analytics?.channel_name || channelNames.get(channelId) || channelId,
-          channelId,
-          views,
-          Number(revenue.toFixed(3)),
-          analytics ? "Available" : "Pending",
-          analytics?.synced_through || "",
-          analytics?.updated_at || "",
-        ]);
-        totalRows += 1;
-      }
+    for (const channelId of channelIds) {
+      const analyticsByMonth = monthlyAnalytics.map(({ channels }) => channels.get(channelId));
+      const latestAnalytics = [...analyticsByMonth].reverse().find(Boolean);
+      rows.push([
+        vendor.name,
+        channelOwners.get(channelId) || "",
+        latestAnalytics?.channel_name || channelNames.get(channelId) || channelId,
+        channelId,
+        ...analyticsByMonth.map((analytics, monthIndex) => {
+          const revenue = analytics?.revenue_usd || 0;
+          monthlyRevenueTotals[monthIndex] += revenue;
+          return Number(revenue.toFixed(3));
+        }),
+      ]);
+      totalRows += 1;
+    }
+    rows.push(
+      [""],
+      [""],
+      [
+        "",
+        "",
+        "Total Revenue",
+        "",
+        ...monthlyRevenueTotals.map((value) => Number(value.toFixed(3))),
+      ]
+    );
+
+    monthlyAnalytics.forEach(({ cache }, monthIndex) => {
       summaryRows.push([
         cache.month,
         vendor.name,
         channelIds.length,
-        monthViews,
-        Number(monthRevenue.toFixed(3)),
+        Number(monthlyRevenueTotals[monthIndex].toFixed(3)),
         new Date().toISOString(),
       ]);
-    }
+    });
     vendorRows.set(title, rows);
   });
 

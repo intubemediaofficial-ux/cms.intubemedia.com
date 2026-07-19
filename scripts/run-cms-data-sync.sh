@@ -6,8 +6,8 @@ APP_DIR="${CMS_APP_DIR:-/var/www/cms-frontend}"
 ENV_FILE="${APP_DIR}/.env.local"
 SYNC_URL="${CMS_SYNC_URL:-http://127.0.0.1:3000/api/sync-client-data}"
 
-if [[ "${MODE}" != "stats" && "${MODE}" != "revenue" ]]; then
-  echo "Usage: $0 stats|revenue" >&2
+if [[ "${MODE}" != "stats" && "${MODE}" != "revenue" && "${MODE}" != "sheet" ]]; then
+  echo "Usage: $0 stats|revenue|sheet" >&2
   exit 2
 fi
 
@@ -35,8 +35,12 @@ if ! flock -n 9; then
 fi
 
 MAX_TIME=180
+QUERY="mode=${MODE}"
 if [[ "${MODE}" == "revenue" ]]; then
   MAX_TIME=900
+elif [[ "${MODE}" == "sheet" ]]; then
+  MAX_TIME=300
+  QUERY="action=vendor-sheet"
 fi
 
 curl --fail --silent --show-error \
@@ -45,5 +49,5 @@ curl --fail --silent --show-error \
   --retry 2 \
   --retry-all-errors \
   -H "x-cron-secret: ${CRON_SECRET}" \
-  "${SYNC_URL}?mode=${MODE}"
+  "${SYNC_URL}?${QUERY}"
 echo
