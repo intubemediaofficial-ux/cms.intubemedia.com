@@ -3,6 +3,7 @@ import "server-only";
 import { google } from "googleapis";
 import { getAllCachedClientData } from "@/lib/client-data-cache";
 import { kv } from "@/lib/redis";
+import { getVendorGoogleSheetConfig } from "@/lib/vendor-google-sheet-config";
 import { getVendorAssignments, getVendors } from "@/lib/vendors";
 
 const USERS_KEY = "bainsla_users";
@@ -63,9 +64,16 @@ function quoteSheetName(name: string): string {
 }
 
 export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
-  const spreadsheetId = process.env.VENDOR_GOOGLE_SHEET_ID?.trim();
-  const clientEmail = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim();
-  const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  let spreadsheetId = process.env.VENDOR_GOOGLE_SHEET_ID?.trim();
+  let clientEmail = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim();
+  let privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
+  if (!spreadsheetId || !clientEmail || !privateKey) {
+    const storedConfig = await getVendorGoogleSheetConfig();
+    spreadsheetId ||= storedConfig?.spreadsheetId;
+    clientEmail ||= storedConfig?.clientEmail;
+    privateKey ||= storedConfig?.privateKey;
+  }
+  privateKey = privateKey?.replace(/\\n/g, "\n");
   if (!spreadsheetId || !clientEmail || !privateKey) {
     return { status: "not_configured" };
   }

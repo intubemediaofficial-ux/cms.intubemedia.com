@@ -71,6 +71,9 @@ export default function AdminVendorsPage() {
   const [saving, setSaving] = useState(false);
   const [exportingAll, setExportingAll] = useState(false);
   const [sheetSyncing, setSheetSyncing] = useState(false);
+  const [sheetConfiguring, setSheetConfiguring] = useState(false);
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [sheetCredentials, setSheetCredentials] = useState<File | null>(null);
   const [sheetStatus, setSheetStatus] = useState("");
   const [vendorSearch, setVendorSearch] = useState("");
   const [channelSearch, setChannelSearch] = useState("");
@@ -290,6 +293,50 @@ export default function AdminVendorsPage() {
     }
   };
 
+  const configureGoogleSheet = async () => {
+    if (!sheetUrl.trim() || !sheetCredentials) {
+      setError("Google Sheet URL and service-account JSON are required");
+      return;
+    }
+    setSheetConfiguring(true);
+    setSheetStatus("");
+    setError("");
+    try {
+      const credentials = JSON.parse(await sheetCredentials.text()) as {
+        client_email?: unknown;
+        private_key?: unknown;
+      };
+      if (
+        typeof credentials.client_email !== "string" ||
+        typeof credentials.private_key !== "string"
+      ) {
+        throw new Error("Invalid service-account JSON file");
+      }
+      const response = await fetch("/api/vendors", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "configureSheet",
+          spreadsheetId: sheetUrl,
+          clientEmail: credentials.client_email,
+          privateKey: credentials.private_key,
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Google Sheet configuration failed");
+      setSheetStatus(
+        `Google Sheet configured and updated: ${json.data?.vendors || 0} vendors, ${json.data?.rows || 0} rows.`
+      );
+      setSheetCredentials(null);
+    } catch (configError) {
+      setError(
+        configError instanceof Error ? configError.message : "Google Sheet configuration failed"
+      );
+    } finally {
+      setSheetConfiguring(false);
+    }
+  };
+
   const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId);
   const filteredVendors = vendors.filter((vendor) =>
     vendor.name.toLowerCase().includes(vendorSearch.trim().toLowerCase())
@@ -345,6 +392,38 @@ export default function AdminVendorsPage() {
 
       {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
       {sheetStatus && <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">{sheetStatus}</div>}
+
+      <div className="bg-white border border-border rounded-xl p-4 space-y-3">
+        <div>
+          <h2 className="font-semibold">Google Sheet Connection</h2>
+          <p className="text-xs text-muted mt-1">
+            Admin-only setup. Credentials are encrypted server-side and never displayed again.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3">
+          <input
+            type="url"
+            value={sheetUrl}
+            onChange={(event) => setSheetUrl(event.target.value)}
+            placeholder="Google Sheet URL"
+            className="px-3 py-2 border border-border rounded-lg text-sm"
+          />
+          <input
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => setSheetCredentials(event.target.files?.[0] || null)}
+            className="px-3 py-2 border border-border rounded-lg text-sm"
+          />
+          <button
+            onClick={() => void configureGoogleSheet()}
+            disabled={sheetConfiguring || !sheetUrl.trim() || !sheetCredentials}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm disabled:opacity-50"
+          >
+            {sheetConfiguring && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save & Sync
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-6">
         <div className="bg-white border border-border rounded-xl overflow-hidden">
