@@ -202,12 +202,23 @@ export async function GET(request: Request) {
     getVendors(),
     getVendorAssignments(),
   ]);
-  const visibleVendors = getVisibleVendors(scope, vendors);
+  const assignableVendors = getVisibleVendors(scope, vendors);
+  const assignableVendorIds = new Set(assignableVendors.map((vendor) => vendor.id));
+  const manageableAssignments = assignments.filter((assignment) =>
+    scope.manageableChannelIds.has(assignment.channelId)
+  );
+  const assignedVendorIds = new Set(
+    manageableAssignments.map((assignment) => assignment.vendorId)
+  );
+  const visibleVendors = scope.isAdmin
+    ? vendors
+    : vendors.filter(
+        (vendor) =>
+          assignableVendorIds.has(vendor.id) || assignedVendorIds.has(vendor.id)
+      );
   const visibleVendorIds = new Set(visibleVendors.map((vendor) => vendor.id));
-  const scopedAssignments = assignments.filter(
-    (assignment) =>
-      scope.manageableChannelIds.has(assignment.channelId) &&
-      visibleVendorIds.has(assignment.vendorId)
+  const scopedAssignments = manageableAssignments.filter((assignment) =>
+    visibleVendorIds.has(assignment.vendorId)
   );
 
   if (action === "list") {
@@ -222,9 +233,15 @@ export async function GET(request: Request) {
           .map((vendor) => ({
             ...vendor,
             channelCount: counts.get(vendor.id) || 0,
+            canEdit: scope.isAdmin || assignableVendorIds.has(vendor.id),
+            canAssign: scope.isAdmin || assignableVendorIds.has(vendor.id),
           }))
           .sort((a, b) => a.name.localeCompare(b.name)),
-        assignments: scopedAssignments,
+        assignments: manageableAssignments,
+        assignedVendors: visibleVendors.map((vendor) => ({
+          id: vendor.id,
+          name: vendor.name,
+        })),
       },
     });
   }
