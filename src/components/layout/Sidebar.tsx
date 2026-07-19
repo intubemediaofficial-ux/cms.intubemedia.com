@@ -61,6 +61,7 @@ const clientNavItems: NavItem[] = [
       { href: "/reports/summary-channel", label: "Summary Channel", icon: FileText },
     ],
   },
+  { href: "/vendors", label: "Vendor Management", icon: Users },
   { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/music-distribution", label: "Music Distribution", icon: Music },
   { href: "/claim-release", label: "Claim Release", icon: ShieldCheck },
@@ -92,6 +93,7 @@ const companyNavItems: NavItem[] = [
       { href: "/reports/summary-channel", label: "Summary Channel", icon: FileText },
     ],
   },
+  { href: "/vendors", label: "Vendor Management", icon: Users },
   { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

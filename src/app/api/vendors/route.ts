@@ -36,6 +36,12 @@ interface StoredUser {
   parentId?: string;
   channels?: string[];
   pendingChannels?: string[];
+  channelNetworks?: Array<{
+    channelId: string;
+    networkId: string;
+    networkName: string;
+    revenueSharePercent?: number;
+  }>;
   status?: "active" | "inactive" | "pending";
 }
 
@@ -43,10 +49,10 @@ interface VendorScope {
   email: string;
   isAdmin: boolean;
   currentUser: StoredUser | null;
-  userIds: Set<string>;
   approvedChannelIds: Set<string>;
   manageableChannelIds: Set<string>;
   channelOwners: Map<string, StoredUser>;
+  channelNetworks: Map<string, string>;
 }
 
 async function getScope(): Promise<VendorScope | null> {
@@ -82,36 +88,32 @@ async function getScope(): Promise<VendorScope | null> {
     ])
   );
   const channelOwners = new Map<string, StoredUser>();
+  const channelNetworks = new Map<string, string>();
   for (const user of scopedUsers) {
     for (const channelId of user.channels || []) channelOwners.set(channelId, user);
+    for (const assignment of user.channelNetworks || []) {
+      channelNetworks.set(assignment.channelId, assignment.networkName);
+    }
   }
 
   return {
     email,
     isAdmin,
     currentUser,
-    userIds: new Set(scopedUsers.map((user) => user.id)),
     approvedChannelIds,
     manageableChannelIds,
     channelOwners,
+    channelNetworks,
   };
 }
 
 function getVisibleVendors(
   scope: VendorScope,
-  vendors: Vendor[],
-  assignments: ChannelVendorAssignment[]
+  vendors: Vendor[]
 ): Vendor[] {
   if (scope.isAdmin) return vendors;
-  const assignedVendorIds = new Set(
-    assignments
-      .filter((assignment) => scope.manageableChannelIds.has(assignment.channelId))
-      .map((assignment) => assignment.vendorId)
-  );
   return vendors.filter(
-    (vendor) =>
-      (vendor.createdByUserId && scope.userIds.has(vendor.createdByUserId)) ||
-      assignedVendorIds.has(vendor.id)
+    (vendor) => vendor.createdByUserId === scope.currentUser?.id
   );
 }
 
@@ -156,6 +158,7 @@ async function buildVendorReports(
           channel_name: row?.channel_name || nameMap.get(channelId) || channelId,
           client_name: owner?.name || "",
           vendor_name: vendor.name,
+          network_name: scope.channelNetworks.get(channelId) || "",
           revenue_usd: row?.revenue_usd || 0,
           views: row?.views || 0,
           synced_through: row?.synced_through || null,
@@ -199,7 +202,7 @@ export async function GET(request: Request) {
     getVendors(),
     getVendorAssignments(),
   ]);
-  const visibleVendors = getVisibleVendors(scope, vendors, assignments);
+  const visibleVendors = getVisibleVendors(scope, vendors);
   const visibleVendorIds = new Set(visibleVendors.map((vendor) => vendor.id));
   const scopedAssignments = assignments.filter(
     (assignment) =>
@@ -261,11 +264,8 @@ export async function POST(request: Request) {
   const name = normalizeName(body.name);
   if (!name) return Response.json({ error: "Vendor name is required" }, { status: 400 });
 
-  const [vendors, assignments] = await Promise.all([
-    getVendors(),
-    getVendorAssignments(),
-  ]);
-  const visible = getVisibleVendors(scope, vendors, assignments);
+  const vendors = await getVendors();
+  const visible = getVisibleVendors(scope, vendors);
   const duplicate = visible.find(
     (vendor) => vendor.name.toLowerCase() === name.toLowerCase()
   );
@@ -338,7 +338,7 @@ export async function PUT(request: Request) {
     getVendors(),
     getVendorAssignments(),
   ]);
-  const visibleVendors = getVisibleVendors(scope, vendors, assignments);
+  const visibleVendors = getVisibleVendors(scope, vendors);
 
   if (action === "assign") {
     const channelId = typeof body.channelId === "string" ? body.channelId.trim() : "";

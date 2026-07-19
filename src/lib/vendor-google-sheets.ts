@@ -14,6 +14,7 @@ interface StoredUser {
   id: string;
   name: string;
   channels?: string[];
+  channelNetworks?: Array<{ channelId: string; networkName: string }>;
   status?: "active" | "inactive" | "pending";
 }
 
@@ -107,9 +108,13 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
     .sort((a, b) => a.month.localeCompare(b.month));
 
   const channelOwners = new Map<string, string>();
+  const channelNetworks = new Map<string, string>();
   for (const user of users) {
     if (user.status !== "active") continue;
     for (const channelId of user.channels || []) channelOwners.set(channelId, user.name);
+    for (const assignment of user.channelNetworks || []) {
+      channelNetworks.set(assignment.channelId, assignment.networkName);
+    }
   }
   const channelNames = new Map<string, string>();
   for (const client of cachedClients) {
@@ -198,6 +203,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
       "Client",
       "Channel",
       "Channel ID",
+      "Network",
       ...monthlyHeaders,
     ]];
     const monthlyRevenueTotals = monthlyCaches.map(() => 0);
@@ -210,6 +216,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
         channelOwners.get(channelId) || "",
         latestAnalytics?.channel_name || channelNames.get(channelId) || channelId,
         channelId,
+        channelNetworks.get(channelId) || "",
         ...analyticsByMonth.map((analytics, monthIndex) => {
           const revenue = analytics?.revenue_usd || 0;
           monthlyRevenueTotals[monthIndex] += revenue;
@@ -225,6 +232,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
         "",
         "",
         "Total Revenue",
+        "",
         "",
         ...monthlyRevenueTotals.map((value) => Number(value.toFixed(3))),
       ]
@@ -273,7 +281,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
           range: {
             sheetId,
             startColumnIndex: 0,
-            endColumnIndex: 4 + monthlyCaches.length,
+            endColumnIndex: 5 + monthlyCaches.length,
           },
           cell: {
             userEnteredFormat: {
@@ -301,7 +309,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
             startRowIndex: totalRowIndex,
             endRowIndex: totalRowIndex + 1,
             startColumnIndex: 0,
-            endColumnIndex: 4 + monthlyCaches.length,
+            endColumnIndex: 5 + monthlyCaches.length,
           },
           cell: {
             userEnteredFormat: {
