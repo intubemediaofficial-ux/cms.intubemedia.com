@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Building2,
@@ -26,6 +25,7 @@ interface ReportChannel {
   channel_id: string;
   channel_name: string;
   client_name: string;
+  network_name: string;
   revenue_usd: number;
   views: number;
   synced_through: string | null;
@@ -56,9 +56,9 @@ function monthOptions(): Array<{ value: string; label: string }> {
   });
 }
 
-export default function AdminVendorsPage() {
+export function VendorManagementPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
+  const isAdmin = session?.user?.role === "admin";
   const months = useMemo(() => monthOptions(), []);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [selectedVendorId, setSelectedVendorId] = useState("");
@@ -79,12 +79,6 @@ export default function AdminVendorsPage() {
   const [channelSearch, setChannelSearch] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (status === "authenticated" && session?.user?.role !== "admin") {
-      router.push("/dashboard");
-    }
-  }, [status, session, router]);
-
   const fetchVendors = useCallback(async () => {
     setLoading(true);
     try {
@@ -104,10 +98,10 @@ export default function AdminVendorsPage() {
   }, []);
 
   useEffect(() => {
-    if (status === "authenticated" && session?.user?.role === "admin") {
+    if (status === "authenticated") {
       queueMicrotask(() => void fetchVendors());
     }
-  }, [status, session, fetchVendors]);
+  }, [status, fetchVendors]);
 
   const fetchReport = useCallback(async () => {
     if (!selectedVendorId || !selectedMonth) {
@@ -205,13 +199,14 @@ export default function AdminVendorsPage() {
     if (!report) return;
     const monthLabel = months.find((month) => month.value === report.month)?.label || report.month;
     downloadExcel(
-      ["Month", "Vendor", "Client", "Channel", "Channel ID", "Views", "Revenue USD", "Status"],
+      ["Month", "Vendor", "Client", "Channel", "Channel ID", "Network", "Views", "Revenue USD", "Status"],
       report.channels.map((channel) => [
         monthLabel,
         report.vendor.name,
         channel.client_name,
         channel.channel_name,
         channel.channel_id,
+        channel.network_name,
         channel.views,
         Number(channel.revenue_usd.toFixed(3)),
         channel.available ? "Available" : "Pending",
@@ -247,13 +242,14 @@ export default function AdminVendorsPage() {
           },
           ...reports.map((item) => ({
             name: item.vendor.name,
-            headers: ["Month", "Vendor", "Client", "Channel", "Channel ID", "Views", "Revenue USD", "Status"],
+            headers: ["Month", "Vendor", "Client", "Channel", "Channel ID", "Network", "Views", "Revenue USD", "Status"],
             rows: item.channels.map((channel) => [
               monthLabel,
               item.vendor.name,
               channel.client_name,
               channel.channel_name,
               channel.channel_id,
+              channel.network_name,
               channel.views,
               Number(channel.revenue_usd.toFixed(3)),
               channel.available ? "Available" : "Pending",
@@ -357,14 +353,16 @@ export default function AdminVendorsPage() {
           <p className="text-sm text-muted mt-1">Assign channels and review exact calendar-month revenue and views.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => void syncGoogleSheet()}
-            disabled={sheetSyncing}
-            className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg text-sm disabled:opacity-50"
-          >
-            {sheetSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Sync Google Sheet
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => void syncGoogleSheet()}
+              disabled={sheetSyncing}
+              className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg text-sm disabled:opacity-50"
+            >
+              {sheetSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Sync Google Sheet
+            </button>
+          )}
           <button
             onClick={() => void exportAllVendors()}
             disabled={exportingAll || vendors.length === 0}
@@ -393,37 +391,39 @@ export default function AdminVendorsPage() {
       {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
       {sheetStatus && <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">{sheetStatus}</div>}
 
-      <div className="bg-white border border-border rounded-xl p-4 space-y-3">
-        <div>
-          <h2 className="font-semibold">Google Sheet Connection</h2>
-          <p className="text-xs text-muted mt-1">
-            Admin-only setup. Credentials are encrypted server-side and never displayed again.
-          </p>
+      {isAdmin && (
+        <div className="bg-white border border-border rounded-xl p-4 space-y-3">
+          <div>
+            <h2 className="font-semibold">Google Sheet Connection</h2>
+            <p className="text-xs text-muted mt-1">
+              Admin-only setup. Credentials are encrypted server-side and never displayed again.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3">
+            <input
+              type="url"
+              value={sheetUrl}
+              onChange={(event) => setSheetUrl(event.target.value)}
+              placeholder="Google Sheet URL"
+              className="px-3 py-2 border border-border rounded-lg text-sm"
+            />
+            <input
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => setSheetCredentials(event.target.files?.[0] || null)}
+              className="px-3 py-2 border border-border rounded-lg text-sm"
+            />
+            <button
+              onClick={() => void configureGoogleSheet()}
+              disabled={sheetConfiguring || !sheetUrl.trim() || !sheetCredentials}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm disabled:opacity-50"
+            >
+              {sheetConfiguring && <Loader2 className="w-4 h-4 animate-spin" />}
+              Save & Sync
+            </button>
+          </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3">
-          <input
-            type="url"
-            value={sheetUrl}
-            onChange={(event) => setSheetUrl(event.target.value)}
-            placeholder="Google Sheet URL"
-            className="px-3 py-2 border border-border rounded-lg text-sm"
-          />
-          <input
-            type="file"
-            accept="application/json,.json"
-            onChange={(event) => setSheetCredentials(event.target.files?.[0] || null)}
-            className="px-3 py-2 border border-border rounded-lg text-sm"
-          />
-          <button
-            onClick={() => void configureGoogleSheet()}
-            disabled={sheetConfiguring || !sheetUrl.trim() || !sheetCredentials}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm disabled:opacity-50"
-          >
-            {sheetConfiguring && <Loader2 className="w-4 h-4 animate-spin" />}
-            Save & Sync
-          </button>
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-6">
         <div className="bg-white border border-border rounded-xl overflow-hidden">
@@ -537,7 +537,7 @@ export default function AdminVendorsPage() {
                   <div className="bg-white border border-border rounded-xl overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        <thead><tr className="bg-slate-50 border-b border-border"><th className="text-left px-4 py-3">Channel</th><th className="text-left px-4 py-3">Client</th><th className="text-left px-4 py-3">Vendor</th><th className="text-left px-4 py-3">Month</th><th className="text-right px-4 py-3">Views</th><th className="text-right px-4 py-3">Revenue</th><th className="text-right px-4 py-3">Status</th></tr></thead>
+                        <thead><tr className="bg-slate-50 border-b border-border"><th className="text-left px-4 py-3">Channel</th><th className="text-left px-4 py-3">Client</th><th className="text-left px-4 py-3">Vendor</th><th className="text-left px-4 py-3">Network</th><th className="text-left px-4 py-3">Month</th><th className="text-right px-4 py-3">Views</th><th className="text-right px-4 py-3">Revenue</th><th className="text-right px-4 py-3">Status</th></tr></thead>
                         <tbody>
                           {filteredChannels.map((channel) => (
                             <tr key={channel.channel_id} className="border-b border-border last:border-0 hover:bg-slate-50">
@@ -547,13 +547,14 @@ export default function AdminVendorsPage() {
                               </td>
                               <td className="px-4 py-3">{channel.client_name || "—"}</td>
                               <td className="px-4 py-3">{report.vendor.name}</td>
+                              <td className="px-4 py-3">{channel.network_name || "—"}</td>
                               <td className="px-4 py-3 whitespace-nowrap">{months.find((month) => month.value === report.month)?.label || report.month}</td>
                               <td className="px-4 py-3 text-right">{formatNumber(channel.views)}</td>
                               <td className="px-4 py-3 text-right font-medium text-green-600">{formatCurrency(channel.revenue_usd)}</td>
                               <td className="px-4 py-3 text-right"><span className={`text-xs px-2 py-1 rounded-full ${channel.available ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{channel.available ? "Cached" : "Pending"}</span></td>
                             </tr>
                           ))}
-                          {filteredChannels.length === 0 && <tr><td colSpan={7} className="px-4 py-12 text-center text-muted">No channels match this vendor and search.</td></tr>}
+                          {filteredChannels.length === 0 && <tr><td colSpan={8} className="px-4 py-12 text-center text-muted">No channels match this vendor and search.</td></tr>}
                         </tbody>
                       </table>
                     </div>
@@ -569,3 +570,5 @@ export default function AdminVendorsPage() {
     </div>
   );
 }
+
+export default VendorManagementPage;

@@ -14,6 +14,7 @@ interface StoredUser {
   id: string;
   name: string;
   channels?: string[];
+  channelNetworks?: Array<{ channelId: string; networkName: string }>;
   status?: "active" | "inactive" | "pending";
 }
 
@@ -107,9 +108,13 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
     .sort((a, b) => a.month.localeCompare(b.month));
 
   const channelOwners = new Map<string, string>();
+  const channelNetworks = new Map<string, string>();
   for (const user of users) {
     if (user.status !== "active") continue;
     for (const channelId of user.channels || []) channelOwners.set(channelId, user.name);
+    for (const assignment of user.channelNetworks || []) {
+      channelNetworks.set(assignment.channelId, assignment.networkName);
+    }
   }
   const channelNames = new Map<string, string>();
   for (const client of cachedClients) {
@@ -151,6 +156,13 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
   const refreshedMetadata = addRequests.length > 0
     ? await sheets.spreadsheets.get({ spreadsheetId })
     : metadata;
+  const sheetIdByTitle = new Map(
+    (refreshedMetadata.data.sheets || []).flatMap((sheet) =>
+      sheet.properties?.title && sheet.properties.sheetId !== undefined
+        ? [[sheet.properties.title, sheet.properties.sheetId] as const]
+        : []
+    )
+  );
   const staleSheetIds = (refreshedMetadata.data.sheets || []).flatMap((sheet) => {
     const title = sheet.properties?.title;
     const sheetId = sheet.properties?.sheetId;
@@ -191,6 +203,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
       "Client",
       "Channel",
       "Channel ID",
+      "Network",
       ...monthlyHeaders,
     ]];
     const monthlyRevenueTotals = monthlyCaches.map(() => 0);
@@ -203,6 +216,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
         channelOwners.get(channelId) || "",
         latestAnalytics?.channel_name || channelNames.get(channelId) || channelId,
         channelId,
+        channelNetworks.get(channelId) || "",
         ...analyticsByMonth.map((analytics, monthIndex) => {
           const revenue = analytics?.revenue_usd || 0;
           monthlyRevenueTotals[monthIndex] += revenue;
@@ -218,6 +232,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
         "",
         "",
         "Total Revenue",
+        "",
         "",
         ...monthlyRevenueTotals.map((value) => Number(value.toFixed(3))),
       ]
@@ -255,6 +270,67 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
       data: updates,
     },
   });
+
+  const formatRequests = Array.from(vendorRows, ([title, rows]) => {
+    const sheetId = sheetIdByTitle.get(title);
+    if (sheetId === undefined) return [];
+    const totalRowIndex = rows.length - 1;
+    return [
+      {
+        repeatCell: {
+          range: {
+            sheetId,
+            startColumnIndex: 0,
+            endColumnIndex: 5 + monthlyCaches.length,
+          },
+          cell: {
+            userEnteredFormat: {
+              textFormat: {
+                bold: false,
+                fontSize: 10,
+                foregroundColor: { red: 0, green: 0, blue: 0 },
+              },
+            },
+          },
+          fields: "userEnteredFormat.textFormat",
+        },
+      },
+      {
+        repeatCell: {
+          range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
+          cell: { userEnteredFormat: { textFormat: { bold: true } } },
+          fields: "userEnteredFormat.textFormat.bold",
+        },
+      },
+      {
+        repeatCell: {
+          range: {
+            sheetId,
+            startRowIndex: totalRowIndex,
+            endRowIndex: totalRowIndex + 1,
+            startColumnIndex: 0,
+            endColumnIndex: 5 + monthlyCaches.length,
+          },
+          cell: {
+            userEnteredFormat: {
+              textFormat: {
+                bold: true,
+                fontSize: 14,
+                foregroundColor: { red: 0.85, green: 0, blue: 0 },
+              },
+            },
+          },
+          fields: "userEnteredFormat.textFormat",
+        },
+      },
+    ];
+  }).flat();
+  if (formatRequests.length > 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: formatRequests },
+    });
+  }
 
   return {
     status: "updated",

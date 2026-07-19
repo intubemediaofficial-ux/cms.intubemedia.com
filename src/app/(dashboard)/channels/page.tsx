@@ -139,6 +139,9 @@ async function saveStoredChannels(
       body: JSON.stringify({
         channels: activeIds,
         pendingChannels: pendingIds,
+        channelAddedDates: Object.fromEntries(
+          channels.map((channel) => [channel.id, channel.addedDate])
+        ),
         channelNetworks,
       }),
     });
@@ -235,12 +238,8 @@ export default function ChannelsPage() {
   useEffect(() => {
     if (!isAuthenticated || !storageIdentity) return;
     const stored = getStoredChannels(storageIdentity);
-    const history = stored.filter(
-      (channel) =>
-        channel.status === "delinked" || channel.status === "transferred"
-    );
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setStoredChannels(history);
+    setStoredChannels(stored);
     setChannelRequests(getChannelRequests(storageIdentity));
     setChannelDataMap({});
   }, [isAuthenticated, storageIdentity]);
@@ -340,6 +339,7 @@ export default function ChannelsPage() {
       })
       .then(([meJson, scopeJson]) => {
         const approvedIds: string[] = scopeJson.data?.channelIds || [];
+        const serverAddedDates: Record<string, string> = scopeJson.data?.channelAddedDates || {};
         const pendingIds: string[] = meJson.data?.pendingChannels || [];
         const channelNetworkById = new Map<string, string>(
           (meJson.data?.channelNetworks || []).map(
@@ -351,7 +351,11 @@ export default function ChannelsPage() {
         );
         const currentStored = getStoredChannels(storageIdentity);
         const currentById = new Map(currentStored.map((channel) => [channel.id, channel]));
-        const today = new Date().toISOString().split("T")[0];
+        const today = new Date().toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        });
 
         const assignedChannels: StoredChannel[] = [
           ...approvedIds.map((id) => ({
@@ -364,6 +368,7 @@ export default function ChannelsPage() {
               addedDate: today,
             }),
             cms: channelNetworkById.get(id) || currentById.get(id)?.cms || "",
+            addedDate: serverAddedDates[id] || currentById.get(id)?.addedDate || today,
             status: "active" as const,
           })),
           ...pendingIds.map((id) => ({
@@ -376,6 +381,7 @@ export default function ChannelsPage() {
               addedDate: today,
             }),
             cms: channelNetworkById.get(id) || currentById.get(id)?.cms || "",
+            addedDate: serverAddedDates[id] || currentById.get(id)?.addedDate || today,
             status: "pending_approval" as const,
           })),
         ];
@@ -389,14 +395,24 @@ export default function ChannelsPage() {
 
         writeStoredChannels(storageIdentity, reconciled);
         setStoredChannels(reconciled);
+
+        const ownManagedIds = new Set<string>([
+          ...(meJson.data?.channels || []),
+          ...(meJson.data?.pendingChannels || []),
+        ]);
+        const ownChannelAddedDates = Object.fromEntries(
+          reconciled
+            .filter((channel) => ownManagedIds.has(channel.id))
+            .map((channel) => [channel.id, channel.addedDate])
+        );
+        fetch("/api/users", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelAddedDates: ownChannelAddedDates }),
+        }).catch(() => {});
       })
       .catch(() => {
-        const history = getStoredChannels(storageIdentity).filter(
-          (channel) =>
-            channel.status === "delinked" || channel.status === "transferred"
-        );
-        writeStoredChannels(storageIdentity, history);
-        setStoredChannels(history);
+        setStoredChannels(getStoredChannels(storageIdentity));
       });
   }, [isAuthenticated, storageIdentity]);
 

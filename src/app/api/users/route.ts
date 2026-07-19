@@ -45,6 +45,7 @@ export interface StoredUser {
   phone: string;
   channels: string[];
   pendingChannels?: string[];
+  channelAddedDates?: Record<string, string>;
   status: "active" | "inactive" | "pending";
   joinedDate: string;
   category: string;
@@ -71,6 +72,29 @@ function normalizeChannelIds(value: unknown): string[] {
 
 function normalizeNetworkName(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function currentChannelDate(): string {
+  return new Date().toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function reconcileChannelAddedDates(user: StoredUser): void {
+  const managedChannelIds = new Set([
+    ...(user.channels || []),
+    ...(user.pendingChannels || []),
+  ]);
+  const dates = { ...(user.channelAddedDates || {}) };
+  for (const channelId of managedChannelIds) {
+    dates[channelId] ||= currentChannelDate();
+  }
+  for (const channelId of Object.keys(dates)) {
+    if (!managedChannelIds.has(channelId)) delete dates[channelId];
+  }
+  user.channelAddedDates = dates;
 }
 
 function customNetworkId(email: string, name: string): string {
@@ -251,7 +275,10 @@ export async function GET(request: Request) {
             ? [me]
             : [];
       const channelIds = Array.from(new Set(scopedUsers.flatMap((user) => user.channels || [])));
-      return Response.json({ data: { channelIds } });
+      const channelAddedDates = Object.fromEntries(
+        scopedUsers.flatMap((user) => Object.entries(user.channelAddedDates || {}))
+      );
+      return Response.json({ data: { channelIds, channelAddedDates } });
     } catch (error) {
       console.error("[Users GET channelScope] Error:", error);
       return Response.json({ error: "Storage error", kvError: true }, { status: 500 });
@@ -348,6 +375,9 @@ export async function POST(request: Request) {
       password: hashPassword(password),
       phone: phone?.trim() || "",
       channels: requestedChannels,
+      channelAddedDates: Object.fromEntries(
+        requestedChannels.map((channelId) => [channelId, currentChannelDate()])
+      ),
       status: "active",
       joinedDate: new Date().toLocaleDateString("en-GB", {
         day: "2-digit",
@@ -475,6 +505,8 @@ export async function PUT(request: Request) {
         if (!users[userIdx].pendingChannels.includes(channelId)) {
           users[userIdx].pendingChannels.push(channelId);
         }
+        users[userIdx].channelAddedDates ||= {};
+        users[userIdx].channelAddedDates[channelId] ||= currentChannelDate();
       } else {
         // Remove from pendingChannels
         users[userIdx].pendingChannels = (users[userIdx].pendingChannels || []).filter((c) => c !== channelId);
@@ -483,6 +515,10 @@ export async function PUT(request: Request) {
           if (!users[userIdx].channels.includes(channelId)) {
             users[userIdx].channels.push(channelId);
           }
+          users[userIdx].channelAddedDates ||= {};
+          users[userIdx].channelAddedDates[channelId] ||= currentChannelDate();
+        } else if (users[userIdx].channelAddedDates) {
+          delete users[userIdx].channelAddedDates[channelId];
         }
       }
       const saved = await saveUsers(users);
@@ -522,12 +558,15 @@ export async function PUT(request: Request) {
         return Response.json({ error: "You can only transfer channels between your own clients" }, { status: 403 });
       }
       users[fromIdx].channels = users[fromIdx].channels.filter((c) => c !== channelId);
+      if (users[fromIdx].channelAddedDates) delete users[fromIdx].channelAddedDates[channelId];
       if (users[fromIdx].channelNetworks) {
         users[fromIdx].channelNetworks = users[fromIdx].channelNetworks!.filter((cn) => cn.channelId !== channelId);
       }
       if (!users[toIdx].channels.includes(channelId)) {
         users[toIdx].channels.push(channelId);
       }
+      users[toIdx].channelAddedDates ||= {};
+      users[toIdx].channelAddedDates[channelId] = currentChannelDate();
       const saved = await saveUsers(users);
       if (!saved) return Response.json({ error: "Failed to transfer" }, { status: 500 });
       await clearChannelVendorAssignments([channelId]);
@@ -626,6 +665,7 @@ export async function PUT(request: Request) {
       const approved = new Set(users[idx].channels);
       users[idx].pendingChannels = requestedPendingChannels.filter((channelId) => !approved.has(channelId));
     }
+    if (requestedChannels || requestedPendingChannels) reconcileChannelAddedDates(users[idx]);
     if (category) users[idx].category = category;
     if (status) users[idx].status = status;
     if (networks !== undefined) users[idx].networks = networks;
@@ -706,10 +746,21 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    const { channels, pendingChannels, removeChannels, customNetworks, channelNetworks } = body;
+    const {
+      channels,
+      pendingChannels,
+      removeChannels,
+      customNetworks,
+      channelNetworks,
+      channelAddedDates,
+    } = body;
 
-    if (!Array.isArray(channels) && !Array.isArray(pendingChannels) && !Array.isArray(removeChannels) && !Array.isArray(customNetworks) && !Array.isArray(channelNetworks)) {
-      return Response.json({ error: "channels, pendingChannels, removeChannels, customNetworks, or channelNetworks array required" }, { status: 400 });
+    const hasChannelAddedDates =
+      channelAddedDates &&
+      typeof channelAddedDates === "object" &&
+      !Array.isArray(channelAddedDates);
+    if (!Array.isArray(channels) && !Array.isArray(pendingChannels) && !Array.isArray(removeChannels) && !Array.isArray(customNetworks) && !Array.isArray(channelNetworks) && !hasChannelAddedDates) {
+      return Response.json({ error: "channels, pendingChannels, removeChannels, customNetworks, channelNetworks, or channelAddedDates required" }, { status: 400 });
     }
 
     const users = await getUsers();
@@ -771,6 +822,32 @@ export async function PATCH(request: Request) {
           })
         )
       );
+    }
+
+    if (hasChannelAddedDates) {
+      users[idx].channelAddedDates ||= {};
+      const managedChannelIds = new Set([
+        ...(users[idx].channels || []),
+        ...(users[idx].pendingChannels || []),
+      ]);
+      for (const [channelId, date] of Object.entries(channelAddedDates)) {
+        if (
+          managedChannelIds.has(channelId) &&
+          typeof date === "string" &&
+          date.trim() &&
+          !users[idx].channelAddedDates[channelId]
+        ) {
+          users[idx].channelAddedDates[channelId] = date.trim();
+        }
+      }
+    }
+    if (
+      Array.isArray(channels) ||
+      Array.isArray(pendingChannels) ||
+      Array.isArray(removeChannels) ||
+      hasChannelAddedDates
+    ) {
+      reconcileChannelAddedDates(users[idx]);
     }
 
     // Save custom network names
@@ -846,6 +923,7 @@ export async function PATCH(request: Request) {
         pendingChannels: users[idx].pendingChannels || [],
         customNetworks: users[idx].customNetworks || [],
         channelNetworks: users[idx].channelNetworks || [],
+        channelAddedDates: users[idx].channelAddedDates || {},
         rejectedChannels: Array.from(rejectedChannels),
       },
     });
