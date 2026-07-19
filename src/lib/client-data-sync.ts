@@ -446,7 +446,7 @@ export async function syncClientData(mode: ClientDataSyncMode): Promise<ClientDa
 
     if (mode === "revenue") {
       try {
-        await warmRecentMonths(5);
+        await warmRecentMonths(7);
       } catch (error) {
         console.error("[ClientDataSync] warmRecentMonths failed:", error);
       }

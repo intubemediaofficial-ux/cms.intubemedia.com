@@ -84,6 +84,17 @@ function normalizedHeader(value: unknown): string {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+const DEFAULT_VENDOR_START_MONTH = "2026-02";
+const VENDOR_START_MONTHS = new Map([
+  ["rajesh white gold", "2025-12"],
+  ["devendra wmg", "2026-01"],
+  ["devendra other cms", "2026-01"],
+]);
+
+export function getVendorStartMonth(vendorName: string): string {
+  return VENDOR_START_MONTHS.get(vendorName.trim().toLowerCase()) || DEFAULT_VENDOR_START_MONTH;
+}
+
 function monthLabel(month: string): string {
   const [year, monthNumber] = month.split("-").map(Number);
   return new Intl.DateTimeFormat("en-US", {
@@ -245,14 +256,14 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
     cache,
     channels: new Map(cache.channels.map((channel) => [channel.channel_id, channel])),
   }));
-  const monthlyHeaders = monthlyCaches.map(
-    (cache) => `${monthLabel(cache.month)} Revenue USD`
-  );
   let totalRows = 0;
 
   vendors.forEach((vendor, index) => {
     const title = vendorSheetNames[index];
     const channelIds = assignmentByVendor.get(vendor.id) || [];
+    const vendorMonthlyAnalytics = monthlyAnalytics.filter(
+      ({ cache }) => cache.month >= getVendorStartMonth(vendor.name)
+    );
     const rows: Array<Array<string | number>> = [[
       "Vendor",
       "Client",
@@ -260,13 +271,15 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
       "Channel Link",
       "Channel ID",
       "Network",
-      ...monthlyHeaders,
+      ...vendorMonthlyAnalytics.map(
+        ({ cache }) => `${monthLabel(cache.month)} Revenue USD`
+      ),
       "Linked Date",
     ]];
-    const monthlyRevenueTotals = monthlyCaches.map(() => 0);
+    const monthlyRevenueTotals = vendorMonthlyAnalytics.map(() => 0);
 
     for (const channelId of channelIds) {
-      const analyticsByMonth = monthlyAnalytics.map(({ channels }) => channels.get(channelId));
+      const analyticsByMonth = vendorMonthlyAnalytics.map(({ channels }) => channels.get(channelId));
       const latestAnalytics = [...analyticsByMonth].reverse().find(Boolean);
       rows.push([
         vendor.name,
@@ -299,7 +312,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
       ]
     );
 
-    monthlyAnalytics.forEach(({ cache }, monthIndex) => {
+    vendorMonthlyAnalytics.forEach(({ cache }, monthIndex) => {
       summaryRows.push([
         cache.month,
         vendor.name,
@@ -362,7 +375,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
     const sheetId = sheetIdByTitle.get(title);
     if (sheetId === undefined) return;
     const totalRowIndex = rows.length - 1;
-    const linkedDateColumn = 6 + monthlyCaches.length;
+    const linkedDateColumn = rows[0].length - 1;
     const columnCount = linkedDateColumn + 1;
     formatRequests.push(
       {
