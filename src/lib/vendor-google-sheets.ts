@@ -5,8 +5,15 @@ import type { sheets_v4 } from "googleapis";
 import { getAllCachedClientData } from "@/lib/client-data-cache";
 import { kv } from "@/lib/redis";
 import { getBackendChannels } from "@/lib/backend-api";
-import { getVendorGoogleSheetConfig } from "@/lib/vendor-google-sheet-config";
-import { getVendorAssignments, getVendors } from "@/lib/vendors";
+import {
+  getConfiguredVendorGoogleSheetScopeIds,
+  getVendorGoogleSheetConfig,
+} from "@/lib/vendor-google-sheet-config";
+import {
+  getVendorAssignments,
+  getVendors,
+  getVendorsForOwner,
+} from "@/lib/vendors";
 
 const USERS_KEY = "bainsla_users";
 const MONTHLY_PREFIX = "monthly_channel_analytics:";
@@ -15,6 +22,8 @@ const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 interface StoredUser {
   id: string;
   name: string;
+  role?: "client" | "company";
+  parentId?: string;
   channels?: string[];
   channelNetworks?: Array<{ channelId: string; networkName: string }>;
   status?: "active" | "inactive" | "pending";
@@ -144,13 +153,29 @@ export async function syncVendorGoogleSheet(
     kv.keys(`${MONTHLY_PREFIX}*`),
     getBackendChannels(),
   ]);
+  const tenantVendors = getVendorsForOwner(
+    allVendors,
+    options.scopeUserId || null
+  );
+  const tenantChannelIds = options.channelIds || new Set(
+    users
+      .filter((user) =>
+        user.status === "active" && (
+          options.scopeUserId
+            ? user.id === options.scopeUserId || user.parentId === options.scopeUserId
+            : user.role === "client" && !user.parentId
+        )
+      )
+      .flatMap((user) => user.channels || [])
+  );
   const vendors = options.vendorIds
-    ? allVendors.filter((vendor) => options.vendorIds?.has(vendor.id))
-    : allVendors;
+    ? tenantVendors.filter((vendor) => options.vendorIds?.has(vendor.id))
+    : tenantVendors;
+  const selectedVendorIds = new Set(vendors.map((vendor) => vendor.id));
   const assignments = allAssignments.filter(
     (assignment) =>
-      (!options.vendorIds || options.vendorIds.has(assignment.vendorId)) &&
-      (!options.channelIds || options.channelIds.has(assignment.channelId))
+      selectedVendorIds.has(assignment.vendorId) &&
+      tenantChannelIds.has(assignment.channelId)
   );
   const monthlyCaches = (
     await Promise.all(monthlyKeys.map((key) => kv.get<MonthlyCache>(key)))
@@ -185,9 +210,9 @@ export async function syncVendorGoogleSheet(
     assignmentByVendor.set(assignment.vendorId, ids);
   }
 
-  const allVendorSheetNames = uniqueVendorSheetNames(allVendors.map((vendor) => vendor.name));
+  const allVendorSheetNames = uniqueVendorSheetNames(tenantVendors.map((vendor) => vendor.name));
   const sheetNameByVendorId = new Map(
-    allVendors.map((vendor, index) => [vendor.id, allVendorSheetNames[index]])
+    tenantVendors.map((vendor, index) => [vendor.id, allVendorSheetNames[index]])
   );
   const vendorSheetNames = vendors.map(
     (vendor) => sheetNameByVendorId.get(vendor.id) || sanitizeSheetName(vendor.name)
@@ -555,4 +580,52 @@ export async function syncVendorGoogleSheet(
     months: monthlyCaches.length,
     rows: totalRows,
   };
+}
+
+export async function syncAllConfiguredVendorGoogleSheets() {
+  const [scopeUserIds, users] = await Promise.all([
+    getConfiguredVendorGoogleSheetScopeIds(),
+    kv.get<StoredUser[]>(USERS_KEY).then((value) => value || []),
+  ]);
+  let admin: VendorSheetSyncResult | { status: "failed" };
+  try {
+    admin = await syncVendorGoogleSheet();
+  } catch (error) {
+    console.error("[Vendor Sheets] Admin sync failed:", error);
+    admin = { status: "failed" };
+  }
+  const companies = [];
+
+  for (const scopeUserId of scopeUserIds) {
+    const company = users.find(
+      (user) =>
+        user.id === scopeUserId &&
+        user.role === "company" &&
+        user.status === "active"
+    );
+    if (!company) continue;
+
+    const scopedUsers = users.filter(
+      (user) =>
+        user.status === "active" &&
+        (user.id === scopeUserId || user.parentId === scopeUserId)
+    );
+    const channelIds = new Set(scopedUsers.flatMap((user) => user.channels || []));
+    try {
+      companies.push({
+        scopeUserId,
+        companyName: company.name,
+        ...(await syncVendorGoogleSheet({ scopeUserId, channelIds })),
+      });
+    } catch (error) {
+      console.error(`[Vendor Sheets] Company sync failed for ${scopeUserId}:`, error);
+      companies.push({
+        scopeUserId,
+        companyName: company.name,
+        status: "failed" as const,
+      });
+    }
+  }
+
+  return { admin, companies };
 }

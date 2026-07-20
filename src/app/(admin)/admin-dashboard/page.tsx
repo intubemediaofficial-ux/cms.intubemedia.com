@@ -1898,6 +1898,14 @@ export default function AdminDashboardPage() {
                     </button>
                     <div className="flex items-center gap-1 border-l border-border/50 px-3">
                       <button
+                        onClick={() => router.push(`/admin-vendors?companyId=${encodeURIComponent(company.id)}`)}
+                        className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50"
+                        title="Open Company Vendor Management"
+                        aria-label={`Open ${company.name} Vendor Management`}
+                      >
+                        <BarChart3 className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={() => router.push(`/admin-clients?edit=${encodeURIComponent(company.id)}`)}
                         className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
                         title="Edit account or password"
@@ -1927,6 +1935,14 @@ export default function AdminDashboardPage() {
                   </div>
                   {expandedClient === `company-${company.id}` && (
                     <div className="border-t border-border/50 bg-slate-50/50 p-4 space-y-3">
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => router.push(`/admin-vendors?companyId=${encodeURIComponent(company.id)}`)}
+                          className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700"
+                        >
+                          Open Company Vendor Management
+                        </button>
+                      </div>
                       {companyAccounts.length === 0 ? (
                         <p className="text-sm text-muted text-center py-4">No clients or company channels added yet</p>
                       ) : (

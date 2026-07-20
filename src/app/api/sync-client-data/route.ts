@@ -5,7 +5,7 @@ import {
   getClientDataSyncStatus,
   syncClientData,
 } from "@/lib/client-data-sync";
-import { syncVendorGoogleSheet } from "@/lib/vendor-google-sheets";
+import { syncAllConfiguredVendorGoogleSheets } from "@/lib/vendor-google-sheets";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
     return Response.json({ data: await getClientDataSyncStatus() });
   }
   if (action === "vendor-sheet") {
-    return Response.json({ data: await syncVendorGoogleSheet() });
+    return Response.json({ data: await syncAllConfiguredVendorGoogleSheets() });
   }
 
   const mode = getMode(request);

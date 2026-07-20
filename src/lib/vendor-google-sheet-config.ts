@@ -35,27 +35,31 @@ function encryptionKey(): Buffer {
     .digest();
 }
 
-export async function saveVendorGoogleSheetConfig(
-  config: VendorGoogleSheetConfig
-): Promise<void> {
+function encryptConfig(config: VendorGoogleSheetConfig): EncryptedConfig {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
   const ciphertext = Buffer.concat([
     cipher.update(JSON.stringify(config), "utf8"),
     cipher.final(),
   ]);
-  const stored: EncryptedConfig = {
+  return {
     version: 1,
     iv: iv.toString("base64"),
     authTag: cipher.getAuthTag().toString("base64"),
     ciphertext: ciphertext.toString("base64"),
   };
-  await kv.set(CONFIG_KEY, stored);
 }
 
-async function getStoredVendorGoogleSheetConfig(): Promise<VendorGoogleSheetConfig | null> {
-  const stored = await kv.get<EncryptedConfig>(CONFIG_KEY);
-  if (!stored || stored.version !== 1) return null;
+function isEncryptedConfig(value: unknown): value is EncryptedConfig {
+  if (!value || typeof value !== "object") return false;
+  const stored = value as Partial<EncryptedConfig>;
+  return stored.version === 1 &&
+    typeof stored.iv === "string" &&
+    typeof stored.authTag === "string" &&
+    typeof stored.ciphertext === "string";
+}
+
+function decryptConfig(stored: EncryptedConfig): VendorGoogleSheetConfig {
   const decipher = createDecipheriv(
     "aes-256-gcm",
     encryptionKey(),
@@ -69,44 +73,64 @@ async function getStoredVendorGoogleSheetConfig(): Promise<VendorGoogleSheetConf
   return JSON.parse(plaintext) as VendorGoogleSheetConfig;
 }
 
-export async function saveScopedVendorSpreadsheetId(
-  scopeUserId: string,
-  spreadsheetId: string
+export async function saveVendorGoogleSheetConfig(
+  config: VendorGoogleSheetConfig
 ): Promise<void> {
-  await kv.set(`${SCOPED_SHEET_PREFIX}${scopeUserId}`, { spreadsheetId });
+  await kv.set(CONFIG_KEY, encryptConfig(config));
+}
+
+export async function saveScopedVendorGoogleSheetConfig(
+  scopeUserId: string,
+  config: VendorGoogleSheetConfig
+): Promise<void> {
+  await kv.set(`${SCOPED_SHEET_PREFIX}${scopeUserId}`, encryptConfig(config));
+}
+
+async function getStoredVendorGoogleSheetConfig(): Promise<VendorGoogleSheetConfig | null> {
+  const stored = await kv.get<unknown>(CONFIG_KEY);
+  return isEncryptedConfig(stored) ? decryptConfig(stored) : null;
 }
 
 export async function getVendorGoogleSheetConfig(
   scopeUserId?: string
 ): Promise<VendorGoogleSheetConfig | null> {
   const storedConfig = await getStoredVendorGoogleSheetConfig();
+  if (scopeUserId) {
+    const scoped = await kv.get<unknown>(`${SCOPED_SHEET_PREFIX}${scopeUserId}`);
+    return isEncryptedConfig(scoped) ? decryptConfig(scoped) : null;
+  }
+
   const clientEmail =
     process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim() ||
     storedConfig?.clientEmail;
   const privateKey =
     process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, "\n") ||
     storedConfig?.privateKey;
-  if (!clientEmail || !privateKey) return null;
-
-  if (scopeUserId) {
-    const scoped = await kv.get<{ spreadsheetId?: string }>(
-      `${SCOPED_SHEET_PREFIX}${scopeUserId}`
-    );
-    const spreadsheetId = scoped?.spreadsheetId?.trim();
-    return spreadsheetId ? { spreadsheetId, clientEmail, privateKey } : null;
-  }
-
   const spreadsheetId =
     process.env.VENDOR_GOOGLE_SHEET_ID?.trim() ||
     storedConfig?.spreadsheetId;
-  return spreadsheetId ? { spreadsheetId, clientEmail, privateKey } : null;
+  return spreadsheetId && clientEmail && privateKey
+    ? { spreadsheetId, clientEmail, privateKey }
+    : null;
 }
 
-export async function getVendorGoogleSheetServiceAccountEmail(): Promise<string> {
+export async function getVendorGoogleSheetServiceAccountEmail(
+  scopeUserId?: string
+): Promise<string> {
+  if (scopeUserId) {
+    return (await getVendorGoogleSheetConfig(scopeUserId))?.clientEmail || "";
+  }
   const storedConfig = await getStoredVendorGoogleSheetConfig();
   return (
     process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim() ||
     storedConfig?.clientEmail ||
     ""
   );
+}
+
+export async function getConfiguredVendorGoogleSheetScopeIds(): Promise<string[]> {
+  const keys = await kv.keys(`${SCOPED_SHEET_PREFIX}*`);
+  return keys
+    .map((key) => key.slice(SCOPED_SHEET_PREFIX.length))
+    .filter(Boolean);
 }

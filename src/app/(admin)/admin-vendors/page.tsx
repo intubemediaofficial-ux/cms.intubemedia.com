@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Building2,
   Download,
@@ -57,11 +58,14 @@ function monthOptions(): Array<{ value: string; label: string }> {
   });
 }
 
-export function VendorManagementPage() {
+function VendorManagementContent() {
   const { data: session, status } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const isAdmin = session?.user?.role === "admin";
   const isCompany = session?.user?.role === "company";
   const canManageSheets = isAdmin || isCompany;
+  const requestedCompanyId = isAdmin ? searchParams.get("companyId") || "" : "";
   const months = useMemo(() => monthOptions(), []);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [selectedVendorId, setSelectedVendorId] = useState("");
@@ -88,17 +92,32 @@ export function VendorManagementPage() {
   const [revenueFromMonth, setRevenueFromMonth] = useState(months[0]?.value || "");
   const [revenueToMonth, setRevenueToMonth] = useState(months[0]?.value || "");
   const [revenueVendorIds, setRevenueVendorIds] = useState<string[]>([]);
+  const [scopeName, setScopeName] = useState("");
+  const [viewingCompanyAsAdmin, setViewingCompanyAsAdmin] = useState(false);
+
+  const scopedVendorUrl = useCallback((query = "") => {
+    const params = new URLSearchParams(query);
+    if (requestedCompanyId) params.set("companyId", requestedCompanyId);
+    const search = params.toString();
+    return `/api/vendors${search ? `?${search}` : ""}`;
+  }, [requestedCompanyId]);
+
+  const scopedPayload = useCallback((payload: Record<string, unknown>) => (
+    requestedCompanyId ? { ...payload, companyId: requestedCompanyId } : payload
+  ), [requestedCompanyId]);
 
   const fetchVendors = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/vendors?action=list", { cache: "no-store" });
+      const response = await fetch(scopedVendorUrl("action=list"), { cache: "no-store" });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error || "Failed to load vendors");
       const list: Vendor[] = json.data?.vendors || [];
       setVendors(list);
       setSheetServiceAccountEmail(json.data?.sheetConnection?.serviceAccountEmail || "");
       setSheetConfigured(Boolean(json.data?.sheetConnection?.configured));
+      setScopeName(json.data?.scope?.companyName || "");
+      setViewingCompanyAsAdmin(Boolean(json.data?.scope?.viewingCompanyAsAdmin));
       setSelectedVendorId((current) =>
         list.some((vendor) => vendor.id === current) ? current : list[0]?.id || ""
       );
@@ -107,7 +126,7 @@ export function VendorManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scopedVendorUrl]);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -124,7 +143,7 @@ export function VendorManagementPage() {
     setError("");
     try {
       const response = await fetch(
-        `/api/vendors?action=report&vendorId=${encodeURIComponent(selectedVendorId)}&month=${selectedMonth}`,
+        scopedVendorUrl(`action=report&vendorId=${encodeURIComponent(selectedVendorId)}&month=${selectedMonth}`),
         { cache: "no-store" }
       );
       const json = await response.json();
@@ -136,7 +155,7 @@ export function VendorManagementPage() {
     } finally {
       setReportLoading(false);
     }
-  }, [selectedVendorId, selectedMonth]);
+  }, [selectedVendorId, selectedMonth, scopedVendorUrl]);
 
   useEffect(() => {
     queueMicrotask(() => void fetchReport());
@@ -151,7 +170,7 @@ export function VendorManagementPage() {
       const response = await fetch("/api/vendors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(scopedPayload({ name })),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error || "Failed to create vendor");
@@ -174,7 +193,7 @@ export function VendorManagementPage() {
       const response = await fetch("/api/vendors", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "rename", vendorId: selectedVendorId, name }),
+        body: JSON.stringify(scopedPayload({ action: "rename", vendorId: selectedVendorId, name })),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error || "Failed to rename vendor");
@@ -193,7 +212,7 @@ export function VendorManagementPage() {
     setSaving(true);
     setError("");
     try {
-      const response = await fetch(`/api/vendors?vendorId=${encodeURIComponent(selected.id)}`, {
+      const response = await fetch(scopedVendorUrl(`vendorId=${encodeURIComponent(selected.id)}`), {
         method: "DELETE",
       });
       const json = await response.json();
@@ -213,7 +232,7 @@ export function VendorManagementPage() {
     setError("");
     try {
       const response = await fetch(
-        `/api/vendors?action=export&vendorId=${encodeURIComponent(selectedVendor.id)}`,
+        scopedVendorUrl(`action=export&vendorId=${encodeURIComponent(selectedVendor.id)}`),
         { cache: "no-store" }
       );
       if (!response.ok) {
@@ -241,7 +260,7 @@ export function VendorManagementPage() {
     setExportingAll(true);
     setError("");
     try {
-      const response = await fetch(`/api/vendors?action=reports&month=${selectedMonth}`, { cache: "no-store" });
+      const response = await fetch(scopedVendorUrl(`action=reports&month=${selectedMonth}`), { cache: "no-store" });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error || "Failed to load all vendor reports");
       const reports: VendorReport[] = json.data?.reports || [];
@@ -299,12 +318,12 @@ export function VendorManagementPage() {
       const response = await fetch("/api/vendors", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(scopedPayload({
           action: "syncRevenue",
           vendorIds: revenueVendorIds,
           fromMonth,
           toMonth,
-        }),
+        })),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error || "Revenue sync failed");
@@ -330,7 +349,7 @@ export function VendorManagementPage() {
       const response = await fetch("/api/vendors", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "syncSheet" }),
+        body: JSON.stringify(scopedPayload({ action: "syncSheet" })),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error || "Google Sheets sync failed");
@@ -347,40 +366,33 @@ export function VendorManagementPage() {
   };
 
   const configureGoogleSheet = async () => {
-    if (!sheetUrl.trim() || (isAdmin && !sheetCredentials)) {
-      setError(
-        isAdmin
-          ? "Google Sheet URL and service-account JSON are required"
-          : "Google Sheet URL is required"
-      );
+    if (!sheetUrl.trim() || !sheetCredentials) {
+      setError("Google Sheet URL and service-account JSON are required");
       return;
     }
     setSheetConfiguring(true);
     setSheetStatus("");
     setError("");
     try {
-      let credentials: { client_email?: unknown; private_key?: unknown } = {};
-      if (isAdmin && sheetCredentials) {
-        credentials = JSON.parse(await sheetCredentials.text()) as {
-          client_email?: unknown;
-          private_key?: unknown;
-        };
-        if (
-          typeof credentials.client_email !== "string" ||
-          typeof credentials.private_key !== "string"
-        ) {
-          throw new Error("Invalid service-account JSON file");
-        }
+      const credentials = JSON.parse(await sheetCredentials.text()) as {
+        client_email?: unknown;
+        private_key?: unknown;
+      };
+      if (
+        typeof credentials.client_email !== "string" ||
+        typeof credentials.private_key !== "string"
+      ) {
+        throw new Error("Invalid service-account JSON file");
       }
       const response = await fetch("/api/vendors", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(scopedPayload({
           action: "configureSheet",
           spreadsheetId: sheetUrl,
           clientEmail: credentials.client_email,
           privateKey: credentials.private_key,
-        }),
+        })),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error || "Google Sheet configuration failed");
@@ -389,6 +401,7 @@ export function VendorManagementPage() {
       );
       setSheetCredentials(null);
       setSheetConfigured(true);
+      setSheetServiceAccountEmail(credentials.client_email);
     } catch (configError) {
       setError(
         configError instanceof Error ? configError.message : "Google Sheet configuration failed"
@@ -415,10 +428,24 @@ export function VendorManagementPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Vendor Management</h1>
-          <p className="text-sm text-muted mt-1">Assign channels and review exact calendar-month revenue and views.</p>
+          <h1 className="text-2xl font-bold text-foreground">
+            {viewingCompanyAsAdmin ? `${scopeName} Vendor Management` : "Vendor Management"}
+          </h1>
+          <p className="text-sm text-muted mt-1">
+            {viewingCompanyAsAdmin
+              ? "This Company’s vendors, channels, revenue, and Google Sheet are isolated from Admin data."
+              : "Assign channels and review exact calendar-month revenue and views."}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {viewingCompanyAsAdmin && (
+            <button
+              onClick={() => router.push("/admin-dashboard#company-overview")}
+              className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg text-sm"
+            >
+              <Building2 className="w-4 h-4" /> Company Overview
+            </button>
+          )}
           {canManageSheets && (
             <button
               onClick={() => void syncGoogleSheet()}
@@ -429,53 +456,56 @@ export function VendorManagementPage() {
               Sync Google Sheet
             </button>
           )}
-          <button
-            onClick={() => void exportAllVendors()}
-            disabled={exportingAll || vendors.length === 0}
-            className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm disabled:opacity-50"
-          >
-            {exportingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            All Vendors Excel
-          </button>
-          <input
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && void createVendor()}
-            placeholder="New vendor name"
-            className="px-3 py-2 border border-border rounded-lg text-sm"
-          />
-          <button
-            onClick={createVendor}
-            disabled={saving || !newName.trim()}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50"
-          >
-            <Plus className="w-4 h-4" /> Add Vendor
-          </button>
+          {canManageSheets && (
+            <>
+              <button
+                onClick={() => void exportAllVendors()}
+                disabled={exportingAll || vendors.length === 0}
+                className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm disabled:opacity-50"
+              >
+                {exportingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                All Vendors Excel
+              </button>
+              <input
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && void createVendor()}
+                placeholder="New vendor name"
+                className="px-3 py-2 border border-border rounded-lg text-sm"
+              />
+              <button
+                onClick={createVendor}
+                disabled={saving || !newName.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4" /> Add Vendor
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
       {sheetStatus && <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">{sheetStatus}</div>}
 
-      {canManageSheets && (
+      {isCompany && (
         <div className="bg-white border border-border rounded-xl p-4 space-y-3">
           <div>
             <h2 className="font-semibold">Google Sheet Connection</h2>
             <p className="text-xs text-muted mt-1">
-              {isAdmin
-                ? "Admin setup. Credentials are encrypted server-side and never displayed again."
-                : "Create your Google Sheet, share it as Editor with the email below, then paste its URL."}
+              Upload your Google service-account JSON, share the Sheet as Editor with its client_email, paste the Sheet URL, then Save & Sync.
+              Credentials are encrypted server-side and isolated to this Company.
             </p>
-            {!isAdmin && sheetServiceAccountEmail && (
+            {sheetServiceAccountEmail && (
               <div className="mt-2 text-xs">
-                Share as Editor: <span className="font-mono font-medium select-all">{sheetServiceAccountEmail}</span>
+                Connected service account: <span className="font-mono font-medium select-all">{sheetServiceAccountEmail}</span>
               </div>
             )}
             {sheetConfigured && (
-              <div className="mt-1 text-xs text-green-700">Google Sheet is connected for this account.</div>
+              <div className="mt-1 text-xs text-green-700">Google Sheet is connected for this Company.</div>
             )}
           </div>
-          <div className={`grid grid-cols-1 gap-3 ${isAdmin ? "lg:grid-cols-[1fr_1fr_auto]" : "lg:grid-cols-[1fr_auto]"}`}>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr_auto]">
             <input
               type="url"
               value={sheetUrl}
@@ -483,17 +513,15 @@ export function VendorManagementPage() {
               placeholder="Google Sheet URL"
               className="px-3 py-2 border border-border rounded-lg text-sm"
             />
-            {isAdmin && (
-              <input
-                type="file"
-                accept="application/json,.json"
-                onChange={(event) => setSheetCredentials(event.target.files?.[0] || null)}
-                className="px-3 py-2 border border-border rounded-lg text-sm"
-              />
-            )}
+            <input
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => setSheetCredentials(event.target.files?.[0] || null)}
+              className="px-3 py-2 border border-border rounded-lg text-sm"
+            />
             <button
               onClick={() => void configureGoogleSheet()}
-              disabled={sheetConfiguring || !sheetUrl.trim() || (isAdmin && !sheetCredentials)}
+              disabled={sheetConfiguring || !sheetUrl.trim() || !sheetCredentials}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm disabled:opacity-50"
             >
               {sheetConfiguring && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -674,14 +702,16 @@ export function VendorManagementPage() {
                       </button>
                     </>
                   )}
-                  <button
-                    onClick={() => void exportVendorSheet()}
-                    disabled={exportingVendor}
-                    className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm disabled:opacity-50"
-                  >
-                    {exportingVendor ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    Download Vendor Excel
-                  </button>
+                  {canManageSheets && (
+                    <button
+                      onClick={() => void exportVendorSheet()}
+                      disabled={exportingVendor}
+                      className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm disabled:opacity-50"
+                    >
+                      {exportingVendor ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Download Vendor Excel
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -748,6 +778,14 @@ export function VendorManagementPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export function VendorManagementPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted">Loading Vendor Management…</div>}>
+      <VendorManagementContent />
+    </Suspense>
   );
 }
 
