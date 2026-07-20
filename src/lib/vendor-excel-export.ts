@@ -22,6 +22,50 @@ function columnWidthFromPixels(pixels: number): number {
   return Math.max(8, Math.round(pixels / 7));
 }
 
+export interface VendorMonthExportChannel {
+  channelId: string;
+  channelName: string;
+  clientName: string;
+  networkName: string;
+  revenueUsd: number;
+  linkedDate: string;
+}
+
+export function buildVendorMonthExportValues(
+  vendorName: string,
+  monthLabel: string,
+  channels: VendorMonthExportChannel[]
+): unknown[][] {
+  const total = channels.reduce((sum, channel) => sum + channel.revenueUsd, 0);
+  return [
+    [
+      "Vendor",
+      "Client",
+      "Channel",
+      "Channel Link",
+      "Channel ID",
+      "Network",
+      `${monthLabel} Revenue USD`,
+      "Linked Date",
+    ],
+    ...channels.map((channel) => [
+      vendorName,
+      channel.clientName,
+      channel.channelName,
+      `https://www.youtube.com/channel/${channel.channelId}`,
+      channel.channelId,
+      channel.networkName,
+      Number(channel.revenueUsd.toFixed(2)),
+      channel.linkedDate
+        ? new Date(`${channel.linkedDate}T00:00:00Z`)
+        : "",
+    ]),
+    [""],
+    [""],
+    ["TOTAL USD", "", "", "", "", "", Number(total.toFixed(2)), ""],
+  ];
+}
+
 export async function buildVendorExcelWorkbook(
   sheetTitle: string,
   values: unknown[][]

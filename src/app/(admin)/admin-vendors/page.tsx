@@ -28,6 +28,7 @@ interface ReportChannel {
   channel_name: string;
   client_name: string;
   network_name: string;
+  linked_date: string;
   revenue_usd: number;
   views: number;
   synced_through: string | null;
@@ -208,7 +209,9 @@ function VendorManagementContent() {
 
   const deleteVendor = async () => {
     const selected = vendors.find((vendor) => vendor.id === selectedVendorId);
-    if (!selected || !window.confirm(`Delete vendor “${selected.name}” and clear its assignments?`)) return;
+    if (!selected || !window.confirm(
+      `Delete vendor “${selected.name}” from Dashboard and clear its assignments? Its Google Sheet tab and historical data will be preserved.`
+    )) return;
     setSaving(true);
     setError("");
     try {
@@ -232,7 +235,9 @@ function VendorManagementContent() {
     setError("");
     try {
       const response = await fetch(
-        scopedVendorUrl(`action=export&vendorId=${encodeURIComponent(selectedVendor.id)}`),
+        scopedVendorUrl(
+          `action=export&vendorId=${encodeURIComponent(selectedVendor.id)}&month=${encodeURIComponent(selectedMonth)}`
+        ),
         { cache: "no-store" }
       );
       if (!response.ok) {
@@ -243,7 +248,7 @@ function VendorManagementContent() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${selectedVendor.name.replace(/[^a-z0-9]+/gi, "-")}-revenue.xlsx`;
+      link.download = `${selectedVendor.name.replace(/[^a-z0-9]+/gi, "-")}-${selectedMonth}-revenue.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -281,7 +286,7 @@ function VendorManagementContent() {
           },
           ...reports.map((item) => ({
             name: item.vendor.name,
-            headers: ["Month", "Vendor", "Client", "Channel", "Channel ID", "Network", "Views", "Revenue USD", "Status"],
+            headers: ["Month", "Vendor", "Client", "Channel", "Channel ID", "Network", "Linked Date", "Views", "Revenue USD", "Status"],
             rows: item.channels.map((channel) => [
               monthLabel,
               item.vendor.name,
@@ -289,6 +294,7 @@ function VendorManagementContent() {
               channel.channel_name,
               channel.channel_id,
               channel.network_name,
+              channel.linked_date,
               channel.views,
               Number(channel.revenue_usd.toFixed(3)),
               channel.available ? "Available" : "Pending",
@@ -747,7 +753,7 @@ function VendorManagementContent() {
                   <div className="bg-white border border-border rounded-xl overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        <thead><tr className="bg-slate-50 border-b border-border"><th className="text-left px-4 py-3">Channel</th><th className="text-left px-4 py-3">Client</th><th className="text-left px-4 py-3">Vendor</th><th className="text-left px-4 py-3">Network</th><th className="text-left px-4 py-3">Month</th><th className="text-right px-4 py-3">Views</th><th className="text-right px-4 py-3">Revenue</th><th className="text-right px-4 py-3">Status</th></tr></thead>
+                        <thead><tr className="bg-slate-50 border-b border-border"><th className="text-left px-4 py-3">Channel</th><th className="text-left px-4 py-3">Client</th><th className="text-left px-4 py-3">Vendor</th><th className="text-left px-4 py-3">Network</th><th className="text-left px-4 py-3">Linked Date</th><th className="text-left px-4 py-3">Month</th><th className="text-right px-4 py-3">Views</th><th className="text-right px-4 py-3">Revenue</th><th className="text-right px-4 py-3">Status</th></tr></thead>
                         <tbody>
                           {filteredChannels.map((channel) => (
                             <tr key={channel.channel_id} className="border-b border-border last:border-0 hover:bg-slate-50">
@@ -758,13 +764,14 @@ function VendorManagementContent() {
                               <td className="px-4 py-3">{channel.client_name || "—"}</td>
                               <td className="px-4 py-3">{report.vendor.name}</td>
                               <td className="px-4 py-3">{channel.network_name || "—"}</td>
+                              <td className="px-4 py-3 whitespace-nowrap">{channel.linked_date || "—"}</td>
                               <td className="px-4 py-3 whitespace-nowrap">{months.find((month) => month.value === report.month)?.label || report.month}</td>
                               <td className="px-4 py-3 text-right">{formatNumber(channel.views)}</td>
                               <td className="px-4 py-3 text-right font-medium text-green-600">{formatCurrency(channel.revenue_usd)}</td>
                               <td className="px-4 py-3 text-right"><span className={`text-xs px-2 py-1 rounded-full ${channel.available ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{channel.available ? "Cached" : "Pending"}</span></td>
                             </tr>
                           ))}
-                          {filteredChannels.length === 0 && <tr><td colSpan={8} className="px-4 py-12 text-center text-muted">No channels match this vendor and search.</td></tr>}
+                          {filteredChannels.length === 0 && <tr><td colSpan={9} className="px-4 py-12 text-center text-muted">No channels match this vendor and search.</td></tr>}
                         </tbody>
                       </table>
                     </div>

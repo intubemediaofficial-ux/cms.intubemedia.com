@@ -15,11 +15,18 @@ import {
   saveScopedVendorGoogleSheetConfig,
   saveVendorGoogleSheetConfig,
 } from "@/lib/vendor-google-sheet-config";
-import { exportVendorGoogleSheetTab } from "@/lib/vendor-excel-export";
+import {
+  buildVendorExcelWorkbook,
+  buildVendorMonthExportValues,
+} from "@/lib/vendor-excel-export";
 import {
   syncVendorGoogleSheet,
   uniqueVendorSheetNames,
 } from "@/lib/vendor-google-sheets";
+import {
+  getVendorSheetChannelMetadata,
+  vendorSheetChannelMetadataKey,
+} from "@/lib/vendor-sheet-metadata";
 import {
   ChannelVendorAssignment,
   getVendorAssignments,
@@ -170,20 +177,36 @@ function normalizeName(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
 
+function reportMonthLabel(month: string): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, monthNumber - 1, 1)));
+}
+
 async function buildVendorReports(
   scope: VendorScope,
   vendors: Vendor[],
   assignments: ChannelVendorAssignment[],
   month: string
 ) {
-  const [analytics, cachedClients] = await Promise.all([
-    getMonthlyChannelAnalytics(month),
+  const [analytics, cachedClients, sheetMetadata] = await Promise.all([
+    getMonthlyChannelAnalytics(month, { allowFetch: false }),
     getAllCachedClientData(),
+    getVendorSheetChannelMetadata(sheetScopeUserId(scope)),
   ]);
   const analyticsMap = new Map(
     analytics.channels.map((channel) => [channel.channel_id, channel])
   );
   const nameMap = new Map<string, string>();
+  const sheetMetadataMap = new Map(
+    sheetMetadata.map((record) => [
+      vendorSheetChannelMetadataKey(record.vendorId, record.channelId),
+      record,
+    ])
+  );
   for (const client of cachedClients) {
     for (const channel of client.channels || []) {
       if (channel.channelTitle) nameMap.set(channel.channelId, channel.channelTitle);
@@ -202,12 +225,20 @@ async function buildVendorReports(
       .map((channelId) => {
         const row = analyticsMap.get(channelId);
         const owner = scope.channelOwners.get(channelId);
+        const sheetValues = sheetMetadataMap.get(
+          vendorSheetChannelMetadataKey(vendor.id, channelId)
+        );
         return {
           channel_id: channelId,
-          channel_name: row?.channel_name || nameMap.get(channelId) || channelId,
-          client_name: owner?.name || "",
+          channel_name: sheetValues
+            ? sheetValues.channelName
+            : row?.channel_name || nameMap.get(channelId) || channelId,
+          client_name: sheetValues ? sheetValues.clientName : owner?.name || "",
           vendor_name: vendor.name,
-          network_name: scope.channelNetworks.get(channelId) || "",
+          network_name: sheetValues
+            ? sheetValues.networkName
+            : scope.channelNetworks.get(channelId) || "",
+          linked_date: sheetValues?.linkedDate || "",
           revenue_usd: row?.revenue_usd || 0,
           views: row?.views || 0,
           synced_through: row?.synced_through || null,
@@ -238,6 +269,24 @@ function sheetScopeUserId(scope: VendorScope): string | undefined {
 
 function canManageVendorSheets(scope: VendorScope): boolean {
   return scope.isAdmin || scope.currentUser?.role === "company";
+}
+
+async function syncSheetBeforeCachedRead(
+  scope: VendorScope,
+  vendorIds: Set<string>,
+  month: string
+): Promise<void> {
+  if (!canManageVendorSheets(scope)) return;
+  try {
+    await syncVendorGoogleSheet({
+      scopeUserId: sheetScopeUserId(scope),
+      vendorIds,
+      channelIds: scope.approvedChannelIds,
+      months: new Set([month]),
+    });
+  } catch (error) {
+    console.error("[Vendors] Google Sheet metadata import failed:", error);
+  }
 }
 
 async function syncSheetAfterMutation(
@@ -326,6 +375,10 @@ export async function GET(request: Request) {
       return Response.json({ error: "Vendor export requires Admin or Company access" }, { status: 403 });
     }
     const vendorId = url.searchParams.get("vendorId") || "";
+    const month = url.searchParams.get("month") || "";
+    if (!isValidMonth(month)) {
+      return Response.json({ error: "month=YYYY-MM is required" }, { status: 400 });
+    }
     const selectedVendor = visibleVendors.find((vendor) => vendor.id === vendorId);
     if (!selectedVendor) {
       return Response.json({ error: "Vendor not found" }, { status: 404 });
@@ -333,15 +386,29 @@ export async function GET(request: Request) {
     const vendorIndex = visibleVendors.findIndex((vendor) => vendor.id === selectedVendor.id);
     const sheetTitle = uniqueVendorSheetNames(visibleVendors.map((vendor) => vendor.name))[vendorIndex];
     try {
-      const exported = await exportVendorGoogleSheetTab(
-        sheetTitle,
-        sheetScopeUserId(scope)
+      await syncSheetBeforeCachedRead(scope, new Set([vendorId]), month);
+      const report = (await buildVendorReports(
+        scope,
+        [selectedVendor],
+        scopedAssignments,
+        month
+      ))[0];
+      const values = buildVendorMonthExportValues(
+        selectedVendor.name,
+        reportMonthLabel(month),
+        report.channels.map((channel) => ({
+          channelId: channel.channel_id,
+          channelName: channel.channel_name,
+          clientName: channel.client_name,
+          networkName: channel.network_name,
+          revenueUsd: channel.revenue_usd,
+          linkedDate: channel.linked_date,
+        }))
       );
-      if (exported.status === "not_configured") {
-        return Response.json({ error: "Google Sheet is not configured" }, { status: 409 });
-      }
-      const filename = `${selectedVendor.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "vendor"}-revenue.xlsx`;
-      return new Response(exported.data, {
+      const data = await buildVendorExcelWorkbook(sheetTitle, values);
+      const baseName = selectedVendor.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "vendor";
+      const filename = `${baseName}-${month}-revenue.xlsx`;
+      return new Response(data, {
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "Content-Disposition": `attachment; filename="${filename}"`,
@@ -368,6 +435,9 @@ export async function GET(request: Request) {
       : visibleVendors;
     if (action === "report" && reportVendors.length === 0) {
       return Response.json({ error: "Vendor not found" }, { status: 404 });
+    }
+    if (action === "report") {
+      await syncSheetBeforeCachedRead(scope, new Set([vendorId]), month);
     }
     const reports = await buildVendorReports(
       scope,
