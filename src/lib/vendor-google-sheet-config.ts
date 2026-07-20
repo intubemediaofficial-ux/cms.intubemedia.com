@@ -9,6 +9,7 @@ import {
 import { kv } from "@/lib/redis";
 
 const CONFIG_KEY = "cms_vendor_google_sheet_config";
+const SCOPED_SHEET_PREFIX = "cms_vendor_google_sheet_scope:";
 
 export interface VendorGoogleSheetConfig {
   spreadsheetId: string;
@@ -52,7 +53,7 @@ export async function saveVendorGoogleSheetConfig(
   await kv.set(CONFIG_KEY, stored);
 }
 
-export async function getVendorGoogleSheetConfig(): Promise<VendorGoogleSheetConfig | null> {
+async function getStoredVendorGoogleSheetConfig(): Promise<VendorGoogleSheetConfig | null> {
   const stored = await kv.get<EncryptedConfig>(CONFIG_KEY);
   if (!stored || stored.version !== 1) return null;
   const decipher = createDecipheriv(
@@ -66,4 +67,46 @@ export async function getVendorGoogleSheetConfig(): Promise<VendorGoogleSheetCon
     decipher.final(),
   ]).toString("utf8");
   return JSON.parse(plaintext) as VendorGoogleSheetConfig;
+}
+
+export async function saveScopedVendorSpreadsheetId(
+  scopeUserId: string,
+  spreadsheetId: string
+): Promise<void> {
+  await kv.set(`${SCOPED_SHEET_PREFIX}${scopeUserId}`, { spreadsheetId });
+}
+
+export async function getVendorGoogleSheetConfig(
+  scopeUserId?: string
+): Promise<VendorGoogleSheetConfig | null> {
+  const storedConfig = await getStoredVendorGoogleSheetConfig();
+  const clientEmail =
+    process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim() ||
+    storedConfig?.clientEmail;
+  const privateKey =
+    process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, "\n") ||
+    storedConfig?.privateKey;
+  if (!clientEmail || !privateKey) return null;
+
+  if (scopeUserId) {
+    const scoped = await kv.get<{ spreadsheetId?: string }>(
+      `${SCOPED_SHEET_PREFIX}${scopeUserId}`
+    );
+    const spreadsheetId = scoped?.spreadsheetId?.trim();
+    return spreadsheetId ? { spreadsheetId, clientEmail, privateKey } : null;
+  }
+
+  const spreadsheetId =
+    process.env.VENDOR_GOOGLE_SHEET_ID?.trim() ||
+    storedConfig?.spreadsheetId;
+  return spreadsheetId ? { spreadsheetId, clientEmail, privateKey } : null;
+}
+
+export async function getVendorGoogleSheetServiceAccountEmail(): Promise<string> {
+  const storedConfig = await getStoredVendorGoogleSheetConfig();
+  return (
+    process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim() ||
+    storedConfig?.clientEmail ||
+    ""
+  );
 }

@@ -12,7 +12,7 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import { downloadExcel, downloadMultiSheetExcel } from "@/lib/excel-export";
+import { downloadMultiSheetExcel } from "@/lib/excel-export";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 
 interface Vendor {
@@ -60,6 +60,8 @@ function monthOptions(): Array<{ value: string; label: string }> {
 export function VendorManagementPage() {
   const { data: session, status } = useSession();
   const isAdmin = session?.user?.role === "admin";
+  const isCompany = session?.user?.role === "company";
+  const canManageSheets = isAdmin || isCompany;
   const months = useMemo(() => monthOptions(), []);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [selectedVendorId, setSelectedVendorId] = useState("");
@@ -71,14 +73,21 @@ export function VendorManagementPage() {
   const [editingName, setEditingName] = useState("");
   const [saving, setSaving] = useState(false);
   const [exportingAll, setExportingAll] = useState(false);
+  const [exportingVendor, setExportingVendor] = useState(false);
   const [sheetSyncing, setSheetSyncing] = useState(false);
   const [sheetConfiguring, setSheetConfiguring] = useState(false);
   const [sheetUrl, setSheetUrl] = useState("");
   const [sheetCredentials, setSheetCredentials] = useState<File | null>(null);
   const [sheetStatus, setSheetStatus] = useState("");
+  const [sheetServiceAccountEmail, setSheetServiceAccountEmail] = useState("");
+  const [sheetConfigured, setSheetConfigured] = useState(false);
   const [vendorSearch, setVendorSearch] = useState("");
   const [channelSearch, setChannelSearch] = useState("");
   const [error, setError] = useState("");
+  const [revenueSyncing, setRevenueSyncing] = useState(false);
+  const [revenueFromMonth, setRevenueFromMonth] = useState(months[0]?.value || "");
+  const [revenueToMonth, setRevenueToMonth] = useState(months[0]?.value || "");
+  const [revenueVendorIds, setRevenueVendorIds] = useState<string[]>([]);
 
   const fetchVendors = useCallback(async () => {
     setLoading(true);
@@ -88,6 +97,8 @@ export function VendorManagementPage() {
       if (!response.ok) throw new Error(json.error || "Failed to load vendors");
       const list: Vendor[] = json.data?.vendors || [];
       setVendors(list);
+      setSheetServiceAccountEmail(json.data?.sheetConnection?.serviceAccountEmail || "");
+      setSheetConfigured(Boolean(json.data?.sheetConnection?.configured));
       setSelectedVendorId((current) =>
         list.some((vendor) => vendor.id === current) ? current : list[0]?.id || ""
       );
@@ -196,25 +207,33 @@ export function VendorManagementPage() {
     }
   };
 
-  const exportReport = () => {
-    if (!report) return;
-    const monthLabel = months.find((month) => month.value === report.month)?.label || report.month;
-    downloadExcel(
-      ["Month", "Vendor", "Client", "Channel", "Channel ID", "Network", "Views", "Revenue USD", "Status"],
-      report.channels.map((channel) => [
-        monthLabel,
-        report.vendor.name,
-        channel.client_name,
-        channel.channel_name,
-        channel.channel_id,
-        channel.network_name,
-        channel.views,
-        Number(channel.revenue_usd.toFixed(3)),
-        channel.available ? "Available" : "Pending",
-      ]),
-      `${report.vendor.name.replace(/[^a-z0-9]+/gi, "-")}-${report.month}-vendor-report`,
-      "Vendor Report"
-    );
+  const exportVendorSheet = async () => {
+    if (!selectedVendor) return;
+    setExportingVendor(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/vendors?action=export&vendorId=${encodeURIComponent(selectedVendor.id)}`,
+        { cache: "no-store" }
+      );
+      if (!response.ok) {
+        const json = await response.json();
+        throw new Error(json.error || "Failed to export vendor sheet");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${selectedVendor.name.replace(/[^a-z0-9]+/gi, "-")}-revenue.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "Failed to export vendor sheet");
+    } finally {
+      setExportingVendor(false);
+    }
   };
 
   const exportAllVendors = async () => {
@@ -266,6 +285,43 @@ export function VendorManagementPage() {
     }
   };
 
+  const runRevenueSync = async () => {
+    if (revenueVendorIds.length === 0) {
+      setError("Select at least one vendor for Revenue Sync");
+      return;
+    }
+    const fromMonth = revenueFromMonth <= revenueToMonth ? revenueFromMonth : revenueToMonth;
+    const toMonth = revenueFromMonth <= revenueToMonth ? revenueToMonth : revenueFromMonth;
+    setRevenueSyncing(true);
+    setSheetStatus("");
+    setError("");
+    try {
+      const response = await fetch("/api/vendors", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "syncRevenue",
+          vendorIds: revenueVendorIds,
+          fromMonth,
+          toMonth,
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Revenue sync failed");
+      const data = json.data;
+      const fromLabel = months.find((month) => month.value === fromMonth)?.label || fromMonth;
+      const toLabel = months.find((month) => month.value === toMonth)?.label || toMonth;
+      setSheetStatus(
+        `Revenue synced: ${data?.vendors || 0} vendor(s), ${data?.channels || 0} channel(s), ${fromLabel} → ${toLabel}. Google Sheet updated.`
+      );
+      await fetchReport();
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : "Revenue sync failed");
+    } finally {
+      setRevenueSyncing(false);
+    }
+  };
+
   const syncGoogleSheet = async () => {
     setSheetSyncing(true);
     setSheetStatus("");
@@ -291,23 +347,30 @@ export function VendorManagementPage() {
   };
 
   const configureGoogleSheet = async () => {
-    if (!sheetUrl.trim() || !sheetCredentials) {
-      setError("Google Sheet URL and service-account JSON are required");
+    if (!sheetUrl.trim() || (isAdmin && !sheetCredentials)) {
+      setError(
+        isAdmin
+          ? "Google Sheet URL and service-account JSON are required"
+          : "Google Sheet URL is required"
+      );
       return;
     }
     setSheetConfiguring(true);
     setSheetStatus("");
     setError("");
     try {
-      const credentials = JSON.parse(await sheetCredentials.text()) as {
-        client_email?: unknown;
-        private_key?: unknown;
-      };
-      if (
-        typeof credentials.client_email !== "string" ||
-        typeof credentials.private_key !== "string"
-      ) {
-        throw new Error("Invalid service-account JSON file");
+      let credentials: { client_email?: unknown; private_key?: unknown } = {};
+      if (isAdmin && sheetCredentials) {
+        credentials = JSON.parse(await sheetCredentials.text()) as {
+          client_email?: unknown;
+          private_key?: unknown;
+        };
+        if (
+          typeof credentials.client_email !== "string" ||
+          typeof credentials.private_key !== "string"
+        ) {
+          throw new Error("Invalid service-account JSON file");
+        }
       }
       const response = await fetch("/api/vendors", {
         method: "PUT",
@@ -325,6 +388,7 @@ export function VendorManagementPage() {
         `Google Sheet configured and updated: ${json.data?.vendors || 0} vendors, ${json.data?.rows || 0} rows.`
       );
       setSheetCredentials(null);
+      setSheetConfigured(true);
     } catch (configError) {
       setError(
         configError instanceof Error ? configError.message : "Google Sheet configuration failed"
@@ -335,6 +399,7 @@ export function VendorManagementPage() {
   };
 
   const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId);
+  const syncableVendors = canManageSheets ? vendors : [];
   const filteredVendors = vendors.filter((vendor) =>
     vendor.name.toLowerCase().includes(vendorSearch.trim().toLowerCase())
   );
@@ -354,7 +419,7 @@ export function VendorManagementPage() {
           <p className="text-sm text-muted mt-1">Assign channels and review exact calendar-month revenue and views.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {isAdmin && (
+          {canManageSheets && (
             <button
               onClick={() => void syncGoogleSheet()}
               disabled={sheetSyncing}
@@ -392,15 +457,25 @@ export function VendorManagementPage() {
       {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
       {sheetStatus && <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">{sheetStatus}</div>}
 
-      {isAdmin && (
+      {canManageSheets && (
         <div className="bg-white border border-border rounded-xl p-4 space-y-3">
           <div>
             <h2 className="font-semibold">Google Sheet Connection</h2>
             <p className="text-xs text-muted mt-1">
-              Admin-only setup. Credentials are encrypted server-side and never displayed again.
+              {isAdmin
+                ? "Admin setup. Credentials are encrypted server-side and never displayed again."
+                : "Create your Google Sheet, share it as Editor with the email below, then paste its URL."}
             </p>
+            {!isAdmin && sheetServiceAccountEmail && (
+              <div className="mt-2 text-xs">
+                Share as Editor: <span className="font-mono font-medium select-all">{sheetServiceAccountEmail}</span>
+              </div>
+            )}
+            {sheetConfigured && (
+              <div className="mt-1 text-xs text-green-700">Google Sheet is connected for this account.</div>
+            )}
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3">
+          <div className={`grid grid-cols-1 gap-3 ${isAdmin ? "lg:grid-cols-[1fr_1fr_auto]" : "lg:grid-cols-[1fr_auto]"}`}>
             <input
               type="url"
               value={sheetUrl}
@@ -408,20 +483,116 @@ export function VendorManagementPage() {
               placeholder="Google Sheet URL"
               className="px-3 py-2 border border-border rounded-lg text-sm"
             />
-            <input
-              type="file"
-              accept="application/json,.json"
-              onChange={(event) => setSheetCredentials(event.target.files?.[0] || null)}
-              className="px-3 py-2 border border-border rounded-lg text-sm"
-            />
+            {isAdmin && (
+              <input
+                type="file"
+                accept="application/json,.json"
+                onChange={(event) => setSheetCredentials(event.target.files?.[0] || null)}
+                className="px-3 py-2 border border-border rounded-lg text-sm"
+              />
+            )}
             <button
               onClick={() => void configureGoogleSheet()}
-              disabled={sheetConfiguring || !sheetUrl.trim() || !sheetCredentials}
+              disabled={sheetConfiguring || !sheetUrl.trim() || (isAdmin && !sheetCredentials)}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm disabled:opacity-50"
             >
               {sheetConfiguring && <Loader2 className="w-4 h-4 animate-spin" />}
               Save & Sync
             </button>
+          </div>
+        </div>
+      )}
+
+      {canManageSheets && (
+        <div className="bg-white border border-border rounded-xl p-4 space-y-3">
+          <div>
+            <h2 className="font-semibold">Revenue Sync</h2>
+            <p className="text-xs text-muted mt-1">
+              Refresh exact YouTube revenue for selected vendors and month range, then update the Google Sheet.
+              Existing months and other vendors stay unchanged; a missing month column is created automatically.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto] gap-3">
+            <label className="text-sm">
+              <span className="block text-xs text-muted mb-1">From Month</span>
+              <select
+                value={revenueFromMonth}
+                onChange={(event) => setRevenueFromMonth(event.target.value)}
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+              >
+                {months.map((month) => (
+                  <option key={month.value} value={month.value}>{month.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              <span className="block text-xs text-muted mb-1">To Month</span>
+              <select
+                value={revenueToMonth}
+                onChange={(event) => setRevenueToMonth(event.target.value)}
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+              >
+                {months.map((month) => (
+                  <option key={month.value} value={month.value}>{month.label}</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end">
+              <button
+                onClick={() => void runRevenueSync()}
+                disabled={revenueSyncing || revenueVendorIds.length === 0}
+                className="flex w-full items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm disabled:opacity-50"
+              >
+                {revenueSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                Revenue Sync
+              </button>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-muted">Vendors ({revenueVendorIds.length} selected)</span>
+              <div className="flex gap-3 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setRevenueVendorIds(syncableVendors.map((vendor) => vendor.id))}
+                  className="text-primary hover:underline"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRevenueVendorIds([])}
+                  className="text-muted hover:underline"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+              {syncableVendors.map((vendor) => {
+                const checked = revenueVendorIds.includes(vendor.id);
+                return (
+                  <label
+                    key={vendor.id}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm cursor-pointer ${checked ? "border-primary bg-primary/5" : "border-border"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) =>
+                        setRevenueVendorIds((current) =>
+                          event.target.checked
+                            ? [...current, vendor.id]
+                            : current.filter((id) => id !== vendor.id)
+                        )
+                      }
+                    />
+                    {vendor.name}
+                  </label>
+                );
+              })}
+              {syncableVendors.length === 0 && <span className="text-sm text-muted">No vendors yet.</span>}
+            </div>
           </div>
         </div>
       )}
@@ -504,11 +675,12 @@ export function VendorManagementPage() {
                     </>
                   )}
                   <button
-                    onClick={exportReport}
-                    disabled={!report || report.channels.length === 0}
+                    onClick={() => void exportVendorSheet()}
+                    disabled={exportingVendor}
                     className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm disabled:opacity-50"
                   >
-                    <Download className="w-4 h-4" /> Excel
+                    {exportingVendor ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    Download Vendor Excel
                   </button>
                 </div>
               </div>

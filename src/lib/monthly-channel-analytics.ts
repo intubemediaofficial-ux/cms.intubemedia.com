@@ -318,6 +318,113 @@ export async function getMonthlyChannelAnalytics(
   }
 }
 
+export function monthsInRange(fromMonth: string, toMonth: string): string[] {
+  if (!isValidMonth(fromMonth) || !isValidMonth(toMonth) || fromMonth > toMonth) {
+    return [];
+  }
+  const months: string[] = [];
+  let [year, month] = fromMonth.split("-").map(Number);
+  while (`${year}-${pad(month)}` <= toMonth) {
+    months.push(`${year}-${pad(month)}`);
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+  return months;
+}
+
+export interface MonthlyChannelRefreshResult {
+  month: string;
+  requested: number;
+  updated: number;
+  preserved: number;
+}
+
+/**
+ * Force-refresh the given channels for a single month, ignoring staleness.
+ *
+ * Fresh YouTube revenue overwrites the cache row; when a fetch fails or returns
+ * empty data the previous cached revenue/views are preserved (never zeroed).
+ * Channels outside {@link channelIds} and other months are left untouched.
+ */
+export async function refreshMonthlyChannels(
+  month: string,
+  channelIds: string[]
+): Promise<MonthlyChannelRefreshResult> {
+  if (!isValidMonth(month)) {
+    return { month, requested: 0, updated: 0, preserved: 0 };
+  }
+  const targetIds = Array.from(new Set(channelIds.filter(Boolean)));
+  if (targetIds.length === 0) {
+    return { month, requested: 0, updated: 0, preserved: 0 };
+  }
+
+  const cacheKey = `${CACHE_PREFIX}${month}`;
+  const lockKey = `${LOCK_PREFIX}${month}`;
+  const acquired = await kv.setIfNotExists(
+    lockKey,
+    { startedAt: new Date().toISOString() },
+    5 * 60
+  );
+  if (!acquired) {
+    return { month, requested: targetIds.length, updated: 0, preserved: 0 };
+  }
+
+  try {
+    const [names, cached] = await Promise.all([
+      getChannelNames(),
+      kv.get<MonthlyChannelCache>(cacheKey),
+    ]);
+    const cachedMap = new Map(
+      (cached?.channels || []).map((channel) => [channel.channel_id, channel])
+    );
+    const { startDate, endDate } = getMonthDateRange(month);
+    const fetched = await fetchChannels(targetIds, names, startDate, endDate);
+    const fetchedMap = new Map(fetched.map((channel) => [channel.channel_id, channel]));
+
+    let updated = 0;
+    let preserved = 0;
+    for (const channelId of targetIds) {
+      const previous = cachedMap.get(channelId);
+      const next = fetchedMap.get(channelId);
+      if (!next) {
+        preserved += 1;
+        continue;
+      }
+      cachedMap.set(channelId, {
+        ...next,
+        revenue_usd:
+          next.revenue_usd > 0 || !previous || previous.revenue_usd <= 0
+            ? next.revenue_usd
+            : previous.revenue_usd,
+        views:
+          next.views > 0 || !previous || previous.views <= 0
+            ? next.views
+            : previous.views,
+      });
+      updated += 1;
+    }
+
+    const channels = sortChannels(
+      Array.from(cachedMap.values()).map((channel) => ({
+        ...channel,
+        channel_name: names.get(channel.channel_id) || channel.channel_name,
+      }))
+    );
+    await kv.set(cacheKey, {
+      month,
+      channels,
+      last_attempt_at: new Date().toISOString(),
+    } satisfies MonthlyChannelCache);
+
+    return { month, requested: targetIds.length, updated, preserved };
+  } finally {
+    await kv.del(lockKey);
+  }
+}
+
 /**
  * Warm the current month and recently-completed months so month filters load
  * instantly and pick up YouTube revisions. Called from the scheduled sync.
