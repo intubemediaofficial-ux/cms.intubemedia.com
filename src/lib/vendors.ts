@@ -2,6 +2,8 @@ import { kv } from "@/lib/redis";
 
 const VENDORS_KEY = "cms_vendors";
 const ASSIGNMENTS_KEY = "cms_channel_vendor_assignments";
+const USERS_KEY = "bainsla_users";
+const OWNER_SCOPE_MIGRATION_KEY = "cms_vendor_owner_scope_version";
 
 export interface Vendor {
   id: string;
@@ -18,6 +20,34 @@ export interface ChannelVendorAssignment {
   assignedByEmail: string;
   assignedAt: string;
   updatedAt: string;
+}
+
+export interface VendorOwnerUser {
+  id: string;
+  role?: string;
+  parentId?: string;
+}
+
+export function normalizeLegacyVendorOwnerScopes(
+  vendors: Vendor[],
+  users: VendorOwnerUser[]
+): Vendor[] {
+  const usersById = new Map(users.map((user) => [user.id, user]));
+  return vendors.map((vendor) => {
+    if (vendor.createdByUserId === null) return vendor;
+    if (vendor.createdByUserId === undefined) {
+      return { ...vendor, createdByUserId: null };
+    }
+
+    const owner = usersById.get(vendor.createdByUserId);
+    if (!owner) return vendor;
+    const ownerUserId = owner.role === "company"
+      ? owner.id
+      : owner.parentId || null;
+    return ownerUserId === vendor.createdByUserId
+      ? vendor
+      : { ...vendor, createdByUserId: ownerUserId };
+  });
 }
 
 export function getVendorsForOwner(
@@ -44,7 +74,23 @@ export function removeScopedChannelVendorAssignments(
 }
 
 export async function getVendors(): Promise<Vendor[]> {
-  return (await kv.get<Vendor[]>(VENDORS_KEY)) || [];
+  const [vendors, migrationVersion] = await Promise.all([
+    kv.get<Vendor[]>(VENDORS_KEY).then((value) => value || []),
+    kv.get<number>(OWNER_SCOPE_MIGRATION_KEY),
+  ]);
+  if (migrationVersion === 1) return vendors;
+
+  const users = (await kv.get<VendorOwnerUser[]>(USERS_KEY)) || [];
+  if (users.length === 0 && vendors.some((vendor) => vendor.createdByUserId)) {
+    return vendors;
+  }
+
+  const normalized = normalizeLegacyVendorOwnerScopes(vendors, users);
+  if (normalized.some((vendor, index) => vendor !== vendors[index])) {
+    await kv.set(VENDORS_KEY, normalized);
+  }
+  await kv.set(OWNER_SCOPE_MIGRATION_KEY, 1);
+  return normalized;
 }
 
 export async function saveVendors(vendors: Vendor[]): Promise<void> {
