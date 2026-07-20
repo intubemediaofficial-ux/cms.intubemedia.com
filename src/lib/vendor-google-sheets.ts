@@ -41,12 +41,19 @@ export interface VendorSheetSyncResult {
   rows?: number;
 }
 
+export interface VendorSheetSyncOptions {
+  vendorIds?: Set<string>;
+  channelIds?: Set<string>;
+  months?: Set<string>;
+  scopeUserId?: string;
+}
+
 function sanitizeSheetName(value: string): string {
   const cleaned = value.replace(/[\\/?*\[\]:]/g, " ").replace(/\s+/g, " ").trim();
   return (cleaned || "Vendor").slice(0, 31);
 }
 
-function uniqueSheetNames(vendorNames: string[]): string[] {
+export function uniqueVendorSheetNames(vendorNames: string[]): string[] {
   const used = new Set<string>(["summary"]);
   return vendorNames.map((name) => {
     const base = sanitizeSheetName(name);
@@ -104,20 +111,24 @@ function monthLabel(month: string): string {
   }).format(new Date(Date.UTC(year, monthNumber - 1, 1)));
 }
 
-export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
-  let spreadsheetId = process.env.VENDOR_GOOGLE_SHEET_ID?.trim();
-  let clientEmail = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim();
-  let privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
-  if (!spreadsheetId || !clientEmail || !privateKey) {
-    const storedConfig = await getVendorGoogleSheetConfig();
-    spreadsheetId ||= storedConfig?.spreadsheetId;
-    clientEmail ||= storedConfig?.clientEmail;
-    privateKey ||= storedConfig?.privateKey;
-  }
-  privateKey = privateKey?.replace(/\\n/g, "\n");
-  if (!spreadsheetId || !clientEmail || !privateKey) {
-    return { status: "not_configured" };
-  }
+function monthFromRevenueHeader(value: unknown): string {
+  const match = String(value || "").match(
+    /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\s+Revenue\s+USD$/i
+  );
+  if (!match) return "";
+  const monthNumber = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december",
+  ].indexOf(match[1].toLowerCase()) + 1;
+  return `${match[2]}-${String(monthNumber).padStart(2, "0")}`;
+}
+
+export async function syncVendorGoogleSheet(
+  options: VendorSheetSyncOptions = {}
+): Promise<VendorSheetSyncResult> {
+  const config = await getVendorGoogleSheetConfig(options.scopeUserId);
+  if (!config) return { status: "not_configured" };
+  const { spreadsheetId, clientEmail, privateKey } = config;
 
   const auth = new google.auth.GoogleAuth({
     credentials: { client_email: clientEmail, private_key: privateKey },
@@ -125,7 +136,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
   });
   const sheets = google.sheets({ version: "v4", auth });
 
-  const [vendors, assignments, users, cachedClients, monthlyKeys, backendChannels] = await Promise.all([
+  const [allVendors, allAssignments, users, cachedClients, monthlyKeys, backendChannels] = await Promise.all([
     getVendors(),
     getVendorAssignments(),
     kv.get<StoredUser[]>(USERS_KEY).then((value) => value || []),
@@ -133,6 +144,14 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
     kv.keys(`${MONTHLY_PREFIX}*`),
     getBackendChannels(),
   ]);
+  const vendors = options.vendorIds
+    ? allVendors.filter((vendor) => options.vendorIds?.has(vendor.id))
+    : allVendors;
+  const assignments = allAssignments.filter(
+    (assignment) =>
+      (!options.vendorIds || options.vendorIds.has(assignment.vendorId)) &&
+      (!options.channelIds || options.channelIds.has(assignment.channelId))
+  );
   const monthlyCaches = (
     await Promise.all(monthlyKeys.map((key) => kv.get<MonthlyCache>(key)))
   )
@@ -166,8 +185,18 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
     assignmentByVendor.set(assignment.vendorId, ids);
   }
 
-  const vendorSheetNames = uniqueSheetNames(vendors.map((vendor) => vendor.name));
-  const desiredTitles = new Set(["Summary", ...vendorSheetNames]);
+  const allVendorSheetNames = uniqueVendorSheetNames(allVendors.map((vendor) => vendor.name));
+  const sheetNameByVendorId = new Map(
+    allVendors.map((vendor, index) => [vendor.id, allVendorSheetNames[index]])
+  );
+  const vendorSheetNames = vendors.map(
+    (vendor) => sheetNameByVendorId.get(vendor.id) || sanitizeSheetName(vendor.name)
+  );
+  const partialSync = Boolean(options.months);
+  const desiredTitles = new Set([
+    ...(partialSync ? [] : ["Summary"]),
+    ...vendorSheetNames,
+  ]);
   const metadata = await sheets.spreadsheets.get({ spreadsheetId });
   const existingSheets = metadata.data.sheets || [];
   const existingByTitle = new Map(
@@ -199,12 +228,15 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
     )
   );
   const preservedLinkedDates = new Map<string, string>();
+  const existingRevenue = new Map<string, number>();
+  const existingMonthsByTitle = new Map<string, Set<string>>();
   if (vendorSheetNames.length > 0) {
     const currentValues = await sheets.spreadsheets.values.batchGet({
       spreadsheetId,
       ranges: vendorSheetNames.map((title) => `${quoteSheetName(title)}!A:ZZ`),
     });
-    (currentValues.data.valueRanges || []).forEach((range) => {
+    (currentValues.data.valueRanges || []).forEach((range, rangeIndex) => {
+      const title = vendorSheetNames[rangeIndex];
       const values = range.values || [];
       const header = values[0] || [];
       const channelIdIndex = header.findIndex((value) => normalizedHeader(value) === "channelid");
@@ -212,15 +244,34 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
         const normalized = normalizedHeader(value);
         return normalized === "linkeddate" || normalized === "linkdate";
       });
-      if (channelIdIndex < 0 || linkedDateIndex < 0) return;
+      const revenueColumns = header.flatMap((value, columnIndex) => {
+        const month = monthFromRevenueHeader(value);
+        return month ? [{ month, columnIndex }] : [];
+      });
+      existingMonthsByTitle.set(
+        title,
+        new Set(revenueColumns.map(({ month }) => month))
+      );
+      if (channelIdIndex < 0) return;
       values.slice(1).forEach((row) => {
         const channelId = String(row[channelIdIndex] || "").trim();
-        const linkedDate = normalizeLinkedDate(row[linkedDateIndex]);
-        if (channelId && linkedDate) preservedLinkedDates.set(channelId, linkedDate);
+        if (!channelId) return;
+        if (linkedDateIndex >= 0) {
+          const linkedDate = normalizeLinkedDate(row[linkedDateIndex]);
+          if (linkedDate) preservedLinkedDates.set(channelId, linkedDate);
+        }
+        for (const { month, columnIndex } of revenueColumns) {
+          const revenue = Number(row[columnIndex]);
+          if (Number.isFinite(revenue)) {
+            existingRevenue.set(`${title}:${channelId}:${month}`, revenue);
+          }
+        }
       });
     });
   }
-  const staleSheetIds = (refreshedMetadata.data.sheets || []).flatMap((sheet) => {
+  const staleSheetIds = partialSync || options.scopeUserId
+    ? []
+    : (refreshedMetadata.data.sheets || []).flatMap((sheet) => {
     const title = sheet.properties?.title;
     const sheetId = sheet.properties?.sheetId;
     return title && sheetId !== undefined && !desiredTitles.has(title) ? [sheetId] : [];
@@ -252,17 +303,35 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
     "Synced At",
   ]];
   const vendorRows = new Map<string, Array<Array<string | number>>>();
-  const monthlyAnalytics = monthlyCaches.map((cache) => ({
-    cache,
-    channels: new Map(cache.channels.map((channel) => [channel.channel_id, channel])),
-  }));
+  const monthlyAnalytics = new Map(
+    monthlyCaches.map((cache) => [
+      cache.month,
+      {
+        cache,
+        channels: new Map(cache.channels.map((channel) => [channel.channel_id, channel])),
+      },
+    ])
+  );
   let totalRows = 0;
 
   vendors.forEach((vendor, index) => {
     const title = vendorSheetNames[index];
     const channelIds = assignmentByVendor.get(vendor.id) || [];
-    const vendorMonthlyAnalytics = monthlyAnalytics.filter(
-      ({ cache }) => cache.month >= getVendorStartMonth(vendor.name)
+    const vendorStartMonth = getVendorStartMonth(vendor.name);
+    const vendorMonthKeys = Array.from(
+      new Set([
+        ...monthlyCaches.map((cache) => cache.month),
+        ...(existingMonthsByTitle.get(title) || []),
+        ...(options.months || []),
+      ])
+    )
+      .filter((month) => month >= vendorStartMonth)
+      .sort();
+    const vendorMonthlyAnalytics = vendorMonthKeys.map((month) =>
+      monthlyAnalytics.get(month) || {
+        cache: { month, channels: [] },
+        channels: new Map<string, MonthlyChannel>(),
+      }
     );
     const rows: Array<Array<string | number>> = [[
       "Vendor",
@@ -289,7 +358,12 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
         channelId,
         channelNetworks.get(channelId) || "",
         ...analyticsByMonth.map((analytics, monthIndex) => {
-          const revenue = analytics?.revenue_usd || 0;
+          const month = vendorMonthlyAnalytics[monthIndex].cache.month;
+          const previous = existingRevenue.get(`${title}:${channelId}:${month}`);
+          const revenue =
+            options.months && !options.months.has(month)
+              ? previous ?? analytics?.revenue_usd ?? 0
+              : analytics?.revenue_usd ?? previous ?? 0;
           monthlyRevenueTotals[monthIndex] += revenue;
           return Number(revenue.toFixed(2));
         }),
@@ -325,7 +399,11 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
   });
 
   const updates = [
-    { range: `${quoteSheetName("Summary")}!A1`, values: summaryRows },
+    ...(
+      partialSync
+        ? []
+        : [{ range: `${quoteSheetName("Summary")}!A1`, values: summaryRows }]
+    ),
     ...Array.from(vendorRows, ([title, values]) => ({
       range: `${quoteSheetName(title)}!A1`,
       values,
@@ -353,7 +431,7 @@ export async function syncVendorGoogleSheet(): Promise<VendorSheetSyncResult> {
   const thinBorder = { style: "SOLID", color: black };
   const formatRequests: sheets_v4.Schema$Request[] = [];
   const summarySheetId = sheetIdByTitle.get("Summary");
-  if (summarySheetId !== undefined) {
+  if (!partialSync && summarySheetId !== undefined) {
     formatRequests.push(
       {
         repeatCell: {

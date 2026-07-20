@@ -5,10 +5,21 @@ import { getAllCachedClientData } from "@/lib/client-data-cache";
 import {
   getMonthlyChannelAnalytics,
   isValidMonth,
+  monthsInRange,
+  refreshMonthlyChannels,
 } from "@/lib/monthly-channel-analytics";
 import { kv } from "@/lib/redis";
-import { saveVendorGoogleSheetConfig } from "@/lib/vendor-google-sheet-config";
-import { syncVendorGoogleSheet } from "@/lib/vendor-google-sheets";
+import {
+  getVendorGoogleSheetConfig,
+  getVendorGoogleSheetServiceAccountEmail,
+  saveScopedVendorSpreadsheetId,
+  saveVendorGoogleSheetConfig,
+} from "@/lib/vendor-google-sheet-config";
+import { exportVendorGoogleSheetTab } from "@/lib/vendor-excel-export";
+import {
+  syncVendorGoogleSheet,
+  uniqueVendorSheetNames,
+} from "@/lib/vendor-google-sheets";
 import {
   ChannelVendorAssignment,
   getVendorAssignments,
@@ -183,11 +194,46 @@ async function buildVendorReports(
   });
 }
 
-async function syncSheetAfterMutation() {
+function sheetScopeUserId(scope: VendorScope): string | undefined {
+  return scope.isAdmin ? undefined : scope.currentUser?.id;
+}
+
+function canManageVendorSheets(scope: VendorScope): boolean {
+  return scope.isAdmin || scope.currentUser?.role === "company";
+}
+
+async function syncSheetAfterMutation(
+  scope: VendorScope,
+  suppressErrors = true
+) {
   try {
-    return await syncVendorGoogleSheet();
+    if (scope.isAdmin) return await syncVendorGoogleSheet();
+    const [vendors, assignments] = await Promise.all([
+      getVendors(),
+      getVendorAssignments(),
+    ]);
+    const assignedVendorIds = new Set(
+      assignments
+        .filter((assignment) => scope.approvedChannelIds.has(assignment.channelId))
+        .map((assignment) => assignment.vendorId)
+    );
+    const vendorIds = new Set(
+      vendors
+        .filter(
+          (vendor) =>
+            vendor.createdByUserId === scope.currentUser?.id ||
+            assignedVendorIds.has(vendor.id)
+        )
+        .map((vendor) => vendor.id)
+    );
+    return await syncVendorGoogleSheet({
+      scopeUserId: sheetScopeUserId(scope),
+      vendorIds,
+      channelIds: scope.approvedChannelIds,
+    });
   } catch (error) {
     console.error("[Vendors] Google Sheets sync failed:", error);
+    if (!suppressErrors) throw error;
     return { status: "failed" as const };
   }
 }
@@ -222,6 +268,12 @@ export async function GET(request: Request) {
   );
 
   if (action === "list") {
+    const [sheetConfig, serviceAccountEmail] = canManageVendorSheets(scope)
+      ? await Promise.all([
+          getVendorGoogleSheetConfig(sheetScopeUserId(scope)),
+          getVendorGoogleSheetServiceAccountEmail(),
+        ])
+      : [null, ""];
     const counts = new Map<string, number>();
     for (const assignment of scopedAssignments) {
       if (!scope.approvedChannelIds.has(assignment.channelId)) continue;
@@ -242,8 +294,44 @@ export async function GET(request: Request) {
           id: vendor.id,
           name: vendor.name,
         })),
+        sheetConnection: canManageVendorSheets(scope)
+          ? {
+              configured: Boolean(sheetConfig),
+              serviceAccountEmail,
+            }
+          : null,
       },
     });
+  }
+
+  if (action === "export") {
+    const vendorId = url.searchParams.get("vendorId") || "";
+    const selectedVendor = visibleVendors.find((vendor) => vendor.id === vendorId);
+    if (!selectedVendor) {
+      return Response.json({ error: "Vendor not found" }, { status: 404 });
+    }
+    const vendorIndex = vendors.findIndex((vendor) => vendor.id === selectedVendor.id);
+    const sheetTitle = uniqueVendorSheetNames(vendors.map((vendor) => vendor.name))[vendorIndex];
+    try {
+      const exported = await exportVendorGoogleSheetTab(
+        sheetTitle,
+        sheetScopeUserId(scope)
+      );
+      if (exported.status === "not_configured") {
+        return Response.json({ error: "Google Sheet is not configured" }, { status: 409 });
+      }
+      const filename = `${selectedVendor.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "vendor"}-revenue.xlsx`;
+      return new Response(exported.data, {
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    } catch (error) {
+      console.error("[Vendors] vendor Excel export failed:", error);
+      return Response.json({ error: "Vendor Excel export failed" }, { status: 502 });
+    }
   }
 
   if (action === "report" || action === "reports") {
@@ -300,7 +388,7 @@ export async function POST(request: Request) {
     updatedAt: now,
   };
   await saveVendors([...vendors, vendor]);
-  const sheetSync = await syncSheetAfterMutation();
+  const sheetSync = await syncSheetAfterMutation(scope);
   return Response.json({ data: vendor, sheetSync }, { status: 201 });
 }
 
@@ -311,41 +399,51 @@ export async function PUT(request: Request) {
   const body = await request.json();
   const action = body.action;
   if (action === "configureSheet") {
-    if (!scope.isAdmin) {
-      return Response.json({ error: "Admin only" }, { status: 403 });
+    if (!canManageVendorSheets(scope)) {
+      return Response.json({ error: "Company or Admin access required" }, { status: 403 });
     }
     const spreadsheetInput =
       typeof body.spreadsheetId === "string" ? body.spreadsheetId.trim() : "";
     const spreadsheetId =
       spreadsheetInput.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)?.[1] ||
       (/^[a-zA-Z0-9_-]{20,}$/.test(spreadsheetInput) ? spreadsheetInput : "");
-    const clientEmail = typeof body.clientEmail === "string" ? body.clientEmail.trim() : "";
-    const privateKey = typeof body.privateKey === "string" ? body.privateKey.trim() : "";
-    if (
-      !spreadsheetId ||
-      !clientEmail.endsWith(".gserviceaccount.com") ||
-      !privateKey.includes("-----BEGIN PRIVATE KEY-----") ||
-      !privateKey.includes("-----END PRIVATE KEY-----")
-    ) {
-      return Response.json({ error: "Invalid Google Sheet or service-account JSON" }, { status: 400 });
+    if (!spreadsheetId) {
+      return Response.json({ error: "Invalid Google Sheet URL" }, { status: 400 });
     }
-    await saveVendorGoogleSheetConfig({ spreadsheetId, clientEmail, privateKey });
+    if (scope.isAdmin) {
+      const clientEmail = typeof body.clientEmail === "string" ? body.clientEmail.trim() : "";
+      const privateKey = typeof body.privateKey === "string" ? body.privateKey.trim() : "";
+      if (
+        !clientEmail.endsWith(".gserviceaccount.com") ||
+        !privateKey.includes("-----BEGIN PRIVATE KEY-----") ||
+        !privateKey.includes("-----END PRIVATE KEY-----")
+      ) {
+        return Response.json({ error: "Invalid service-account JSON" }, { status: 400 });
+      }
+      await saveVendorGoogleSheetConfig({ spreadsheetId, clientEmail, privateKey });
+    } else {
+      const scopeUserId = sheetScopeUserId(scope);
+      if (!scopeUserId || !(await getVendorGoogleSheetServiceAccountEmail())) {
+        return Response.json({ error: "Google Sheets service account is not configured" }, { status: 409 });
+      }
+      await saveScopedVendorSpreadsheetId(scopeUserId, spreadsheetId);
+    }
     try {
-      return Response.json({ data: await syncVendorGoogleSheet() });
+      return Response.json({ data: await syncSheetAfterMutation(scope, false) });
     } catch (error) {
       console.error("[Vendors] Google Sheets configuration test failed:", error);
       return Response.json(
-        { error: "Configuration saved, but Google Sheet access failed" },
+        { error: "Sheet saved, but access failed. Share it with the service-account email as Editor." },
         { status: 502 }
       );
     }
   }
   if (action === "syncSheet") {
-    if (!scope.isAdmin) {
-      return Response.json({ error: "Admin only" }, { status: 403 });
+    if (!canManageVendorSheets(scope)) {
+      return Response.json({ error: "Company or Admin access required" }, { status: 403 });
     }
     try {
-      return Response.json({ data: await syncVendorGoogleSheet() });
+      return Response.json({ data: await syncSheetAfterMutation(scope, false) });
     } catch (error) {
       console.error("[Vendors] Google Sheets sync failed:", error);
       return Response.json({ error: "Google Sheets sync failed" }, { status: 502 });
@@ -356,6 +454,98 @@ export async function PUT(request: Request) {
     getVendorAssignments(),
   ]);
   const visibleVendors = getVisibleVendors(scope, vendors);
+  const scopedAssignedVendorIds = new Set(
+    assignments
+      .filter((assignment) => scope.approvedChannelIds.has(assignment.channelId))
+      .map((assignment) => assignment.vendorId)
+  );
+  const revenueVisibleVendors = scope.isAdmin
+    ? vendors
+    : vendors.filter(
+        (vendor) =>
+          vendor.createdByUserId === scope.currentUser?.id ||
+          scopedAssignedVendorIds.has(vendor.id)
+      );
+
+  if (action === "syncRevenue") {
+    if (!canManageVendorSheets(scope)) {
+      return Response.json({ error: "Company or Admin access required" }, { status: 403 });
+    }
+    const requestedVendorIds = Array.isArray(body.vendorIds)
+      ? Array.from(
+          new Set(
+            body.vendorIds.filter(
+              (id: unknown): id is string => typeof id === "string" && id.length > 0
+            )
+          )
+        )
+      : [];
+    const fromMonth = typeof body.fromMonth === "string" ? body.fromMonth : "";
+    const toMonth = typeof body.toMonth === "string" ? body.toMonth : "";
+    if (requestedVendorIds.length === 0) {
+      return Response.json({ error: "Select at least one vendor" }, { status: 400 });
+    }
+    if (!isValidMonth(fromMonth) || !isValidMonth(toMonth)) {
+      return Response.json(
+        { error: "fromMonth and toMonth must be valid YYYY-MM up to the current month" },
+        { status: 400 }
+      );
+    }
+    if (fromMonth > toMonth) {
+      return Response.json({ error: "fromMonth cannot be after toMonth" }, { status: 400 });
+    }
+    const selectedVendorIds = new Set(
+      revenueVisibleVendors
+        .filter((vendor) => requestedVendorIds.includes(vendor.id))
+        .map((vendor) => vendor.id)
+    );
+    if (selectedVendorIds.size === 0) {
+      return Response.json({ error: "Vendor is not in your current scope" }, { status: 403 });
+    }
+    const channelIds = Array.from(
+      new Set(
+        assignments
+          .filter(
+            (assignment) =>
+              selectedVendorIds.has(assignment.vendorId) &&
+              scope.approvedChannelIds.has(assignment.channelId)
+          )
+          .map((assignment) => assignment.channelId)
+      )
+    );
+    if (channelIds.length === 0) {
+      return Response.json({ error: "Selected vendors have no assigned channels" }, { status: 400 });
+    }
+    const months = monthsInRange(fromMonth, toMonth);
+    const refreshResults = [];
+    for (const month of months) {
+      refreshResults.push(await refreshMonthlyChannels(month, channelIds));
+    }
+    let sheetSync;
+    try {
+      sheetSync = await syncVendorGoogleSheet({
+        scopeUserId: sheetScopeUserId(scope),
+        vendorIds: selectedVendorIds,
+        channelIds: new Set(channelIds),
+        months: new Set(months),
+      });
+    } catch (error) {
+      console.error("[Vendors] revenue sync sheet update failed:", error);
+      return Response.json(
+        { error: "Revenue refreshed, but Google Sheet update failed", refresh: refreshResults },
+        { status: 502 }
+      );
+    }
+    return Response.json({
+      data: {
+        vendors: selectedVendorIds.size,
+        channels: channelIds.length,
+        months,
+        refresh: refreshResults,
+        sheetSync,
+      },
+    });
+  }
 
   if (action === "assign") {
     const channelId = typeof body.channelId === "string" ? body.channelId.trim() : "";
@@ -380,7 +570,7 @@ export async function PUT(request: Request) {
       });
     }
     await saveVendorAssignments(next);
-    const sheetSync = await syncSheetAfterMutation();
+    const sheetSync = await syncSheetAfterMutation(scope);
     return Response.json({ data: { channelId, vendorId: vendorId || null }, sheetSync });
   }
 
@@ -424,7 +614,7 @@ export async function PUT(request: Request) {
       });
     }
     await saveVendorAssignments(next);
-    const sheetSync = await syncSheetAfterMutation();
+    const sheetSync = await syncSheetAfterMutation(scope);
     return Response.json({ data: { updated: requested.length }, sheetSync });
   }
 
@@ -446,7 +636,7 @@ export async function PUT(request: Request) {
       item.id === vendorId ? { ...item, name, updatedAt: new Date().toISOString() } : item
     );
     await saveVendors(updated);
-    const sheetSync = await syncSheetAfterMutation();
+    const sheetSync = await syncSheetAfterMutation(scope);
     return Response.json({ data: updated.find((item) => item.id === vendorId), sheetSync });
   }
 
@@ -480,6 +670,6 @@ export async function DELETE(request: Request) {
       assignments.filter((assignment) => assignment.vendorId !== vendorId)
     ),
   ]);
-  const sheetSync = await syncSheetAfterMutation();
+  const sheetSync = await syncSheetAfterMutation(scope);
   return Response.json({ data: { deleted: true }, sheetSync });
 }
