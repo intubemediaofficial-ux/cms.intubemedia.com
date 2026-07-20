@@ -20,6 +20,29 @@ export interface ChannelVendorAssignment {
   updatedAt: string;
 }
 
+export function getVendorsForOwner(
+  vendors: Vendor[],
+  ownerUserId: string | null
+): Vendor[] {
+  return vendors.filter((vendor) =>
+    ownerUserId
+      ? vendor.createdByUserId === ownerUserId
+      : vendor.createdByUserId === null || vendor.createdByUserId === undefined
+  );
+}
+
+export function removeScopedChannelVendorAssignments(
+  assignments: ChannelVendorAssignment[],
+  channelIds: Set<string>,
+  scopedVendorIds: Set<string>
+): ChannelVendorAssignment[] {
+  return assignments.filter(
+    (assignment) =>
+      !channelIds.has(assignment.channelId) ||
+      !scopedVendorIds.has(assignment.vendorId)
+  );
+}
+
 export async function getVendors(): Promise<Vendor[]> {
   return (await kv.get<Vendor[]>(VENDORS_KEY)) || [];
 }

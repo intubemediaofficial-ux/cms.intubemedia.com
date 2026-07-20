@@ -12,7 +12,7 @@ import { kv } from "@/lib/redis";
 import {
   getVendorGoogleSheetConfig,
   getVendorGoogleSheetServiceAccountEmail,
-  saveScopedVendorSpreadsheetId,
+  saveScopedVendorGoogleSheetConfig,
   saveVendorGoogleSheetConfig,
 } from "@/lib/vendor-google-sheet-config";
 import { exportVendorGoogleSheetTab } from "@/lib/vendor-excel-export";
@@ -24,6 +24,8 @@ import {
   ChannelVendorAssignment,
   getVendorAssignments,
   getVendors,
+  getVendorsForOwner,
+  removeScopedChannelVendorAssignments,
   saveVendorAssignments,
   saveVendors,
   Vendor,
@@ -60,24 +62,47 @@ interface VendorScope {
   email: string;
   isAdmin: boolean;
   currentUser: StoredUser | null;
+  vendorOwnerUserId: string | null;
+  viewingCompanyAsAdmin: boolean;
   approvedChannelIds: Set<string>;
   manageableChannelIds: Set<string>;
   channelOwners: Map<string, StoredUser>;
   channelNetworks: Map<string, string>;
 }
 
-async function getScope(): Promise<VendorScope | null> {
+async function getScope(requestedCompanyId?: string): Promise<VendorScope | null> {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email?.toLowerCase();
   if (!email || session?.user?.userStatus === "inactive") return null;
 
   const users = (await kv.get<StoredUser[]>(USERS_KEY)) || [];
   const isAdmin = ADMIN_EMAILS.includes(email);
-  const currentUser = users.find((user) => user.email.toLowerCase() === email) || null;
+  const authenticatedUser = users.find((user) => user.email.toLowerCase() === email) || null;
+  const selectedCompany = isAdmin && requestedCompanyId
+    ? users.find(
+        (user) =>
+          user.id === requestedCompanyId &&
+          user.role === "company"
+      ) || null
+    : null;
+  if (isAdmin && requestedCompanyId && !selectedCompany) return null;
+  const currentUser = selectedCompany || authenticatedUser;
 
   let scopedUsers: StoredUser[];
-  if (isAdmin) {
-    scopedUsers = users.filter((user) => user.status === "active");
+  if (selectedCompany) {
+    scopedUsers = [
+      selectedCompany,
+      ...users.filter(
+        (user) => user.parentId === selectedCompany.id && user.status === "active"
+      ),
+    ];
+  } else if (isAdmin) {
+    scopedUsers = users.filter(
+      (user) =>
+        user.status === "active" &&
+        user.role === "client" &&
+        !user.parentId
+    );
   } else if (!currentUser || currentUser.status !== "active") {
     return null;
   } else if (currentUser.role === "company") {
@@ -111,6 +136,14 @@ async function getScope(): Promise<VendorScope | null> {
     email,
     isAdmin,
     currentUser,
+    vendorOwnerUserId: selectedCompany?.id || (
+      isAdmin
+        ? null
+        : currentUser?.role === "company"
+          ? currentUser.id
+          : currentUser?.parentId || null
+    ),
+    viewingCompanyAsAdmin: Boolean(selectedCompany),
     approvedChannelIds,
     manageableChannelIds,
     channelOwners,
@@ -120,12 +153,17 @@ async function getScope(): Promise<VendorScope | null> {
 
 function getVisibleVendors(
   scope: VendorScope,
-  vendors: Vendor[]
+  vendors: Vendor[],
+  assignments: ChannelVendorAssignment[] = []
 ): Vendor[] {
-  if (scope.isAdmin) return vendors;
-  return vendors.filter(
-    (vendor) => vendor.createdByUserId === scope.currentUser?.id
+  const tenantVendors = getVendorsForOwner(vendors, scope.vendorOwnerUserId);
+  if (canManageVendorSheets(scope)) return tenantVendors;
+  const assignedVendorIds = new Set(
+    assignments
+      .filter((assignment) => scope.manageableChannelIds.has(assignment.channelId))
+      .map((assignment) => assignment.vendorId)
   );
+  return tenantVendors.filter((vendor) => assignedVendorIds.has(vendor.id));
 }
 
 function normalizeName(value: unknown): string {
@@ -195,7 +233,7 @@ async function buildVendorReports(
 }
 
 function sheetScopeUserId(scope: VendorScope): string | undefined {
-  return scope.isAdmin ? undefined : scope.currentUser?.id;
+  return scope.vendorOwnerUserId || undefined;
 }
 
 function canManageVendorSheets(scope: VendorScope): boolean {
@@ -207,24 +245,9 @@ async function syncSheetAfterMutation(
   suppressErrors = true
 ) {
   try {
-    if (scope.isAdmin) return await syncVendorGoogleSheet();
-    const [vendors, assignments] = await Promise.all([
-      getVendors(),
-      getVendorAssignments(),
-    ]);
-    const assignedVendorIds = new Set(
-      assignments
-        .filter((assignment) => scope.approvedChannelIds.has(assignment.channelId))
-        .map((assignment) => assignment.vendorId)
-    );
+    const vendors = await getVendors();
     const vendorIds = new Set(
-      vendors
-        .filter(
-          (vendor) =>
-            vendor.createdByUserId === scope.currentUser?.id ||
-            assignedVendorIds.has(vendor.id)
-        )
-        .map((vendor) => vendor.id)
+      getVendorsForOwner(vendors, scope.vendorOwnerUserId).map((vendor) => vendor.id)
     );
     return await syncVendorGoogleSheet({
       scopeUserId: sheetScopeUserId(scope),
@@ -239,39 +262,28 @@ async function syncSheetAfterMutation(
 }
 
 export async function GET(request: Request) {
-  const scope = await getScope();
-  if (!scope) return Response.json({ error: "Unauthorized" }, { status: 401 });
-
   const url = new URL(request.url);
+  const scope = await getScope(url.searchParams.get("companyId") || undefined);
+  if (!scope) return Response.json({ error: "Unauthorized or invalid company scope" }, { status: 401 });
+
   const action = url.searchParams.get("action") || "list";
   const [vendors, assignments] = await Promise.all([
     getVendors(),
     getVendorAssignments(),
   ]);
-  const assignableVendors = getVisibleVendors(scope, vendors);
-  const assignableVendorIds = new Set(assignableVendors.map((vendor) => vendor.id));
-  const manageableAssignments = assignments.filter((assignment) =>
-    scope.manageableChannelIds.has(assignment.channelId)
-  );
-  const assignedVendorIds = new Set(
-    manageableAssignments.map((assignment) => assignment.vendorId)
-  );
-  const visibleVendors = scope.isAdmin
-    ? vendors
-    : vendors.filter(
-        (vendor) =>
-          assignableVendorIds.has(vendor.id) || assignedVendorIds.has(vendor.id)
-      );
+  const visibleVendors = getVisibleVendors(scope, vendors, assignments);
   const visibleVendorIds = new Set(visibleVendors.map((vendor) => vendor.id));
-  const scopedAssignments = manageableAssignments.filter((assignment) =>
-    visibleVendorIds.has(assignment.vendorId)
+  const scopedAssignments = assignments.filter(
+    (assignment) =>
+      visibleVendorIds.has(assignment.vendorId) &&
+      scope.manageableChannelIds.has(assignment.channelId)
   );
 
   if (action === "list") {
     const [sheetConfig, serviceAccountEmail] = canManageVendorSheets(scope)
       ? await Promise.all([
           getVendorGoogleSheetConfig(sheetScopeUserId(scope)),
-          getVendorGoogleSheetServiceAccountEmail(),
+          getVendorGoogleSheetServiceAccountEmail(sheetScopeUserId(scope)),
         ])
       : [null, ""];
     const counts = new Map<string, number>();
@@ -285,11 +297,11 @@ export async function GET(request: Request) {
           .map((vendor) => ({
             ...vendor,
             channelCount: counts.get(vendor.id) || 0,
-            canEdit: scope.isAdmin || assignableVendorIds.has(vendor.id),
-            canAssign: scope.isAdmin || assignableVendorIds.has(vendor.id),
+            canEdit: canManageVendorSheets(scope),
+            canAssign: canManageVendorSheets(scope),
           }))
           .sort((a, b) => a.name.localeCompare(b.name)),
-        assignments: manageableAssignments,
+        assignments: scopedAssignments,
         assignedVendors: visibleVendors.map((vendor) => ({
           id: vendor.id,
           name: vendor.name,
@@ -300,18 +312,26 @@ export async function GET(request: Request) {
               serviceAccountEmail,
             }
           : null,
+        scope: {
+          companyId: scope.vendorOwnerUserId,
+          companyName: scope.vendorOwnerUserId ? scope.currentUser?.name || "Company" : null,
+          viewingCompanyAsAdmin: scope.viewingCompanyAsAdmin,
+        },
       },
     });
   }
 
   if (action === "export") {
+    if (!canManageVendorSheets(scope)) {
+      return Response.json({ error: "Vendor export requires Admin or Company access" }, { status: 403 });
+    }
     const vendorId = url.searchParams.get("vendorId") || "";
     const selectedVendor = visibleVendors.find((vendor) => vendor.id === vendorId);
     if (!selectedVendor) {
       return Response.json({ error: "Vendor not found" }, { status: 404 });
     }
-    const vendorIndex = vendors.findIndex((vendor) => vendor.id === selectedVendor.id);
-    const sheetTitle = uniqueVendorSheetNames(vendors.map((vendor) => vendor.name))[vendorIndex];
+    const vendorIndex = visibleVendors.findIndex((vendor) => vendor.id === selectedVendor.id);
+    const sheetTitle = uniqueVendorSheetNames(visibleVendors.map((vendor) => vendor.name))[vendorIndex];
     try {
       const exported = await exportVendorGoogleSheetTab(
         sheetTitle,
@@ -362,10 +382,15 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const scope = await getScope();
-  if (!scope) return Response.json({ error: "Unauthorized" }, { status: 401 });
-
   const body = await request.json();
+  const scope = await getScope(
+    typeof body.companyId === "string" ? body.companyId : undefined
+  );
+  if (!scope) return Response.json({ error: "Unauthorized or invalid company scope" }, { status: 401 });
+  if (!canManageVendorSheets(scope)) {
+    return Response.json({ error: "Vendor Management requires Admin or Company access" }, { status: 403 });
+  }
+
   const name = normalizeName(body.name);
   if (!name) return Response.json({ error: "Vendor name is required" }, { status: 400 });
 
@@ -382,7 +407,7 @@ export async function POST(request: Request) {
   const vendor: Vendor = {
     id: crypto.randomUUID(),
     name,
-    createdByUserId: scope.isAdmin ? null : scope.currentUser?.id || null,
+    createdByUserId: scope.vendorOwnerUserId,
     createdByEmail: scope.email,
     createdAt: now,
     updatedAt: now,
@@ -393,10 +418,15 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const scope = await getScope();
-  if (!scope) return Response.json({ error: "Unauthorized" }, { status: 401 });
-
   const body = await request.json();
+  const scope = await getScope(
+    typeof body.companyId === "string" ? body.companyId : undefined
+  );
+  if (!scope) return Response.json({ error: "Unauthorized or invalid company scope" }, { status: 401 });
+  if (!canManageVendorSheets(scope)) {
+    return Response.json({ error: "Vendor Management requires Admin or Company access" }, { status: 403 });
+  }
+
   const action = body.action;
   if (action === "configureSheet") {
     if (!canManageVendorSheets(scope)) {
@@ -410,23 +440,23 @@ export async function PUT(request: Request) {
     if (!spreadsheetId) {
       return Response.json({ error: "Invalid Google Sheet URL" }, { status: 400 });
     }
-    if (scope.isAdmin) {
-      const clientEmail = typeof body.clientEmail === "string" ? body.clientEmail.trim() : "";
-      const privateKey = typeof body.privateKey === "string" ? body.privateKey.trim() : "";
-      if (
-        !clientEmail.endsWith(".gserviceaccount.com") ||
-        !privateKey.includes("-----BEGIN PRIVATE KEY-----") ||
-        !privateKey.includes("-----END PRIVATE KEY-----")
-      ) {
-        return Response.json({ error: "Invalid service-account JSON" }, { status: 400 });
-      }
-      await saveVendorGoogleSheetConfig({ spreadsheetId, clientEmail, privateKey });
+    const clientEmail = typeof body.clientEmail === "string" ? body.clientEmail.trim() : "";
+    const privateKey = typeof body.privateKey === "string" ? body.privateKey.trim() : "";
+    if (
+      !clientEmail.endsWith(".gserviceaccount.com") ||
+      !privateKey.includes("-----BEGIN PRIVATE KEY-----") ||
+      !privateKey.includes("-----END PRIVATE KEY-----")
+    ) {
+      return Response.json({ error: "Invalid service-account JSON" }, { status: 400 });
+    }
+    if (scope.vendorOwnerUserId) {
+      await saveScopedVendorGoogleSheetConfig(scope.vendorOwnerUserId, {
+        spreadsheetId,
+        clientEmail,
+        privateKey,
+      });
     } else {
-      const scopeUserId = sheetScopeUserId(scope);
-      if (!scopeUserId || !(await getVendorGoogleSheetServiceAccountEmail())) {
-        return Response.json({ error: "Google Sheets service account is not configured" }, { status: 409 });
-      }
-      await saveScopedVendorSpreadsheetId(scopeUserId, spreadsheetId);
+      await saveVendorGoogleSheetConfig({ spreadsheetId, clientEmail, privateKey });
     }
     try {
       return Response.json({ data: await syncSheetAfterMutation(scope, false) });
@@ -453,19 +483,9 @@ export async function PUT(request: Request) {
     getVendors(),
     getVendorAssignments(),
   ]);
-  const visibleVendors = getVisibleVendors(scope, vendors);
-  const scopedAssignedVendorIds = new Set(
-    assignments
-      .filter((assignment) => scope.approvedChannelIds.has(assignment.channelId))
-      .map((assignment) => assignment.vendorId)
-  );
-  const revenueVisibleVendors = scope.isAdmin
-    ? vendors
-    : vendors.filter(
-        (vendor) =>
-          vendor.createdByUserId === scope.currentUser?.id ||
-          scopedAssignedVendorIds.has(vendor.id)
-      );
+  const visibleVendors = getVisibleVendors(scope, vendors, assignments);
+  const visibleVendorIds = new Set(visibleVendors.map((vendor) => vendor.id));
+  const revenueVisibleVendors = visibleVendors;
 
   if (action === "syncRevenue") {
     if (!canManageVendorSheets(scope)) {
@@ -557,10 +577,18 @@ export async function PUT(request: Request) {
       return Response.json({ error: "Vendor is not in your current scope" }, { status: 403 });
     }
 
-    const next = assignments.filter((assignment) => assignment.channelId !== channelId);
+    const next = removeScopedChannelVendorAssignments(
+      assignments,
+      new Set([channelId]),
+      visibleVendorIds
+    );
     if (vendorId) {
       const now = new Date().toISOString();
-      const previous = assignments.find((assignment) => assignment.channelId === channelId);
+      const previous = assignments.find(
+        (assignment) =>
+          assignment.channelId === channelId &&
+          visibleVendorIds.has(assignment.vendorId)
+      );
       next.push({
         channelId,
         vendorId,
@@ -578,7 +606,7 @@ export async function PUT(request: Request) {
     if (!Array.isArray(body.assignments)) {
       return Response.json({ error: "assignments array is required" }, { status: 400 });
     }
-    const requested = body.assignments
+    const requested: Array<{ channelId: string; vendorId: string }> = body.assignments
       .filter(
         (item: unknown): item is { channelId: string; vendorId: string } =>
           typeof item === "object" &&
@@ -600,11 +628,19 @@ export async function PUT(request: Request) {
     }
 
     const channelIds = new Set(requested.map((item: { channelId: string }) => item.channelId));
-    const next = assignments.filter((assignment) => !channelIds.has(assignment.channelId));
+    const next = removeScopedChannelVendorAssignments(
+      assignments,
+      channelIds,
+      visibleVendorIds
+    );
     const now = new Date().toISOString();
     for (const item of requested) {
       if (!item.vendorId) continue;
-      const previous = assignments.find((assignment) => assignment.channelId === item.channelId);
+      const previous = assignments.find(
+        (assignment) =>
+          assignment.channelId === item.channelId &&
+          visibleVendorIds.has(assignment.vendorId)
+      );
       next.push({
         channelId: item.channelId,
         vendorId: item.vendorId,
@@ -622,7 +658,7 @@ export async function PUT(request: Request) {
     const vendorId = typeof body.vendorId === "string" ? body.vendorId : "";
     const name = normalizeName(body.name);
     const vendor = visibleVendors.find((item) => item.id === vendorId);
-    if (!vendor || (!scope.isAdmin && vendor.createdByUserId !== scope.currentUser?.id)) {
+    if (!vendor) {
       return Response.json({ error: "Vendor is not editable" }, { status: 403 });
     }
     if (!name) return Response.json({ error: "Vendor name is required" }, { status: 400 });
@@ -644,24 +680,27 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const scope = await getScope();
-  if (!scope) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const url = new URL(request.url);
+  const scope = await getScope(url.searchParams.get("companyId") || undefined);
+  if (!scope) return Response.json({ error: "Unauthorized or invalid company scope" }, { status: 401 });
+  if (!canManageVendorSheets(scope)) {
+    return Response.json({ error: "Vendor Management requires Admin or Company access" }, { status: 403 });
+  }
 
-  const vendorId = new URL(request.url).searchParams.get("vendorId") || "";
+  const vendorId = url.searchParams.get("vendorId") || "";
   const [vendors, assignments] = await Promise.all([
     getVendors(),
     getVendorAssignments(),
   ]);
-  const vendor = vendors.find((item) => item.id === vendorId);
+  const vendor = getVisibleVendors(scope, vendors).find((item) => item.id === vendorId);
   if (!vendor) return Response.json({ error: "Vendor not found" }, { status: 404 });
 
   const vendorAssignments = assignments.filter((assignment) => assignment.vendorId === vendorId);
   const canDelete =
     scope.isAdmin ||
-    (vendor.createdByUserId === scope.currentUser?.id &&
-      vendorAssignments.every((assignment) =>
-        scope.manageableChannelIds.has(assignment.channelId)
-      ));
+    vendorAssignments.every((assignment) =>
+      scope.manageableChannelIds.has(assignment.channelId)
+    );
   if (!canDelete) return Response.json({ error: "Vendor is not deletable" }, { status: 403 });
 
   await Promise.all([
