@@ -14,6 +14,12 @@ import {
   getVendors,
   getVendorsForOwner,
 } from "@/lib/vendors";
+import {
+  getVendorSheetChannelMetadata,
+  saveVendorSheetChannelMetadata,
+  vendorSheetChannelMetadataKey,
+  type VendorSheetChannelMetadata,
+} from "@/lib/vendor-sheet-metadata";
 
 const USERS_KEY = "bainsla_users";
 const MONTHLY_PREFIX = "monthly_channel_analytics:";
@@ -100,6 +106,39 @@ function normalizedHeader(value: unknown): string {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+export function preserveHistoricalVendorRows(
+  existingHeader: unknown[],
+  existingRows: unknown[][],
+  nextHeader: Array<string | number>,
+  activeChannelIds: Set<string>
+): Array<Array<string | number>> {
+  const oldColumnByHeader = new Map(
+    existingHeader.map((value, index) => [normalizedHeader(value), index])
+  );
+  const channelIdIndex = oldColumnByHeader.get("channelid");
+  if (channelIdIndex === undefined) return [];
+
+  return existingRows.flatMap((row) => {
+    const channelId = String(row[channelIdIndex] || "").trim();
+    if (!channelId || activeChannelIds.has(channelId)) return [];
+    return [nextHeader.map((header) => {
+      const normalized = normalizedHeader(header);
+      const oldIndex = oldColumnByHeader.get(normalized);
+      const value = oldIndex === undefined ? "" : row[oldIndex];
+      if (normalized === "linkeddate" || normalized === "linkdate") {
+        return googleSheetDateSerial(value);
+      }
+      if (monthFromRevenueHeader(header)) {
+        const revenueText = String(value || "").trim();
+        if (!revenueText) return "";
+        const revenue = Number(revenueText.replace(/,/g, ""));
+        return Number.isFinite(revenue) ? revenue : revenueText;
+      }
+      return typeof value === "number" ? value : String(value || "");
+    })];
+  });
+}
+
 const DEFAULT_VENDOR_START_MONTH = "2026-02";
 const VENDOR_START_MONTHS = new Map([
   ["rajesh white gold", "2025-12"],
@@ -145,13 +184,22 @@ export async function syncVendorGoogleSheet(
   });
   const sheets = google.sheets({ version: "v4", auth });
 
-  const [allVendors, allAssignments, users, cachedClients, monthlyKeys, backendChannels] = await Promise.all([
+  const [
+    allVendors,
+    allAssignments,
+    users,
+    cachedClients,
+    monthlyKeys,
+    backendChannels,
+    storedSheetMetadata,
+  ] = await Promise.all([
     getVendors(),
     getVendorAssignments(),
     kv.get<StoredUser[]>(USERS_KEY).then((value) => value || []),
     getAllCachedClientData(),
     kv.keys(`${MONTHLY_PREFIX}*`),
     getBackendChannels(),
+    getVendorSheetChannelMetadata(options.scopeUserId),
   ]);
   const tenantVendors = getVendorsForOwner(
     allVendors,
@@ -255,6 +303,17 @@ export async function syncVendorGoogleSheet(
   const preservedLinkedDates = new Map<string, string>();
   const existingRevenue = new Map<string, number>();
   const existingMonthsByTitle = new Map<string, Set<string>>();
+  const existingRowsByTitle = new Map<
+    string,
+    { header: unknown[]; channelRows: unknown[][] }
+  >();
+  const sheetMetadataByChannel = new Map(
+    storedSheetMetadata.map((record) => [
+      vendorSheetChannelMetadataKey(record.vendorId, record.channelId),
+      record,
+    ])
+  );
+  const importedSheetMetadata: VendorSheetChannelMetadata[] = [];
   if (vendorSheetNames.length > 0) {
     const currentValues = await sheets.spreadsheets.values.batchGet({
       spreadsheetId,
@@ -262,9 +321,13 @@ export async function syncVendorGoogleSheet(
     });
     (currentValues.data.valueRanges || []).forEach((range, rangeIndex) => {
       const title = vendorSheetNames[rangeIndex];
+      const vendor = vendors[rangeIndex];
       const values = range.values || [];
       const header = values[0] || [];
       const channelIdIndex = header.findIndex((value) => normalizedHeader(value) === "channelid");
+      const clientIndex = header.findIndex((value) => normalizedHeader(value) === "client");
+      const channelIndex = header.findIndex((value) => normalizedHeader(value) === "channel");
+      const networkIndex = header.findIndex((value) => normalizedHeader(value) === "network");
       const linkedDateIndex = header.findIndex((value) => {
         const normalized = normalizedHeader(value);
         return normalized === "linkeddate" || normalized === "linkdate";
@@ -278,9 +341,13 @@ export async function syncVendorGoogleSheet(
         new Set(revenueColumns.map(({ month }) => month))
       );
       if (channelIdIndex < 0) return;
-      values.slice(1).forEach((row) => {
+      const channelRows = values.slice(1).filter((row) =>
+        Boolean(String(row[channelIdIndex] || "").trim())
+      );
+      existingRowsByTitle.set(title, { header, channelRows });
+      const activeChannelIds = new Set(assignmentByVendor.get(vendor.id) || []);
+      channelRows.forEach((row) => {
         const channelId = String(row[channelIdIndex] || "").trim();
-        if (!channelId) return;
         if (linkedDateIndex >= 0) {
           const linkedDate = normalizeLinkedDate(row[linkedDateIndex]);
           if (linkedDate) preservedLinkedDates.set(channelId, linkedDate);
@@ -291,24 +358,29 @@ export async function syncVendorGoogleSheet(
             existingRevenue.set(`${title}:${channelId}:${month}`, revenue);
           }
         }
+        if (!activeChannelIds.has(channelId)) return;
+        const record: VendorSheetChannelMetadata = {
+          vendorId: vendor.id,
+          channelId,
+          clientName: clientIndex >= 0 ? String(row[clientIndex] || "").trim() : "",
+          channelName: channelIndex >= 0 ? String(row[channelIndex] || "").trim() : "",
+          networkName: networkIndex >= 0 ? String(row[networkIndex] || "").trim() : "",
+          linkedDate: linkedDateIndex >= 0
+            ? normalizeLinkedDate(row[linkedDateIndex])
+            : "",
+          updatedAt: new Date().toISOString(),
+        };
+        sheetMetadataByChannel.set(
+          vendorSheetChannelMetadataKey(vendor.id, channelId),
+          record
+        );
+        importedSheetMetadata.push(record);
       });
     });
-  }
-  const staleSheetIds = partialSync || options.scopeUserId
-    ? []
-    : (refreshedMetadata.data.sheets || []).flatMap((sheet) => {
-    const title = sheet.properties?.title;
-    const sheetId = sheet.properties?.sheetId;
-    return title && sheetId !== undefined && !desiredTitles.has(title) ? [sheetId] : [];
-  });
-  const totalSheets = refreshedMetadata.data.sheets?.length || 0;
-  if (staleSheetIds.length > 0 && totalSheets - staleSheetIds.length > 0) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: staleSheetIds.map((sheetId) => ({ deleteSheet: { sheetId } })),
-      },
-    });
+    await saveVendorSheetChannelMetadata(
+      importedSheetMetadata,
+      options.scopeUserId
+    );
   }
   const unmergeRequests: sheets_v4.Schema$Request[] = (refreshedMetadata.data.sheets || [])
     .filter((sheet) => desiredTitles.has(sheet.properties?.title || ""))
@@ -358,7 +430,7 @@ export async function syncVendorGoogleSheet(
         channels: new Map<string, MonthlyChannel>(),
       }
     );
-    const rows: Array<Array<string | number>> = [[
+    const header: Array<string | number> = [
       "Vendor",
       "Client",
       "Channel",
@@ -369,19 +441,25 @@ export async function syncVendorGoogleSheet(
         ({ cache }) => `${monthLabel(cache.month)} Revenue USD`
       ),
       "Linked Date",
-    ]];
+    ];
+    const rows: Array<Array<string | number>> = [header];
     const monthlyRevenueTotals = vendorMonthlyAnalytics.map(() => 0);
 
     for (const channelId of channelIds) {
       const analyticsByMonth = vendorMonthlyAnalytics.map(({ channels }) => channels.get(channelId));
       const latestAnalytics = [...analyticsByMonth].reverse().find(Boolean);
+      const sheetMetadata = sheetMetadataByChannel.get(
+        vendorSheetChannelMetadataKey(vendor.id, channelId)
+      );
       rows.push([
         vendor.name,
-        channelOwners.get(channelId) || "",
-        latestAnalytics?.channel_name || channelNames.get(channelId) || channelId,
+        sheetMetadata ? sheetMetadata.clientName : channelOwners.get(channelId) || "",
+        sheetMetadata
+          ? sheetMetadata.channelName
+          : latestAnalytics?.channel_name || channelNames.get(channelId) || channelId,
         `https://www.youtube.com/channel/${channelId}`,
         channelId,
-        channelNetworks.get(channelId) || "",
+        sheetMetadata ? sheetMetadata.networkName : channelNetworks.get(channelId) || "",
         ...analyticsByMonth.map((analytics, monthIndex) => {
           const month = vendorMonthlyAnalytics[monthIndex].cache.month;
           const previous = existingRevenue.get(`${title}:${channelId}:${month}`);
@@ -392,8 +470,29 @@ export async function syncVendorGoogleSheet(
           monthlyRevenueTotals[monthIndex] += revenue;
           return Number(revenue.toFixed(2));
         }),
-        googleSheetDateSerial(preservedLinkedDates.get(channelId) || linkedDates.get(channelId)),
+        googleSheetDateSerial(
+          sheetMetadata
+            ? sheetMetadata.linkedDate
+            : preservedLinkedDates.get(channelId) || linkedDates.get(channelId)
+        ),
       ]);
+      totalRows += 1;
+    }
+    const existingRows = existingRowsByTitle.get(title);
+    const historicalRows = existingRows
+      ? preserveHistoricalVendorRows(
+          existingRows.header,
+          existingRows.channelRows,
+          header,
+          new Set(channelIds)
+        )
+      : [];
+    for (const historicalRow of historicalRows) {
+      vendorMonthlyAnalytics.forEach((_, monthIndex) => {
+        const revenue = Number(historicalRow[6 + monthIndex]);
+        if (Number.isFinite(revenue)) monthlyRevenueTotals[monthIndex] += revenue;
+      });
+      rows.push(historicalRow);
       totalRows += 1;
     }
     rows.push(
@@ -415,7 +514,7 @@ export async function syncVendorGoogleSheet(
       summaryRows.push([
         cache.month,
         vendor.name,
-        channelIds.length,
+        channelIds.length + historicalRows.length,
         Number(monthlyRevenueTotals[monthIndex].toFixed(3)),
         new Date().toISOString(),
       ]);
